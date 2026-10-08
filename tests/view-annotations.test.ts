@@ -240,3 +240,87 @@ test("annotations use only their view's Sections, import remaps ownership and de
     close();
   }
 });
+
+test("annotations attach to UI Sections on the default deployment layer and follow layer changes", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const view = services.views.create(workspace.id, {
+      name: "Default workflow",
+      kind: "workflow",
+    }).result;
+    const section = services.boundaries.create(workspace.id, {
+      viewId: view.id,
+      kind: "custom",
+      layer: view.settings.boundaryLayer,
+      name: "UI Section",
+    }).result;
+    const run = (operations: ArchitectureOperationInput[]) =>
+      services.model.applyOperations(
+        workspace.id,
+        ApplyOperationsRequestSchema.parse({ operations }),
+        "ui",
+      );
+    run([
+      {
+        op: "createViewAnnotation",
+        viewId: view.id,
+        data: { ...text, id: "heading", sectionId: section.id },
+      },
+    ]);
+    expect(services.views.get(view.id).settings.annotations).toMatchObject([
+      { id: "heading", sectionId: section.id },
+    ]);
+    expect(services.model.validate(workspace.id).valid).toBe(true);
+    const imported = services.imports.importDocument(services.model.getDocument(workspace.id));
+    const importedView = services.views.listDetailed(imported.id)[0];
+    expect(importedView?.boundaries[0]?.layer).toBe("deployment");
+    expect(importedView?.settings.annotations[0]?.sectionId).toBe(importedView?.boundaries[0]?.id);
+    services.boundaries.update(workspace.id, section.id, { layer: "security" });
+    expect(services.views.get(view.id).settings.boundaryLayer).toBe("deployment");
+    run([
+      {
+        op: "updateViewAnnotation",
+        viewId: view.id,
+        annotationId: "heading",
+        data: { text: "Still in Section" },
+      },
+    ]);
+    expect(services.model.validate(workspace.id).valid).toBe(true);
+    expect(services.views.get(view.id).settings.annotations).toMatchObject([
+      { id: "heading", text: "Still in Section", sectionId: section.id },
+    ]);
+    expect(() =>
+      services.boundaries.update(workspace.id, section.id, { kind: "trustZone" }),
+    ).toThrow("must remain a Section");
+    const other = services.views.create(workspace.id, { name: "Other", kind: "workflow" }).result;
+    expect(() =>
+      run([
+        { op: "createViewAnnotation", viewId: other.id, data: { ...text, sectionId: section.id } },
+      ]),
+    ).toThrow("own view");
+    const semantic = services.boundaries.create(workspace.id, {
+      viewId: view.id,
+      kind: "trustZone",
+      layer: "security",
+      name: "Semantic boundary",
+    }).result;
+    expect(() =>
+      run([
+        {
+          op: "updateViewAnnotation",
+          viewId: view.id,
+          annotationId: "heading",
+          data: { sectionId: semantic.id },
+        },
+      ]),
+    ).toThrow("own view");
+    const invalid = services.model.getDocument(workspace.id);
+    const invalidView = invalid.views.find((candidate) => candidate.id === view.id);
+    if (!invalidView) throw new Error("Missing workflow view");
+    invalidView.settings.annotations = [{ ...text, id: "wrong-kind", sectionId: semantic.id }];
+    expect(() => services.imports.importDocument(invalid)).toThrow("annotation");
+  } finally {
+    close();
+  }
+});

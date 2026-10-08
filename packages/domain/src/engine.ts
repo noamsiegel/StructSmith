@@ -373,14 +373,12 @@ export function updateBoundary(
     throw ruleViolation("A boundary containing Sections must remain a Section.");
   }
   if (
-    (kind !== "custom" || layer !== "custom") &&
+    kind !== "custom" &&
     repos.views
       .findById(current.viewId)
       ?.settings.annotations.some((annotation) => annotation.sectionId === boundaryId)
   )
-    throw ruleViolation(
-      "A boundary containing annotations must remain a Section in the custom layer.",
-    );
+    throw ruleViolation("A boundary containing annotations must remain a Section.");
   const elementIds = input.elementIds ?? current.elementIds;
   validateBoundaryElements(repos, workspace.id, current.viewId, elementIds);
   const next = claimBoundaryMembers(repos, {
@@ -612,8 +610,7 @@ function validateExplorationSettings(
       if (
         section?.workspaceId !== workspace.id ||
         section.viewId !== view.id ||
-        section.kind !== "custom" ||
-        section.layer !== "custom"
+        section.kind !== "custom"
       )
         throw ruleViolation("Annotations may only belong to a Section in their own view.");
     }

@@ -131,7 +131,7 @@ export function validateDocument(document: WorkspaceDocument): ValidationResult 
     for (const annotation of parsedAnnotations.success ? parsedAnnotations.data : []) {
       if (!annotation.sectionId) continue;
       const section = boundaryById.get(annotation.sectionId);
-      if (section?.viewId !== view.id || section.kind !== "custom" || section.layer !== "custom")
+      if (section?.viewId !== view.id || section.kind !== "custom")
         issues.push({
           level: "error",
           code: "ANNOTATION_SECTION_INVALID",
