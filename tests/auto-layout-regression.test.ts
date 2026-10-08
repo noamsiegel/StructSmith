@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { computeLayout, estimateLabelSize } from "@structsmith/domain";
+import { computeLayout, estimateAnnotationSize, estimateLabelSize } from "@structsmith/domain";
 import { createTestContext, createWorkspace } from "./helpers";
 
 test("auto-layout excludes hidden descendant relationships before lifting", () => {
@@ -261,6 +261,79 @@ test("auto-layout resets connector geometry, preserves styling and undoes as one
       elements: before.elements,
       relationships: before.relationships,
     });
+  } finally {
+    close();
+  }
+});
+
+test("auto-layout encloses fixed annotations and moved model members in the same Section", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const action = services.elements.create(workspace.id, {
+      kind: "action",
+      name: "Move during layout",
+    }).result;
+    const view = services.views.create(workspace.id, {
+      kind: "workflow",
+      name: "Mixed Section",
+      elementIds: [action.id],
+      settings: { boundaryLayer: "custom" },
+    }).result;
+    const section = services.boundaries.create(workspace.id, {
+      viewId: view.id,
+      kind: "custom",
+      layer: "custom",
+      name: "Context",
+      elementIds: [action.id],
+    }).result;
+    services.model.applyOperations(workspace.id, {
+      operations: [
+        { op: "setLayout", viewId: view.id, entries: [{ elementId: action.id, x: 1000, y: 1000 }] },
+        {
+          op: "createViewAnnotation",
+          viewId: view.id,
+          data: {
+            id: "note",
+            kind: "note",
+            text: "Fixed note with enough content to grow. ".repeat(30),
+            x: 1500,
+            y: 1100,
+            width: 240,
+            height: 60,
+            sectionId: section.id,
+          },
+        },
+        {
+          op: "updateView",
+          viewId: view.id,
+          data: {
+            settings: {
+              sectionFrames: {
+                [`boundary:${section.id}`]: { x: 950, y: 950, width: 950, height: 1000 },
+              },
+            },
+          },
+        },
+      ],
+    });
+    const original = services.views.get(view.id).settings.annotations;
+    const result = services.views.autoLayout(workspace.id, view.id, "LR").result;
+    const frame = result.settings.sectionFrames[`boundary:${section.id}`];
+    if (!frame) throw new Error("Auto-layout dropped the annotated Section frame");
+    const card = result.elements.find((entry) => entry.elementId === action.id);
+    if (!card) throw new Error("Missing test card");
+    expect(frame.x).toBeLessThanOrEqual(card.x);
+    expect(frame.y).toBeLessThanOrEqual(card.y);
+    expect(frame.x + frame.width).toBeGreaterThanOrEqual(1740);
+    const note = original[0];
+    if (!note) throw new Error("Missing test note");
+    expect(frame.y + frame.height).toBeGreaterThanOrEqual(
+      note.y + estimateAnnotationSize(note).height,
+    );
+    expect(result.settings.annotations).toEqual(original);
+    const second = services.views.autoLayout(workspace.id, view.id, "LR").result;
+    expect(second.settings.sectionFrames).toEqual(result.settings.sectionFrames);
   } finally {
     close();
   }

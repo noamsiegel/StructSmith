@@ -1,37 +1,10 @@
-import type { SectionFrame, ViewAnnotation } from "@structsmith/contracts";
-import { wrappedLines } from "@structsmith/domain";
+import type { SectionFrame } from "@structsmith/contracts";
+
+export { estimateAnnotationSize as annotationSize } from "@structsmith/domain";
 
 export const annotationNodeId = (id: string) => `annotation:${id}`;
 export const annotationId = (nodeId: string) => nodeId.slice("annotation:".length);
 export const isAnnotationId = (nodeId: string) => nodeId.startsWith("annotation:");
-
-export function annotationSize(annotation: ViewAnnotation) {
-  if (annotation.kind === "table") {
-    const columns = annotation.cells[0]?.length ?? 1;
-    const width = Math.max(annotation.width, columns * 140);
-    const cellWidth = width / columns - 24;
-    const height = annotation.cells.reduce(
-      (total, row) =>
-        total + Math.max(40, ...row.map((cell) => wrappedLines(cell, cellWidth, 7) * 20 + 20)),
-      0,
-    );
-    return { width, height: Math.max(annotation.height, height) };
-  }
-  const width = Math.max(120, annotation.width);
-  const fontSize =
-    "fontSize" in annotation && typeof annotation.fontSize === "number"
-      ? annotation.fontSize
-      : annotation.kind === "text"
-        ? 18
-        : 16;
-  return {
-    width,
-    height: Math.max(
-      annotation.height,
-      wrappedLines(annotation.text, width - 32, fontSize * 0.56) * fontSize * 1.5 + 32,
-    ),
-  };
-}
 
 export function containingAnnotationSection(
   rectangle: SectionFrame,

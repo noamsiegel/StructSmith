@@ -45,7 +45,7 @@ import { detailViewsFor } from "./detail-views";
 import { badRequest, DomainError, ruleViolation } from "./errors";
 import { createId, nowIso, uniqueKey } from "./ids";
 import { edgeLabel, resolveRelationshipsForView } from "./implied";
-import { computeLayout, estimateElementSize } from "./layout";
+import { computeLayout, estimateAnnotationSize, estimateElementSize } from "./layout";
 import type { Repositories } from "./ports";
 import { checkParent, descendantsOf, wouldCreateCycle } from "./rules";
 import { validateViewScenarios } from "./scenarios";
@@ -1264,8 +1264,39 @@ export function autoLayoutView(
       return !descendantsOf(id, allElements).some((element) => visible.has(element.id));
     }),
   );
+  const arranged = repos.views.listElements(viewId);
+  for (const boundary of activeBoundaries.filter((item) => item.kind === "custom")) {
+    const nested = [boundary];
+    for (let index = 0; index < nested.length; index++)
+      nested.push(
+        ...activeBoundaries.filter((item) => item.parentBoundaryId === nested[index]?.id),
+      );
+    const sectionIds = new Set(nested.map((item) => item.id));
+    const annotations = view.settings.annotations.filter(
+      (item) => item.sectionId && sectionIds.has(item.sectionId),
+    );
+    const memberIds = new Set(nested.flatMap((item) => item.elementIds));
+    const members = arranged.filter((item) => !item.hidden && memberIds.has(item.elementId));
+    if (!annotations.length || !members.length) continue;
+    const boxes = [
+      ...members.map((item) => ({
+        x: item.x,
+        y: item.y,
+        ...estimateElementSize(elements.get(item.elementId), view.settings, item),
+      })),
+      ...annotations.map((item) => ({ x: item.x, y: item.y, ...estimateAnnotationSize(item) })),
+    ];
+    const x = Math.min(...boxes.map((item) => item.x)) - 28;
+    const y = Math.min(...boxes.map((item) => item.y)) - 28;
+    sectionFrames[`boundary:${boundary.id}`] = {
+      x,
+      y,
+      width: Math.max(120, Math.max(...boxes.map((item) => item.x + item.width)) - x + 28),
+      height: Math.max(80, Math.max(...boxes.map((item) => item.y + item.height)) - y + 28),
+    };
+  }
   updateView(repos, workspace, viewId, { settings: { sectionFrames } });
-  return repos.views.listElements(viewId);
+  return arranged;
 }
 
 /* ------------------------------------------------------------------ */
