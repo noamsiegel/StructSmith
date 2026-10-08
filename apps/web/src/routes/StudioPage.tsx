@@ -478,6 +478,8 @@ function StudioContent({
               onResize={(size) => updateSidebarVisibility("inspector", size.inPixels > 0)}
             >
               <Inspector
+                views={viewList}
+                onOpenView={selectView}
                 workspaceId={workspaceId}
                 elements={elements}
                 boundaries={boundaries}

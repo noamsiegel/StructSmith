@@ -709,5 +709,23 @@
     "top": "Góra",
     "bottom": "Dół",
     "auto": "Automatycznie"
+  },
+  "dependencies": {
+    "title": "Dependencies",
+    "incoming": "Incoming",
+    "outgoing": "Outgoing",
+    "none": "No dependencies.",
+    "via": "via {{name}}",
+    "unlabeled": "Unlabeled connection",
+    "usedIn": "Appears in {{count}} diagrams",
+    "noViews": "Not placed in a diagram."
+  },
+  "resourceLinks": {
+    "title": "Resources",
+    "implementation": "Implementation",
+    "runbook": "Runbook",
+    "open": "Open {{kind}}",
+    "invalid": "Enter an HTTP or HTTPS URL without embedded credentials.",
+    "saved": "Updated resource links"
   }
 }

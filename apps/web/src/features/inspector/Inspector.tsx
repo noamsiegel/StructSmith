@@ -34,8 +34,10 @@ import { useEditorStore } from "@/store/editor";
 import { iconFor } from "../icons";
 import { DetailViewAction } from "../navigation/DetailNavigation";
 import { CopyReferenceButton } from "../reference/CopyReferenceButton";
+import { DependencyPanel } from "./DependencyPanel";
 import { PropertyEditor } from "./PropertyEditor";
 import { RelationshipPresentationEditor } from "./RelationshipPresentationEditor";
+import { ResourceLinks } from "./ResourceLinks";
 import { TagEditor } from "./TagEditor";
 
 interface InspectorProps {
@@ -45,6 +47,8 @@ interface InspectorProps {
   relationships: readonly ArchitectureRelationship[];
   records: readonly ArchitectureRecord[];
   view: ViewDetail | null;
+  views: readonly ViewDetail[];
+  onOpenView: (viewId: string) => void;
 }
 
 const Field = ({ label, children }: { label: string; children: React.ReactNode }) => (
@@ -61,6 +65,8 @@ export function Inspector({
   relationships,
   records,
   view,
+  views,
+  onOpenView,
 }: InspectorProps) {
   const { t } = useTranslation();
   const selection = useEditorStore((state) => state.selection);
@@ -74,6 +80,8 @@ export function Inspector({
       : undefined;
   const boundary =
     selection.type === "boundary" ? boundaries.find((item) => item.id === selection.id) : undefined;
+
+  const resourceObject = element ?? relationship;
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-card">
@@ -147,6 +155,37 @@ export function Inspector({
                       : [],
                 });
               }}
+            />
+          )}
+
+          {element && (
+            <DependencyPanel
+              element={element}
+              elements={elements}
+              relationships={relationships}
+              views={views}
+              onOpenView={onOpenView}
+            />
+          )}
+          {resourceObject && (
+            <ResourceLinks
+              object={resourceObject}
+              onPatch={(properties) =>
+                applyOperations.mutate({
+                  label: t("resourceLinks.saved"),
+                  operations: element
+                    ? [{ op: "updateElement", elementId: element.id, data: { properties } }]
+                    : relationship
+                      ? [
+                          {
+                            op: "updateRelationship",
+                            relationshipId: relationship.id,
+                            data: { properties },
+                          },
+                        ]
+                      : [],
+                })
+              }
             />
           )}
 
