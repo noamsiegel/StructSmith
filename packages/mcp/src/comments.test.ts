@@ -26,12 +26,15 @@ test("MCP comment CRUD preserves replies, guards revisions and snapshots thread 
     const created = await call("comment_create", { data: { x: 10, y: 20, text: " Parent " } });
     const pin: ViewComment = created.comments[0];
     expect(pin).toMatchObject({ x: 10, y: 20, text: "Parent", resolved: false, replies: [] });
+    expect(pin.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(pin.updatedAt).toBe(pin.createdAt);
     const replied = await call("comment_reply_create", {
       commentId: pin.id,
       data: { text: "Reply" },
       expectedRevision: created.revision,
     });
     const replyId = replied.comments[0].replies[0].id;
+    expect(replied.comments[0].replies[0].createdAt).toBe(replied.comments[0].updatedAt);
     const updated = await call("comment_update", {
       commentId: pin.id,
       data: { text: "Edited parent", resolved: true, x: 30 },
@@ -45,6 +48,7 @@ test("MCP comment CRUD preserves replies, guards revisions and snapshots thread 
       resolved: true,
       replies: [{ id: replyId, text: "Reply" }],
     });
+    expect(updated.comments[0].createdAt).toBe(pin.createdAt);
     const stale = await client.callTool({
       name: "comment_delete",
       arguments: { ...base, commentId: pin.id, expectedRevision: created.revision },
@@ -56,7 +60,7 @@ test("MCP comment CRUD preserves replies, guards revisions and snapshots thread 
       replyId,
       data: { text: "Edited reply" },
     });
-    expect(replyEdited.comments[0].replies).toEqual([{ id: replyId, text: "Edited reply" }]);
+    expect(replyEdited.comments[0].replies).toMatchObject([{ id: replyId, text: "Edited reply" }]);
     await call("comment_update", { commentId: pin.id, data: { resolved: false } });
     expect((await call("comment_list"))[0].resolved).toBe(false);
     const replyDeleted = await call("comment_reply_delete", { commentId: pin.id, replyId });

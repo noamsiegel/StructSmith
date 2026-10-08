@@ -189,7 +189,7 @@ test("thread edits, replies, resolution and deletion preserve stable IDs and und
         data: { text: " Updated reply " },
       },
     ]);
-    expect(current()).toEqual([
+    expect(current()).toMatchObject([
       {
         id: commentId,
         x: -50,
@@ -209,7 +209,7 @@ test("thread edits, replies, resolution and deletion preserve stable IDs and und
     const deletedReply = run([
       { op: "deleteViewCommentReply", viewId: view.id, commentId, replyId: replies[0].id },
     ]);
-    expect(current()[0]?.replies).toEqual([{ id: replies[1].id, text: "Second reply" }]);
+    expect(current()[0]?.replies).toEqual([replies[1]]);
     if (!deletedReply.snapshotId) throw new Error("Missing reply undo snapshot");
     services.snapshots.restore(deletedReply.snapshotId);
     expect(current()).toEqual(reopened);
@@ -291,4 +291,108 @@ test("thread patches have no defaults and reject invalid text, points or duplica
       commentPins: [{ id: "thread", x: 0, y: 0, text: "Thread", replies: [reply, reply] }],
     }).success,
   ).toBe(false);
+});
+
+test("attached comments require a placement in their own view and retain server timestamps", async () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const other = createWorkspace(services, "Other");
+    const view = services.views.create(workspace.id, { name: "Attached", kind: "custom" }).result;
+    const placed = services.elements.create(workspace.id, {
+      kind: "custom",
+      name: "Placed",
+    }).result;
+    const unplaced = services.elements.create(workspace.id, {
+      kind: "custom",
+      name: "Unplaced",
+    }).result;
+    const foreign = services.elements.create(other.id, { kind: "custom", name: "Foreign" }).result;
+    services.views.setElements(workspace.id, view.id, [placed.id], "add");
+    services.views.saveLayout(workspace.id, view.id, [{ elementId: placed.id, x: 100, y: 200 }]);
+    const run = (operations: ArchitectureOperationInput[]) =>
+      services.model.applyOperations(workspace.id, { operations }, "ui");
+    for (const elementId of ["missing", unplaced.id, foreign.id]) {
+      expect(() =>
+        run([
+          {
+            op: "addViewComment",
+            viewId: view.id,
+            data: { x: 5, y: 6, text: "Invalid", elementId },
+          },
+        ]),
+      ).toThrow();
+    }
+    run([
+      {
+        op: "addViewComment",
+        viewId: view.id,
+        data: { x: 5, y: 6, text: "Attached", elementId: placed.id },
+      },
+    ]);
+    const read = () => {
+      const pin = services.views.get(view.id).settings.commentPins[0];
+      if (!pin) throw new Error("Missing attached comment");
+      return pin;
+    };
+    const original = read();
+    expect(original).toMatchObject({ x: 5, y: 6, elementId: placed.id });
+    expect(original.createdAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(original.updatedAt).toBe(original.createdAt);
+    for (const elementId of [unplaced.id, foreign.id]) {
+      expect(() =>
+        run([
+          { op: "updateViewComment", viewId: view.id, commentId: original.id, data: { elementId } },
+        ]),
+      ).toThrow();
+    }
+    await Bun.sleep(3);
+    run([
+      {
+        op: "addViewCommentReply",
+        viewId: view.id,
+        commentId: original.id,
+        data: { text: "Reply" },
+      },
+    ]);
+    const replied = read();
+    const reply = replied.replies[0];
+    if (!reply) throw new Error("Missing timestamped reply");
+    expect(reply.createdAt).toBe(replied.updatedAt);
+    expect(reply.updatedAt).toBe(reply.createdAt);
+    expect(replied.createdAt).toBe(original.createdAt);
+    expect((replied.updatedAt ?? "") > (original.updatedAt ?? "")).toBe(true);
+    await Bun.sleep(3);
+    run([
+      {
+        op: "updateViewCommentReply",
+        viewId: view.id,
+        commentId: original.id,
+        replyId: reply.id,
+        data: { text: "Edit reply" },
+      },
+    ]);
+    expect(read().replies[0]?.createdAt).toBe(reply.createdAt);
+    expect(read().replies[0]?.updatedAt).toBe(read().updatedAt);
+    expect((read().updatedAt ?? "") > (replied.updatedAt ?? "")).toBe(true);
+    await Bun.sleep(3);
+    const lastUpdated = read().updatedAt ?? "";
+    run([
+      {
+        op: "updateViewComment",
+        viewId: view.id,
+        commentId: original.id,
+        data: { text: "Edited", elementId: null, x: 105, y: 206 },
+      },
+    ]);
+    expect(read()).toMatchObject({
+      createdAt: original.createdAt,
+      elementId: null,
+      x: 105,
+      y: 206,
+    });
+    expect((read().updatedAt ?? "") > lastUpdated).toBe(true);
+  } finally {
+    close();
+  }
 });

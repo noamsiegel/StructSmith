@@ -558,8 +558,13 @@ export function addViewComment(
   input: AddViewCommentInput,
 ): ArchitectureView {
   const current = requireView(repos, viewId, workspace.id);
+  const data = AddViewCommentSchema.parse(input);
+  validateCommentAttachment(repos, workspace, viewId, data.elementId);
+  const timestamp = nowIso();
   const pin = {
-    ...AddViewCommentSchema.parse(input),
+    ...data,
+    createdAt: timestamp,
+    updatedAt: timestamp,
     id: createId("comment"),
     resolved: false,
     replies: [],
@@ -567,6 +572,18 @@ export function addViewComment(
   return updateView(repos, workspace, viewId, {
     settings: { commentPins: [...current.settings.commentPins, pin] },
   });
+}
+
+function validateCommentAttachment(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  elementId: string | null | undefined,
+): void {
+  if (!elementId) return;
+  requireElement(repos, elementId, workspace.id);
+  if (!repos.views.listElements(viewId).some((entry) => entry.elementId === elementId))
+    throw badRequest(`Comment attachment "${elementId}" must be placed on this view.`);
 }
 
 function requireViewComment(
@@ -602,9 +619,12 @@ export function updateViewComment(
   input: UpdateViewCommentInput,
 ): ArchitectureView {
   const { view, comment } = requireViewComment(repos, workspace, viewId, commentId);
+  const patch = UpdateViewCommentSchema.parse(input);
+  validateCommentAttachment(repos, workspace, viewId, patch.elementId);
   return replaceViewComment(repos, workspace, view, {
     ...comment,
-    ...UpdateViewCommentSchema.parse(input),
+    ...patch,
+    updatedAt: nowIso(),
   });
 }
 
@@ -628,11 +648,18 @@ export function addViewCommentReply(
   input: AddViewCommentReplyInput,
 ): ArchitectureView {
   const { view, comment } = requireViewComment(repos, workspace, viewId, commentId);
+  const timestamp = nowIso();
   return replaceViewComment(repos, workspace, view, {
     ...comment,
+    updatedAt: timestamp,
     replies: [
       ...comment.replies,
-      { ...AddViewCommentReplySchema.parse(input), id: createId("reply") },
+      {
+        ...AddViewCommentReplySchema.parse(input),
+        id: createId("reply"),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
     ],
   });
 }
@@ -649,10 +676,12 @@ export function updateViewCommentReply(
   if (!comment.replies.some((reply) => reply.id === replyId))
     throw badRequest(`Reply "${replyId}" does not exist on this comment.`);
   const patch = AddViewCommentReplySchema.parse(input);
+  const timestamp = nowIso();
   return replaceViewComment(repos, workspace, view, {
     ...comment,
+    updatedAt: timestamp,
     replies: comment.replies.map((reply) =>
-      reply.id === replyId ? { ...reply, ...patch } : reply,
+      reply.id === replyId ? { ...reply, ...patch, updatedAt: timestamp } : reply,
     ),
   });
 }
@@ -669,6 +698,7 @@ export function deleteViewCommentReply(
     throw badRequest(`Reply "${replyId}" does not exist on this comment.`);
   return replaceViewComment(repos, workspace, view, {
     ...comment,
+    updatedAt: nowIso(),
     replies: comment.replies.filter((reply) => reply.id !== replyId),
   });
 }
