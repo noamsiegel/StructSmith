@@ -1,9 +1,10 @@
 import type { Workspace, WorkspaceDocument } from "@structsmith/contracts";
 import { ImportMermaidRequestSchema } from "@structsmith/contracts";
 import { requireWorkspace, type ServiceContext } from "../context";
-import { badRequest, DomainError } from "../errors";
+import { badRequest, DomainError, ruleViolation } from "../errors";
 import { createId, nowIso } from "../ids";
 import { parseMermaidToWorkspaceDocument } from "../mermaid-import";
+import { validateDocument } from "../validation";
 import { restoreDocument } from "./snapshot.service";
 
 /** Shared import domain layer for native JSON and Mermaid (REST and MCP). */
@@ -14,6 +15,12 @@ export class ImportService {
     document: WorkspaceDocument,
     options: { mode?: "new" | "overwrite"; name?: string } = {},
   ): Workspace {
+    const invalidSections = validateDocument(document).issues.filter(
+      (issue) => issue.code === "SECTION_PARENT_KIND",
+    );
+    if (invalidSections.length > 0) {
+      throw ruleViolation("Sections can only be nested inside other Sections.", invalidSections);
+    }
     const mode = options.mode ?? "new";
     const timestamp = nowIso();
 

@@ -57,6 +57,15 @@ export function validateDocument(document: WorkspaceDocument): ValidationResult 
         boundaryId: boundary.id,
       });
     }
+    if (parent && boundary.kind === "custom" && parent.kind !== "custom") {
+      issues.push({
+        level: "error",
+        code: "SECTION_PARENT_KIND",
+        message: `Section "${boundary.name}" can only be nested inside another Section.`,
+        boundaryId: boundary.id,
+        viewId: boundary.viewId,
+      });
+    }
     const visited = new Set<string>([boundary.id]);
     let current = parent;
     while (current) {

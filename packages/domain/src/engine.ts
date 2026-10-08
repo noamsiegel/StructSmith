@@ -246,12 +246,16 @@ function validateBoundaryParent(
   viewId: string,
   parentBoundaryId: string | null,
   layer: ArchitectureBoundary["layer"],
+  kind: ArchitectureBoundary["kind"],
 ): void {
   if (!parentBoundaryId) return;
   if (parentBoundaryId === boundaryId) throw badRequest("A boundary cannot contain itself.");
   const parent = requireBoundary(repos, parentBoundaryId, workspace.id);
   if (parent.viewId !== viewId) throw ruleViolation("Nested boundaries must use the same view.");
   if (parent.layer !== layer) throw ruleViolation("Nested boundaries must use the same layer.");
+  if (kind === "custom" && parent.kind !== "custom") {
+    throw ruleViolation("Sections can only be nested inside other Sections.");
+  }
   let current: ArchitectureBoundary | undefined = parent;
   while (current) {
     if (current.id === boundaryId)
@@ -301,7 +305,15 @@ export function createBoundary(
   if (repos.boundaries.findById(id)) throw badRequest(`Boundary id "${id}" is already taken.`);
   requireView(repos, input.viewId, workspace.id);
   const layer = input.layer ?? "deployment";
-  validateBoundaryParent(repos, workspace, id, input.viewId, input.parentBoundaryId ?? null, layer);
+  validateBoundaryParent(
+    repos,
+    workspace,
+    id,
+    input.viewId,
+    input.parentBoundaryId ?? null,
+    layer,
+    input.kind,
+  );
   validateBoundaryElements(repos, workspace.id, input.viewId, input.elementIds ?? []);
   const timestamp = nowIso();
   const boundary = claimBoundaryMembers(repos, {
@@ -332,6 +344,7 @@ export function updateBoundary(
 ): ArchitectureBoundary {
   const current = requireBoundary(repos, boundaryId, workspace.id);
   const layer = input.layer ?? current.layer;
+  const kind = input.kind ?? current.kind;
   const parentBoundaryId =
     input.parentBoundaryId !== undefined ? input.parentBoundaryId : current.parentBoundaryId;
   validateBoundaryParent(
@@ -341,13 +354,22 @@ export function updateBoundary(
     current.viewId,
     parentBoundaryId ?? null,
     layer,
+    kind,
   );
+  if (
+    kind !== "custom" &&
+    repos.boundaries
+      .listByView(current.viewId)
+      .some((boundary) => boundary.parentBoundaryId === boundaryId && boundary.kind === "custom")
+  ) {
+    throw ruleViolation("A boundary containing Sections must remain a Section.");
+  }
   const elementIds = input.elementIds ?? current.elementIds;
   validateBoundaryElements(repos, workspace.id, current.viewId, elementIds);
   const next = claimBoundaryMembers(repos, {
     ...current,
     parentBoundaryId: parentBoundaryId ?? null,
-    kind: input.kind ?? current.kind,
+    kind,
     layer,
     classification:
       input.classification !== undefined ? input.classification : current.classification,
