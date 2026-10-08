@@ -12,7 +12,7 @@ export const DEFAULT_NODE_HEIGHT = 96;
 const BASE_NODE_GAP = 96;
 
 /** Word wrapping estimate for layout without a browser; explicit line breaks are preserved. */
-function wrappedLines(text: string, width: number, characterWidth: number): number {
+export function wrappedLines(text: string, width: number, characterWidth: number): number {
   const columns = Math.max(1, Math.floor(width / characterWidth));
   return text.split(/\r?\n/).reduce((total, paragraph) => {
     let lines = 1;

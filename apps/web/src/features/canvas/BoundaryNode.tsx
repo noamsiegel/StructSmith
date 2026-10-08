@@ -10,13 +10,14 @@ import { iconFor } from "../icons";
 import { DetailViewAction } from "../navigation/DetailNavigation";
 import { InlineExpansionAction } from "../navigation/InlineExpansion";
 import { ConnectionHandles } from "./ConnectionHandles";
-import type { BoundaryNodeData } from "./graph";
+import { type BoundaryNodeData, boundaryHeaderHeight } from "./graph";
 
 /** A semantic boundary rendered from the live footprint of its visible members. */
 function BoundaryNodeComponent({
   data,
   selected,
   draggable,
+  width,
 }: NodeProps & { data: BoundaryNodeData }) {
   const { t } = useTranslation();
   const cancelled = useRef(false);
@@ -36,6 +37,7 @@ function BoundaryNodeComponent({
         ? "var(--ownership-internal)"
         : "var(--boundary)");
   const Icon = iconFor(data.kind ?? "custom", null);
+  const headerHeight = boundaryHeaderHeight(data.name, width ?? 220, data.section);
 
   return (
     <div
@@ -76,12 +78,13 @@ function BoundaryNodeComponent({
       <div
         className={cn(
           data.section
-            ? "absolute -top-8 left-0 flex h-7 max-w-full items-center gap-1 rounded-md bg-canvas px-1 text-xs font-medium"
-            : "flex h-9 min-w-0 items-center gap-2 rounded-t-lg border-b px-3 text-xs",
+            ? "absolute bottom-full left-0 mb-1 flex w-full items-center gap-1 rounded-md bg-canvas px-1 py-0.5 text-xs font-medium"
+            : "flex min-w-0 items-center gap-2 rounded-t-lg border-b px-3 py-1 text-xs",
           draggable && "cursor-grab active:cursor-grabbing",
         )}
         title={draggable ? t("boundaries.moveGroupHint") : undefined}
         style={{
+          minHeight: data.section ? headerHeight - 4 : headerHeight,
           borderColor: data.section
             ? undefined
             : `color-mix(in oklch, ${accent} 45%, var(--canvas))`,
@@ -129,7 +132,7 @@ function BoundaryNodeComponent({
         ) : data.section && data.onRename ? (
           <Button
             variant="ghost"
-            className="nodrag nopan h-7 min-w-0 truncate px-1 normal-case tracking-normal"
+            className="nodrag nopan h-auto min-w-0 flex-1 justify-start whitespace-pre-line px-1 py-1 text-left text-xs leading-4 normal-case tracking-normal [overflow-wrap:anywhere]"
             title={t("sections.rename")}
             onClick={() => {
               cancelled.current = false;
@@ -140,14 +143,18 @@ function BoundaryNodeComponent({
             {data.name}
           </Button>
         ) : (
-          <span className="min-w-0 flex-1 truncate font-semibold text-foreground" title={data.name}>
+          <span
+            className="min-w-0 flex-1 whitespace-pre-line font-semibold leading-4 text-foreground [overflow-wrap:anywhere]"
+            title={data.name}
+          >
             {data.name}
           </span>
         )}
-        {data.section ? (
-          <span className="font-medium text-muted-foreground">{t("sections.title")}</span>
-        ) : !data.elementId ? (
-          <Badge variant="outline" className="shrink-0 normal-case tracking-normal">
+        {!data.section && !data.elementId ? (
+          <Badge
+            variant="outline"
+            className="max-w-[40%] whitespace-normal normal-case tracking-normal [overflow-wrap:anywhere]"
+          >
             {data.classification
               ? t(`boundaries.classification.${data.classification}`)
               : data.kind

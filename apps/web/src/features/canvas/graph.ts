@@ -15,6 +15,7 @@ import {
   edgeLabel,
   estimateElementSize,
   resolveRelationshipsForView,
+  wrappedLines,
 } from "@structsmith/domain";
 import type { Edge, Node } from "@xyflow/react";
 import {
@@ -29,6 +30,10 @@ export const NODE_WIDTH = DEFAULT_NODE_WIDTH;
 export const NODE_HEIGHT = DEFAULT_NODE_HEIGHT;
 export const BOUNDARY_PADDING = 28;
 export const BOUNDARY_HEADER = 36;
+
+export function boundaryHeaderHeight(name: string, width: number, section = false): number {
+  return Math.max(BOUNDARY_HEADER, wrappedLines(name, width - (section ? 60 : 150), 7) * 16 + 8);
+}
 
 export interface ElementNodeData extends Record<string, unknown> {
   color?: string;
@@ -345,12 +350,23 @@ export function computeBoundaries(
     const maxY = Math.max(...children.map((child) => child.y + child.height));
 
     const saved = parent.kind === "custom" ? sectionFrames[`boundary:${parentId}`] : undefined;
-    const frame = saved ?? {
-      x: minX - BOUNDARY_PADDING,
-      y: minY - BOUNDARY_PADDING - BOUNDARY_HEADER,
-      width: maxX - minX + BOUNDARY_PADDING * 2,
-      height: maxY - minY + BOUNDARY_PADDING * 2 + BOUNDARY_HEADER,
-    };
+    const headerHeight = boundaryHeaderHeight(
+      parent.name,
+      saved?.width ?? maxX - minX + BOUNDARY_PADDING * 2,
+    );
+    const extraHeader = headerHeight - BOUNDARY_HEADER;
+    const frame = saved
+      ? {
+          ...saved,
+          y: saved.y - extraHeader,
+          height: saved.height + extraHeader,
+        }
+      : {
+          x: minX - BOUNDARY_PADDING,
+          y: minY - BOUNDARY_PADDING - headerHeight,
+          width: maxX - minX + BOUNDARY_PADDING * 2,
+          height: maxY - minY + BOUNDARY_PADDING * 2 + headerHeight,
+        };
     nodes.push({
       id: `boundary:${parentId}`,
       type: "boundary",
@@ -420,13 +436,9 @@ export function computeSemanticBoundaries(
           .flatMap((child) => {
             const box = boxFor(child, visiting);
             if (!box) return [];
-            return [
-              {
-                ...box,
-                y: box.y - (child.kind === "custom" ? BOUNDARY_HEADER : 0),
-                height: box.height + (child.kind === "custom" ? BOUNDARY_HEADER : 0),
-              },
-            ];
+            const titleHeight =
+              child.kind === "custom" ? boundaryHeaderHeight(child.name, box.width, true) : 0;
+            return [{ ...box, y: box.y - titleHeight, height: box.height + titleHeight }];
           }),
       ];
       const x = Math.min(saved.x, ...enclosing.map((frame) => frame.x - BOUNDARY_PADDING));
@@ -459,7 +471,15 @@ export function computeSemanticBoundaries(
       );
     for (const child of active.filter((item) => item.parentBoundaryId === boundary.id)) {
       const childBox = boxFor(child, visiting);
-      if (childBox) contents.push(childBox);
+      if (childBox) {
+        const titleHeight =
+          child.kind === "custom" ? boundaryHeaderHeight(child.name, childBox.width, true) : 0;
+        contents.push({
+          ...childBox,
+          y: childBox.y - titleHeight,
+          height: childBox.height + titleHeight,
+        });
+      }
     }
     visiting.delete(boundary.id);
     if (contents.length === 0) return null;
@@ -467,12 +487,15 @@ export function computeSemanticBoundaries(
     const minY = Math.min(...contents.map((item) => item.y));
     const maxX = Math.max(...contents.map((item) => item.x + item.width));
     const maxY = Math.max(...contents.map((item) => item.y + item.height));
+    const width = maxX - minX + BOUNDARY_PADDING * 2;
+    const headerHeight =
+      boundary.kind === "custom" ? BOUNDARY_HEADER : boundaryHeaderHeight(boundary.name, width);
     const box = {
       id: boundary.id,
       x: minX - BOUNDARY_PADDING,
-      y: minY - BOUNDARY_PADDING - BOUNDARY_HEADER,
-      width: maxX - minX + BOUNDARY_PADDING * 2,
-      height: maxY - minY + BOUNDARY_PADDING * 2 + BOUNDARY_HEADER,
+      y: minY - BOUNDARY_PADDING - headerHeight,
+      width,
+      height: maxY - minY + BOUNDARY_PADDING * 2 + headerHeight,
     };
     boxes.set(boundary.id, box);
     return box;

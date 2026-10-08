@@ -1,5 +1,8 @@
 import { expect, test } from "bun:test";
-import { computeCanvasBoundaries } from "../apps/web/src/features/canvas/graph";
+import {
+  boundaryHeaderHeight,
+  computeCanvasBoundaries,
+} from "../apps/web/src/features/canvas/graph";
 import { createTestContext, createWorkspace } from "./helpers";
 
 test("saved parent Sections enclose nested Section frames and their outside titles", () => {
@@ -68,6 +71,115 @@ test("legacy custom model frames are not visual Sections", () => {
       kind: "custom",
       section: false,
     });
+  } finally {
+    close();
+  }
+});
+
+test("long model-frame titles expand upward without changing member coordinates", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const group = services.elements.create(workspace.id, {
+      kind: "workflowGroup",
+      name: "Capture",
+    }).result;
+    const member = services.elements.create(workspace.id, {
+      kind: "action",
+      name: "Replay",
+      parentId: group.id,
+    }).result;
+    const sources = [{ id: member.id, x: 100, y: 200, width: 220, height: 96 }];
+    const short = computeCanvasBoundaries(
+      sources,
+      new Map([
+        [group.id, group],
+        [member.id, member],
+      ]),
+      [],
+      "custom",
+      true,
+    ).parentBoundaries[0];
+    const long = computeCanvasBoundaries(
+      sources,
+      new Map([
+        [
+          group.id,
+          {
+            ...group,
+            name: "Capture every account available to the portal login and withhold unsafe evidence before creating tasks and charges",
+          },
+        ],
+        [member.id, member],
+      ]),
+      [],
+      "custom",
+      true,
+    ).parentBoundaries[0];
+    if (!short || !long || !short.height || !long.height || !long.width)
+      throw new Error("Missing frames");
+    const header = boundaryHeaderHeight(String(long.data.name), long.width);
+    expect(header).toBeGreaterThan(36);
+    expect(long.position.y).toBe(200 - 28 - header);
+    expect(long.height).toBe(short.height + header - 36);
+    expect(long.position.y + long.height).toBe(short.position.y + short.height);
+    expect(sources).toEqual([{ id: member.id, x: 100, y: 200, width: 220, height: 96 }]);
+  } finally {
+    close();
+  }
+});
+
+test("nested Sections enclose the entire wrapped outside title in saved and derived frames", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const member = services.elements.create(workspace.id, {
+      kind: "action",
+      name: "Replay",
+    }).result;
+    const view = services.views.create(workspace.id, {
+      kind: "workflow",
+      name: "Overview",
+      elementIds: [member.id],
+    }).result;
+    const parent = services.boundaries.create(workspace.id, {
+      viewId: view.id,
+      kind: "custom",
+      layer: "custom",
+      name: "Capture",
+    }).result;
+    const child = services.boundaries.create(workspace.id, {
+      viewId: view.id,
+      kind: "custom",
+      layer: "custom",
+      name: "Portal replay evidence, complete account coverage, and safe persistence for downstream charges",
+      parentBoundaryId: parent.id,
+      elementIds: [member.id],
+    }).result;
+    const sources = [{ id: member.id, x: 210, y: 310, width: 160, height: 96 }];
+    for (const frames of [
+      {
+        [`boundary:${parent.id}`]: { x: 0, y: 300, width: 120, height: 80 },
+        [`boundary:${child.id}`]: { x: 200, y: 300, width: 160, height: 120 },
+      },
+      {},
+    ]) {
+      const computed = computeCanvasBoundaries(
+        sources,
+        new Map([[member.id, member]]),
+        [parent, child],
+        "custom",
+        true,
+        frames,
+      ).semanticBoundaries;
+      const parentFrame = computed.find((node) => node.data.boundaryId === parent.id);
+      const childFrame = computed.find((node) => node.data.boundaryId === child.id);
+      if (!parentFrame || !childFrame?.width) throw new Error("Missing Section frames");
+      const titleHeight = boundaryHeaderHeight(child.name, childFrame.width, true);
+      expect(titleHeight).toBeGreaterThan(36);
+      expect(parentFrame.position.y).toBeLessThanOrEqual(childFrame.position.y - titleHeight - 28);
+      expect(parentFrame.height).toBeGreaterThan(childFrame.height ?? 0);
+    }
   } finally {
     close();
   }
