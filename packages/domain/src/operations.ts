@@ -171,6 +171,14 @@ export function applyOperations(
           settings: operation.data.settings
             ? {
                 ...operation.data.settings,
+                ...(operation.data.settings.annotations
+                  ? {
+                      annotations: operation.data.settings.annotations.map((annotation) => ({
+                        ...annotation,
+                        sectionId: refs.resolve(annotation.sectionId),
+                      })),
+                    }
+                  : {}),
                 ...(operation.data.settings.nodeColors
                   ? {
                       nodeColors: Object.fromEntries(
@@ -185,6 +193,42 @@ export function applyOperations(
             : undefined,
         });
         applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "createViewAnnotation": {
+        const annotation = engine.createViewAnnotation(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          {
+            ...operation.data,
+            sectionId: refs.resolve(operation.data.sectionId),
+          },
+        );
+        refs.set(operation.ref, annotation.id);
+        applied.push({ op: operation.op, ref: operation.ref, id: annotation.id });
+        break;
+      }
+      case "updateViewAnnotation": {
+        const annotation = engine.updateViewAnnotation(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          refs.resolve(operation.annotationId),
+          {
+            ...operation.data,
+            ...(operation.data.sectionId !== undefined
+              ? { sectionId: refs.resolve(operation.data.sectionId) }
+              : {}),
+          },
+        );
+        applied.push({ op: operation.op, id: annotation.id });
+        break;
+      }
+      case "deleteViewAnnotation": {
+        const id = refs.resolve(operation.annotationId);
+        engine.deleteViewAnnotation(repos, workspace, refs.resolve(operation.viewId), id);
+        applied.push({ op: operation.op, id });
         break;
       }
       case "addViewComment": {

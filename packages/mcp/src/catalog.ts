@@ -61,6 +61,34 @@ export const MCP_TOOLS: readonly McpToolInfo[] = [
     mutating: false,
   },
 
+  {
+    name: "annotation_list",
+    description: "List view-owned text, note and table annotations.",
+    mutating: false,
+  },
+  {
+    name: "annotation_get",
+    description: "Read one annotation from its owning view.",
+    mutating: false,
+  },
+  {
+    name: "annotation_create",
+    description:
+      "Add a text, note or table annotation to a view with revision protection and an undo snapshot.",
+    mutating: true,
+  },
+  {
+    name: "annotation_update",
+    description:
+      "Patch annotation text, cells, geometry, color or Section membership without changing its ID or kind.",
+    mutating: true,
+  },
+  {
+    name: "annotation_delete",
+    description: "Delete one annotation from its view with an undo snapshot.",
+    mutating: true,
+  },
+
   { name: "element_create", description: "Add an element to the model.", mutating: true },
   { name: "element_update", description: "Update an element.", mutating: true },
   { name: "element_delete", description: "Delete an element from the model.", mutating: true },

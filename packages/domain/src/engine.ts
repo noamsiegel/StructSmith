@@ -10,6 +10,7 @@ import type {
   CreateElementInput,
   CreateRecordInput,
   CreateRelationshipInput,
+  CreateViewAnnotationInput,
   CreateViewInput,
   LayoutAlgorithm,
   LayoutDirection,
@@ -18,8 +19,10 @@ import type {
   UpdateElementInput,
   UpdateRecordInput,
   UpdateRelationshipInput,
+  UpdateViewAnnotationInput,
   UpdateViewCommentInput,
   UpdateViewInput,
+  ViewAnnotation,
   ViewComment,
   ViewElement,
   ViewRelationship,
@@ -31,8 +34,12 @@ import type {
 import {
   AddViewCommentReplySchema,
   AddViewCommentSchema,
+  CreateViewAnnotationSchema,
   ERROR_CODES,
+  UpdateViewAnnotationSchema,
   UpdateViewCommentSchema,
+  ViewAnnotationSchema,
+  ViewSettingsSchema,
 } from "@structsmith/contracts";
 import { detailViewsFor } from "./detail-views";
 import { badRequest, DomainError, ruleViolation } from "./errors";
@@ -48,6 +55,7 @@ import { validateViewScenarios } from "./scenarios";
 /* ------------------------------------------------------------------ */
 
 export const defaultViewSettings: ViewSettings = {
+  annotations: [],
   nodeColors: {},
   sectionFrames: {},
   preferredDetailViews: {},
@@ -364,6 +372,15 @@ export function updateBoundary(
   ) {
     throw ruleViolation("A boundary containing Sections must remain a Section.");
   }
+  if (
+    (kind !== "custom" || layer !== "custom") &&
+    repos.views
+      .findById(current.viewId)
+      ?.settings.annotations.some((annotation) => annotation.sectionId === boundaryId)
+  )
+    throw ruleViolation(
+      "A boundary containing annotations must remain a Section in the custom layer.",
+    );
   const elementIds = input.elementIds ?? current.elementIds;
   validateBoundaryElements(repos, workspace.id, current.viewId, elementIds);
   const next = claimBoundaryMembers(repos, {
@@ -552,6 +569,11 @@ function pruneRemovedNodeSettings(
   removed: ReadonlySet<string>,
 ): void {
   for (const view of repos.views.listByWorkspace(workspace.id)) {
+    const annotations = view.settings.annotations.map((annotation) =>
+      annotation.sectionId && removed.has(annotation.sectionId)
+        ? { ...annotation, sectionId: null }
+        : annotation,
+    );
     const sectionFrames = Object.fromEntries(
       Object.entries(view.settings.sectionFrames).filter(
         ([key]) => !removed.has(key.slice("boundary:".length)),
@@ -563,12 +585,13 @@ function pruneRemovedNodeSettings(
       ),
     );
     if (
+      annotations.some((annotation, index) => annotation !== view.settings.annotations[index]) ||
       Object.keys(sectionFrames).length !== Object.keys(view.settings.sectionFrames).length ||
       Object.keys(nodeColors).length !== Object.keys(view.settings.nodeColors).length
     )
       repos.views.update({
         ...view,
-        settings: { ...view.settings, sectionFrames, nodeColors },
+        settings: { ...view.settings, annotations, sectionFrames, nodeColors },
         updatedAt: nowIso(),
       });
   }
@@ -581,6 +604,20 @@ function validateExplorationSettings(
   settings: UpdateViewInput["settings"],
   elementIds: readonly string[],
 ): void {
+  if (settings?.annotations) {
+    ViewSettingsSchema.shape.annotations.parse(settings.annotations);
+    for (const annotation of settings.annotations) {
+      if (!annotation.sectionId) continue;
+      const section = repos.boundaries.findById(annotation.sectionId);
+      if (
+        section?.workspaceId !== workspace.id ||
+        section.viewId !== view.id ||
+        section.kind !== "custom" ||
+        section.layer !== "custom"
+      )
+        throw ruleViolation("Annotations may only belong to a Section in their own view.");
+    }
+  }
   if (settings?.nodeColors) {
     for (const key of Object.keys(settings.nodeColors)) {
       const id = key.startsWith("boundary:") ? key.slice("boundary:".length) : key;
@@ -756,6 +793,67 @@ export function updateView(
   );
   repos.views.update(next);
   return next;
+}
+
+export function createViewAnnotation(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  input: CreateViewAnnotationInput,
+): ViewAnnotation {
+  const view = requireView(repos, viewId, workspace.id);
+  const data = CreateViewAnnotationSchema.parse(input);
+  const annotation = ViewAnnotationSchema.parse({ ...data, id: data.id ?? createId("annotation") });
+  updateView(repos, workspace, viewId, {
+    settings: { annotations: [...view.settings.annotations, annotation] },
+  });
+  return annotation;
+}
+
+function requireViewAnnotation(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  annotationId: string,
+) {
+  const view = requireView(repos, viewId, workspace.id);
+  const annotation = view.settings.annotations.find((item) => item.id === annotationId);
+  if (!annotation) throw badRequest(`Annotation "${annotationId}" does not exist on this view.`);
+  return { view, annotation };
+}
+
+export function updateViewAnnotation(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  annotationId: string,
+  input: UpdateViewAnnotationInput,
+): ViewAnnotation {
+  const { view, annotation } = requireViewAnnotation(repos, workspace, viewId, annotationId);
+  const next = ViewAnnotationSchema.parse({
+    ...annotation,
+    ...UpdateViewAnnotationSchema.parse(input),
+  });
+  updateView(repos, workspace, viewId, {
+    settings: {
+      annotations: view.settings.annotations.map((item) =>
+        item.id === annotationId ? next : item,
+      ),
+    },
+  });
+  return next;
+}
+
+export function deleteViewAnnotation(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  annotationId: string,
+): void {
+  const { view } = requireViewAnnotation(repos, workspace, viewId, annotationId);
+  updateView(repos, workspace, viewId, {
+    settings: { annotations: view.settings.annotations.filter((item) => item.id !== annotationId) },
+  });
 }
 
 export function addViewComment(

@@ -108,6 +108,8 @@ export function modelingGuide() {
       boundaryBehavior:
         "Each view owns its boundary tree. The view boundaryLayer selects which layer is rendered and used by boundary-aware layout; showBoundaries controls rendering without deleting boundaries or memberships. Add elements to the view before assigning them to a boundary. Elements with no boundary in the active layer remain ordinary items in the view; 'Items in view' is a UI grouping, not a boundary object.",
       settings: {
+        annotations:
+          "View-owned text/note/table objects: id, kind, finite x/y, width/height (20-10000), nullable optional color (#RRGGBB) and sectionId (custom Section boundary in this view). Text/note use text (<=20000 chars) and optional fontSize (8-72); tables use rectangular cells (1-100 rows, 1-20 columns, <=5000 chars per cell, <=100000 total). They are never model elements or relationship endpoints. Use annotation_list/get/create/update/delete or createViewAnnotation/updateViewAnnotation/deleteViewAnnotation in atomic batches. Update patches preserve ID and kind; snapshots support undo. Reusable connected objects belong in the shared model.",
         nodeColors:
           "Per-view #RRGGBB colors keyed by element ID or boundary:ID for group frames. Existing workspace elements and this view's boundaries are valid targets. Replace the map to remove a node color; connector colors use relationship presentation. Explicit colors override status outlines without changing tags.",
         sectionFrames:

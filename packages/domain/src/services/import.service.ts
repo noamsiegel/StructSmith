@@ -16,10 +16,15 @@ export class ImportService {
     options: { mode?: "new" | "overwrite"; name?: string } = {},
   ): Workspace {
     const invalidSections = validateDocument(document).issues.filter(
-      (issue) => issue.code === "SECTION_PARENT_KIND",
+      (issue) => issue.code === "SECTION_PARENT_KIND" || issue.code.startsWith("ANNOTATION_"),
     );
     if (invalidSections.length > 0) {
-      throw ruleViolation("Sections can only be nested inside other Sections.", invalidSections);
+      throw ruleViolation(
+        invalidSections.some((issue) => issue.code === "SECTION_PARENT_KIND")
+          ? "Sections can only be nested inside other Sections."
+          : "Invalid annotation settings.",
+        invalidSections,
+      );
     }
     const mode = options.mode ?? "new";
     const timestamp = nowIso();
@@ -109,6 +114,12 @@ export class ImportService {
             scopeElementId: view.scopeElementId ? mapId(view.scopeElementId) : null,
             settings: {
               ...view.settings,
+              annotations: (view.settings.annotations ?? []).map((annotation) => ({
+                ...annotation,
+                sectionId: annotation.sectionId
+                  ? mapId(annotation.sectionId)
+                  : annotation.sectionId,
+              })),
               nodeColors: Object.fromEntries(
                 Object.entries(view.settings.nodeColors).map(([key, color]) => [
                   key.startsWith("boundary:")

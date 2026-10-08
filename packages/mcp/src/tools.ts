@@ -7,8 +7,10 @@ import {
   CreateElementSchema,
   CreateRecordSchema,
   CreateRelationshipSchema,
+  CreateViewAnnotationOpSchema,
   CreateViewSchema,
   CreateWorkspaceSchema,
+  DeleteViewAnnotationOpSchema,
   DeleteViewCommentOpSchema,
   DeleteViewCommentReplyOpSchema,
   ImportMermaidRequestSchema,
@@ -20,6 +22,7 @@ import {
   UpdateElementSchema,
   UpdateRecordSchema,
   UpdateRelationshipSchema,
+  UpdateViewAnnotationOpSchema,
   UpdateViewCommentOpSchema,
   UpdateViewCommentReplyOpSchema,
   UpdateViewSchema,
@@ -483,6 +486,62 @@ export function registerTools(
     },
     ({ viewId }) => json(services.views.get(viewId)),
   );
+
+  server.registerTool(
+    "annotation_list",
+    {
+      description: describe("annotation_list"),
+      inputSchema: { viewId },
+      annotations: readOnlyAnnotations,
+    },
+    ({ viewId }) => json(services.views.get(viewId).settings.annotations),
+  );
+  server.registerTool(
+    "annotation_get",
+    {
+      description: describe("annotation_get"),
+      inputSchema: { viewId, annotationId: z.string().min(1) },
+      annotations: readOnlyAnnotations,
+    },
+    ({ viewId, annotationId }) => {
+      const annotation = services.views
+        .get(viewId)
+        .settings.annotations.find((item) => item.id === annotationId);
+      if (!annotation)
+        throw badRequest(`Annotation "${annotationId}" does not exist on this view.`);
+      return json(annotation);
+    },
+  );
+  for (const [name, operationSchema, destructive] of [
+    ["annotation_create", CreateViewAnnotationOpSchema, false],
+    ["annotation_update", UpdateViewAnnotationOpSchema, false],
+    ["annotation_delete", DeleteViewAnnotationOpSchema, true],
+  ] as const) {
+    const { op, ...fields } = operationSchema.shape;
+    const inputSchema = z.object({ ...fields, workspaceId, expectedRevision });
+    registerWrite(
+      name,
+      inputSchema.shape,
+      (args: unknown) => {
+        const input = inputSchema.parse(args);
+        const operation = operationSchema.parse({ ...input, op: op.value });
+        const result = services.model.applyOperations(
+          input.workspaceId,
+          {
+            expectedRevision: input.expectedRevision,
+            label: `MCP ${name}`,
+            operations: [operation],
+          },
+          "mcp",
+        );
+        return json({
+          ...result,
+          annotations: services.views.get(input.viewId).settings.annotations,
+        });
+      },
+      destructive,
+    );
+  }
 
   server.registerTool(
     "comment_list",

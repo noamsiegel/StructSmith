@@ -1,4 +1,5 @@
 import type { ValidationIssue, ValidationResult, WorkspaceDocument } from "@structsmith/contracts";
+import { ViewSettingsSchema } from "@structsmith/contracts";
 import { checkParent, wouldCreateCycle } from "./rules";
 
 /**
@@ -117,6 +118,27 @@ export function validateDocument(document: WorkspaceDocument): ValidationResult 
 
   const seenViewKeys = new Set<string>();
   for (const view of views) {
+    const parsedAnnotations = ViewSettingsSchema.shape.annotations.safeParse(
+      view.settings.annotations,
+    );
+    if (!parsedAnnotations.success)
+      issues.push({
+        level: "error",
+        code: "ANNOTATION_INVALID",
+        message: `View "${view.name}" contains invalid annotations.`,
+        viewId: view.id,
+      });
+    for (const annotation of parsedAnnotations.success ? parsedAnnotations.data : []) {
+      if (!annotation.sectionId) continue;
+      const section = boundaryById.get(annotation.sectionId);
+      if (section?.viewId !== view.id || section.kind !== "custom" || section.layer !== "custom")
+        issues.push({
+          level: "error",
+          code: "ANNOTATION_SECTION_INVALID",
+          message: `Annotation "${annotation.id}" must belong to a Section in its own view.`,
+          viewId: view.id,
+        });
+    }
     if (seenViewKeys.has(view.key)) {
       issues.push({
         level: "error",
