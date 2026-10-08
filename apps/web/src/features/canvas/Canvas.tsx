@@ -4,7 +4,9 @@ import type {
   ArchitectureRecord,
   ArchitectureRelationship,
   ViewDetail,
+  ViewElement,
   ViewRelationshipPatch,
+  Workspace,
 } from "@structsmith/contracts";
 import {
   applyEdgeChanges,
@@ -42,6 +44,8 @@ import { buildPasteOperations, createDiagramClipboard, type DiagramCopyMode } fr
 import { ElementNode } from "./ElementNode";
 import {
   boundaryElementId,
+  boundaryMemberIds,
+  boundaryMoveEntries,
   buildGraph,
   computeCanvasBoundaries,
   type FlowEdge,
@@ -146,6 +150,13 @@ export function Canvas({
   const dragOrigins = useRef(new Map<string, { x: number; y: number }>());
   const layoutSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const ignoreDetailsUntil = useRef(0);
+  const boundaryDrag = useRef<{
+    id: string;
+    position: { x: number; y: number };
+    members: Set<string>;
+    placements: ViewElement[];
+    revision: number;
+  } | null>(null);
 
   // A rebuild happens after every mutation; carry the current selection over so
   // the highlight does not blink off while the inspector still shows the item.
@@ -297,7 +308,9 @@ export function Canvas({
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       const relevant = changes.filter(
-        (change) => !("id" in change) || !isBoundaryId(change.id as string),
+        (change) =>
+          (!("id" in change) || !isBoundaryId(change.id as string)) &&
+          !(boundaryDrag.current && change.type === "position"),
       );
       setNodes((current) => applyNodeChanges(relevant, current) as FlowNode[]);
 
@@ -329,6 +342,26 @@ export function Canvas({
       if (layoutTimer.current) clearTimeout(layoutTimer.current);
       flushLayout();
       dragOrigins.current.clear();
+      boundaryDrag.current = null;
+      if (node.type === "boundary") {
+        const workspace = queryClient.getQueryData<Workspace>(queryKeys.workspace(workspaceId));
+        if (!workspace) return;
+        const members = boundaryMemberIds(
+          node.data,
+          elementsById,
+          boundaries,
+          view.settings.boundaryLayer,
+        );
+        const current = new Map(nodes.map((item) => [item.id, item.position]));
+        boundaryDrag.current = {
+          id: node.id,
+          position: node.position,
+          members,
+          placements: view.elements.map((entry) => ({ ...entry, ...current.get(entry.elementId) })),
+          revision: workspace.revision,
+        };
+        return;
+      }
       for (const dragged of draggedNodes.length > 0 ? draggedNodes : [node]) {
         if (isBoundaryId(dragged.id)) continue;
         dragOrigins.current.set(dragged.id, {
@@ -337,11 +370,83 @@ export function Canvas({
         });
       }
     },
-    [flushLayout],
+    [flushLayout, workspaceId, elementsById, boundaries, view, nodes],
   );
+
+  const onNodeDrag = useCallback<OnNodeDrag<FlowNode>>((_event, node) => {
+    const drag = boundaryDrag.current;
+    if (!drag || drag.id !== node.id) return;
+    const entries = boundaryMoveEntries(drag.placements, drag.members, {
+      x: node.position.x - drag.position.x,
+      y: node.position.y - drag.position.y,
+    });
+    const positions = new Map(
+      entries.map((entry) => [entry.elementId, { x: entry.x, y: entry.y }]),
+    );
+    setNodes((current) =>
+      current.map((item) => ({ ...item, position: positions.get(item.id) ?? item.position })),
+    );
+  }, []);
 
   const onNodeDragStop = useCallback<OnNodeDrag<FlowNode>>(
     (_event, node, draggedNodes) => {
+      const drag = boundaryDrag.current;
+      onNodeDrag(_event, node, draggedNodes);
+      boundaryDrag.current = null;
+      if (drag && drag.id === node.id) {
+        const entries = boundaryMoveEntries(drag.placements, drag.members, {
+          x: node.position.x - drag.position.x,
+          y: node.position.y - drag.position.y,
+        });
+        const previous = new Map(drag.placements.map((entry) => [entry.elementId, entry]));
+        if (
+          entries.every(
+            (entry) =>
+              entry.x === previous.get(entry.elementId)?.x &&
+              entry.y === previous.get(entry.elementId)?.y,
+          )
+        )
+          return;
+        beginSave();
+        const request = layoutSaveQueue.current.then(() =>
+          api.applyOperations(workspaceId, {
+            expectedRevision: drag.revision,
+            label: t("toast.layoutSaved"),
+            operations: [{ op: "setLayout", viewId: view.id, entries }],
+          }),
+        );
+        layoutSaveQueue.current = request.then(
+          () => undefined,
+          () => undefined,
+        );
+        void request
+          .then((result) => {
+            if (result.snapshotId)
+              pushHistory({
+                kind: "snapshot",
+                snapshotId: result.snapshotId,
+                label: t("toast.layoutSaved"),
+              });
+            invalidateWorkspace(workspaceId);
+          })
+          .catch((error) => {
+            const previous = new Map(
+              drag.placements
+                .filter((entry) => drag.members.has(entry.elementId))
+                .map((entry) => [entry.elementId, { x: entry.x, y: entry.y }]),
+            );
+            setNodes((current) =>
+              current.map((item) => ({
+                ...item,
+                position: previous.get(item.id) ?? item.position,
+              })),
+            );
+            invalidateWorkspace(workspaceId);
+            onError(error);
+          })
+          .finally(endSave);
+        return;
+      }
       const moved = (draggedNodes.length > 0 ? draggedNodes : [node]).filter(
         (dragged) => !isBoundaryId(dragged.id),
       );
@@ -362,7 +467,7 @@ export function Canvas({
         changes.map(({ elementId, before }) => ({ elementId, ...before })),
       );
     },
-    [persistLayout],
+    [persistLayout, onNodeDrag, beginSave, endSave, onError, pushHistory, t, view.id, workspaceId],
   );
 
   const onEdgesChange = useCallback(
@@ -923,13 +1028,28 @@ export function Canvas({
       ...boundary,
       selected: selection.type === "boundary" && selection.id === boundary.data.boundaryId,
     }));
-    return [...legacyBoundaries, ...semanticBoundaries, ...nodes];
+    const frames = [...legacyBoundaries, ...semanticBoundaries].map((boundary) => {
+      if (boundary.type !== "boundary") return boundary;
+      const members = boundaryMemberIds(
+        boundary.data,
+        elementsById,
+        boundaries,
+        view.settings.boundaryLayer,
+      );
+      const placements = view.elements.filter((entry) => members.has(entry.elementId));
+      return {
+        ...boundary,
+        draggable: placements.length > 0 && !placements.some((entry) => entry.locked),
+      };
+    });
+    return [...frames, ...nodes];
   }, [
     nodes,
     elementsById,
     boundaries,
     view.settings.showBoundaries,
     view.settings.boundaryLayer,
+    view.elements,
     selection,
   ]);
 
@@ -994,6 +1114,7 @@ export function Canvas({
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
         onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}

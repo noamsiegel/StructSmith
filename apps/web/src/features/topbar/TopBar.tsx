@@ -8,6 +8,8 @@ import {
   Maximize,
   Monitor,
   Moon,
+  PanelLeft,
+  PanelRight,
   Plug,
   Plus,
   Redo2,
@@ -30,7 +32,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Tooltip } from "@/components/ui/tooltip";
 import { supportedLanguages } from "@/i18n";
-import { primaryModifierLabel } from "@/lib/platform";
+import { primaryModifierKeyCode, primaryModifierLabel } from "@/lib/platform";
 import { type Theme, useTheme } from "@/lib/theme";
 import { useEditorStore } from "@/store/editor";
 import { useCopyAgentReference } from "../reference/useCopyAgentReference";
@@ -53,6 +55,10 @@ interface TopBarProps {
   onRedo: () => void;
   onOpenMcp: () => void;
   onGoHome: () => void;
+  modelPanelVisible: boolean;
+  inspectorPanelVisible: boolean;
+  onToggleModelPanel: () => void;
+  onToggleInspectorPanel: () => void;
 }
 
 export function TopBar(props: TopBarProps) {
@@ -145,7 +151,12 @@ export function TopBar(props: TopBarProps) {
               {t("reference.copyView")}
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onSelect={() => setExplorerTab("views")}>
+          <DropdownMenuItem
+            onSelect={() => {
+              if (!props.modelPanelVisible) props.onToggleModelPanel();
+              setExplorerTab("views");
+            }}
+          >
             {t("topbar.newView")}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -217,6 +228,35 @@ export function TopBar(props: TopBarProps) {
       </Tooltip>
 
       <span className="flex-1" />
+
+      <Tooltip label={`${t("topbar.toggleModelPanel")} (${primary} B)`}>
+        <Button
+          id="toggle-model-panel"
+          variant="ghost"
+          size="iconSm"
+          aria-label={t("topbar.toggleModelPanel")}
+          aria-expanded={props.modelPanelVisible}
+          aria-controls="model-panel"
+          aria-keyshortcuts={`${primaryModifierKeyCode()}+B`}
+          onClick={props.onToggleModelPanel}
+        >
+          <PanelLeft className="h-3.5 w-3.5" />
+        </Button>
+      </Tooltip>
+      <Tooltip label={`${t("topbar.toggleInspectorPanel")} (${primary} Alt B)`}>
+        <Button
+          id="toggle-inspector-panel"
+          variant="ghost"
+          size="iconSm"
+          aria-label={t("topbar.toggleInspectorPanel")}
+          aria-expanded={props.inspectorPanelVisible}
+          aria-controls="inspector-panel"
+          aria-keyshortcuts={`${primaryModifierKeyCode()}+Alt+B`}
+          onClick={props.onToggleInspectorPanel}
+        >
+          <PanelRight className="h-3.5 w-3.5" />
+        </Button>
+      </Tooltip>
 
       <Tooltip label={`${t("topbar.search")} (${primary}K)`}>
         <Button

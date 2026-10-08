@@ -148,6 +148,8 @@
     "activeTheme": "Aktywny motyw: {{theme}}"
   },
   "topbar": {
+    "toggleModelPanel": "Przełącz panel modelu",
+    "toggleInspectorPanel": "Przełącz panel inspektora",
     "workspace": "Przestrzeń",
     "view": "Widok",
     "add": "Dodaj",
@@ -415,6 +417,7 @@
   },
   "boundaries": {
     "title": "Strefy",
+    "moveGroupHint": "Przeciągnij, aby przenieść grupę wraz z jej elementami",
     "newName": "Nowa strefa",
     "created": "Utworzono strefę",
     "updated": "Zaktualizowano strefę",

@@ -5,6 +5,7 @@ import type {
   ArchitectureRelationship,
   ControlPoint,
   ViewDetail,
+  ViewElement,
   ViewRelationship,
 } from "@structsmith/contracts";
 import {
@@ -432,31 +433,6 @@ export function computeCanvasBoundaries(
   const semanticBoundaries = computeSemanticBoundaries(sources, boundaries, layer, enabled);
   if (!enabled) return { parentBoundaries: [], semanticBoundaries };
 
-  const active = boundaries.filter((boundary) => boundary.layer === layer);
-  const children = new Map<string, ArchitectureBoundary[]>();
-  for (const boundary of active) {
-    if (!boundary.parentBoundaryId) continue;
-    const bucket = children.get(boundary.parentBoundaryId);
-    if (bucket) bucket.push(boundary);
-    else children.set(boundary.parentBoundaryId, [boundary]);
-  }
-
-  const members = new Map<string, Set<string>>();
-  const memberIds = (boundaryId: string, visiting = new Set<string>()): Set<string> => {
-    const cached = members.get(boundaryId);
-    if (cached) return cached;
-    if (visiting.has(boundaryId)) return new Set();
-    visiting.add(boundaryId);
-    const boundary = active.find((candidate) => candidate.id === boundaryId);
-    const result = new Set(boundary?.elementIds ?? []);
-    for (const child of children.get(boundaryId) ?? []) {
-      for (const elementId of memberIds(child.id, visiting)) result.add(elementId);
-    }
-    visiting.delete(boundaryId);
-    members.set(boundaryId, result);
-    return result;
-  };
-
   const nestedBoundaries = semanticBoundaries.flatMap((node): NestedBoundarySource[] => {
     const boundaryId = node.data.boundaryId;
     if (!boundaryId || node.width === undefined || node.height === undefined) return [];
@@ -467,7 +443,9 @@ export function computeCanvasBoundaries(
         y: node.position.y,
         width: node.width,
         height: node.height,
-        elementIds: [...memberIds(String(boundaryId))],
+        elementIds: [
+          ...boundaryMemberIds({ boundaryId: String(boundaryId) }, elementsById, boundaries, layer),
+        ],
       },
     ];
   });
@@ -480,3 +458,55 @@ export function computeCanvasBoundaries(
 
 export const isBoundaryId = (id: string): boolean => id.startsWith("boundary:");
 export const boundaryElementId = (id: string): string => id.slice("boundary:".length);
+
+/** Resolve membership, never the unrelated cards that happen to share a rectangle. */
+export function boundaryMemberIds(
+  data: Pick<BoundaryNodeData, "elementId" | "boundaryId">,
+  elementsById: ReadonlyMap<string, ArchitectureElement>,
+  boundaries: readonly ArchitectureBoundary[],
+  layer: ArchitectureBoundary["layer"],
+): Set<string> {
+  const members = new Set<string>();
+  if (data.boundaryId) {
+    const visited = new Set<string>();
+    const collect = (id: string): void => {
+      if (visited.has(id)) return;
+      visited.add(id);
+      const boundary = boundaries.find((item) => item.id === id && item.layer === layer);
+      if (!boundary) return;
+      for (const elementId of boundary.elementIds) members.add(elementId);
+      for (const child of boundaries) {
+        if (child.parentBoundaryId === id && child.layer === layer) collect(child.id);
+      }
+    };
+    collect(data.boundaryId);
+  } else if (data.elementId) {
+    for (const element of elementsById.values()) {
+      let parentId = element.parentId;
+      const visited = new Set<string>();
+      while (parentId && !visited.has(parentId)) {
+        if (parentId === data.elementId) {
+          members.add(element.id);
+          break;
+        }
+        visited.add(parentId);
+        parentId = elementsById.get(parentId)?.parentId ?? null;
+      }
+    }
+  }
+  return members;
+}
+
+/** A locked member holds the entire group in place, including hidden members. */
+export function boundaryMoveEntries(
+  placements: readonly Pick<ViewElement, "elementId" | "x" | "y" | "locked">[],
+  memberIds: ReadonlySet<string>,
+  delta: { x: number; y: number },
+): { elementId: string; x: number; y: number }[] {
+  if (!Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return [];
+  const members = placements.filter((entry) => memberIds.has(entry.elementId));
+  if (members.some((entry) => entry.locked)) return [];
+  const x = Math.round(delta.x);
+  const y = Math.round(delta.y);
+  return members.map((entry) => ({ elementId: entry.elementId, x: entry.x + x, y: entry.y + y }));
+}

@@ -18,6 +18,8 @@ export function KeyboardShortcutsDialog() {
   const shortcuts = [
     [t("shortcuts.commandPalette"), `${primary} K`],
     [t("shortcuts.showShortcuts"), `${primary} /`],
+    [t("topbar.toggleModelPanel"), `${primary} B`],
+    [t("topbar.toggleInspectorPanel"), `${primary} Alt B`],
     [t("shortcuts.selectAll"), `${primary} A`],
     [t("shortcuts.addToSelection"), `${primary} + ${t("shortcuts.click")}`],
     [t("navigation.openDetails"), t("navigation.doubleClick")],

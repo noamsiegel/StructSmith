@@ -2,7 +2,7 @@ import { canOpenElementDetails, detailViewsFor } from "@structsmith/domain";
 import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Group, Panel, Separator } from "react-resizable-panels";
+import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import {
@@ -50,6 +50,14 @@ import { parseReferenceSearchValue } from "@/lib/agentReference";
 import { hasPrimaryModifier } from "@/lib/platform";
 import { useEditorStore } from "@/store/editor";
 import { useHistoryStore } from "@/store/history";
+
+export function sidebarShortcut(
+  event: Pick<KeyboardEvent, "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
+  editing: boolean,
+): "model" | "inspector" | null {
+  if (editing || !hasPrimaryModifier(event) || event.shiftKey || event.code !== "KeyB") return null;
+  return event.altKey ? "inspector" : "model";
+}
 
 interface StudioPageProps {
   workspaceId: string;
@@ -135,6 +143,30 @@ function StudioContent({
   const setExplorerTab = useEditorStore((state) => state.setExplorerTab);
   const setCommandOpen = useEditorStore((state) => state.setCommandOpen);
   const setShortcutsOpen = useEditorStore((state) => state.setShortcutsOpen);
+  const modelPanel = usePanelRef();
+  const inspectorPanel = usePanelRef();
+  const modelPanelVisible = useEditorStore((state) => state.modelPanelVisible);
+  const inspectorPanelVisible = useEditorStore((state) => state.inspectorPanelVisible);
+  const sidebarDefaults = useRef({
+    model: modelPanelVisible ? "19%" : "0%",
+    inspector: inspectorPanelVisible ? "22%" : "0%",
+  });
+  const setModelPanelVisible = useEditorStore((state) => state.setModelPanelVisible);
+  const setInspectorPanelVisible = useEditorStore((state) => state.setInspectorPanelVisible);
+  const updateSidebarVisibility = (side: "model" | "inspector", visible: boolean): void => {
+    if (!visible && document.getElementById(`${side}-panel`)?.contains(document.activeElement))
+      document.getElementById(`toggle-${side}-panel`)?.focus();
+    (side === "model" ? setModelPanelVisible : setInspectorPanelVisible)(visible);
+  };
+  const toggleSidebar = (side: "model" | "inspector"): void => {
+    const panel = (side === "model" ? modelPanel : inspectorPanel).current;
+    if (!panel) return;
+    if (panel.isCollapsed()) panel.expand();
+    else {
+      updateSidebarVisibility(side, false);
+      panel.collapse();
+    }
+  };
   const handledReference = useRef<string | null>(null);
   const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
   const [detailElementId, setDetailElementId] = useState<string | null>(null);
@@ -249,10 +281,21 @@ function StudioContent({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       const target = event.target as HTMLElement | null;
-      const typing =
-        target?.tagName === "INPUT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.isContentEditable === true;
+      const typing = Boolean(
+        target?.isContentEditable ||
+          target?.closest?.(
+            "input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='textbox']",
+          ),
+      );
+      const sidebar = sidebarShortcut(
+        event,
+        typing || Boolean(target?.closest?.('[role="dialog"]')),
+      );
+      if (sidebar) {
+        event.preventDefault();
+        toggleSidebar(sidebar);
+        return;
+      }
       const primary = hasPrimaryModifier(event);
 
       if (primary && event.key.toLowerCase() === "k") {
@@ -320,11 +363,25 @@ function StudioContent({
           onRedo={() => void history.redo()}
           onOpenMcp={onOpenMcp}
           onGoHome={onGoHome}
+          modelPanelVisible={modelPanelVisible}
+          inspectorPanelVisible={inspectorPanelVisible}
+          onToggleModelPanel={() => toggleSidebar("model")}
+          onToggleInspectorPanel={() => toggleSidebar("inspector")}
         />
 
         <div className="min-h-0 flex-1">
           <Group orientation="horizontal">
-            <Panel defaultSize="19%" minSize="12%" maxSize="34%">
+            <Panel
+              id="model-panel"
+              panelRef={modelPanel}
+              collapsible
+              defaultSize={sidebarDefaults.current.model}
+              minSize="12%"
+              maxSize="34%"
+              inert={!modelPanelVisible}
+              aria-hidden={!modelPanelVisible}
+              onResize={(size) => updateSidebarVisibility("model", size.inPixels > 0)}
+            >
               <Explorer
                 workspaceId={workspaceId}
                 elements={elements}
@@ -397,7 +454,17 @@ function StudioContent({
             </Panel>
 
             <Separator className="w-px bg-border transition-colors hover:bg-primary/40" />
-            <Panel defaultSize="22%" minSize="14%" maxSize="40%">
+            <Panel
+              id="inspector-panel"
+              panelRef={inspectorPanel}
+              collapsible
+              defaultSize={sidebarDefaults.current.inspector}
+              minSize="14%"
+              maxSize="40%"
+              inert={!inspectorPanelVisible}
+              aria-hidden={!inspectorPanelVisible}
+              onResize={(size) => updateSidebarVisibility("inspector", size.inPixels > 0)}
+            >
               <Inspector
                 workspaceId={workspaceId}
                 elements={elements}

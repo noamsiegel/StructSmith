@@ -140,6 +140,8 @@
     "activeTheme": "Active theme: {{theme}}"
   },
   "topbar": {
+    "toggleModelPanel": "Toggle Model sidebar",
+    "toggleInspectorPanel": "Toggle Inspector sidebar",
     "workspace": "Workspace",
     "view": "View",
     "add": "Add",
@@ -407,6 +409,7 @@
   },
   "boundaries": {
     "title": "Boundaries",
+    "moveGroupHint": "Drag to move this group and its members",
     "newName": "New boundary",
     "created": "Created boundary",
     "updated": "Updated boundary",

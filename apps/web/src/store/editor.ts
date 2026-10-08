@@ -49,6 +49,8 @@ interface EditorState {
   bottomPanel: BottomPanel;
   commandOpen: boolean;
   shortcutsOpen: boolean;
+  modelPanelVisible: boolean;
+  inspectorPanelVisible: boolean;
   paletteOpen: boolean;
   paletteBoundaryId: string | null;
   connectFrom: string | null;
@@ -62,6 +64,8 @@ interface EditorState {
   setBottomPanel: (panel: BottomPanel) => void;
   setCommandOpen: (open: boolean) => void;
   setShortcutsOpen: (open: boolean) => void;
+  setModelPanelVisible: (visible: boolean) => void;
+  setInspectorPanelVisible: (visible: boolean) => void;
   setPaletteOpen: (open: boolean) => void;
   openElementPalette: (boundaryId?: string | null) => void;
   setConnectFrom: (elementId: string | null) => void;
@@ -77,6 +81,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   bottomPanel: null,
   commandOpen: false,
   shortcutsOpen: false,
+  modelPanelVisible: true,
+  inspectorPanelVisible: true,
   paletteOpen: false,
   paletteBoundaryId: null,
   connectFrom: null,
@@ -97,6 +103,8 @@ export const useEditorStore = create<EditorState>((set) => ({
     set((state) => ({ bottomPanel: state.bottomPanel === bottomPanel ? null : bottomPanel })),
   setCommandOpen: (commandOpen) => set({ commandOpen }),
   setShortcutsOpen: (shortcutsOpen) => set({ shortcutsOpen }),
+  setModelPanelVisible: (modelPanelVisible) => set({ modelPanelVisible }),
+  setInspectorPanelVisible: (inspectorPanelVisible) => set({ inspectorPanelVisible }),
   setPaletteOpen: (paletteOpen) =>
     set({ paletteOpen, ...(paletteOpen ? {} : { paletteBoundaryId: null }) }),
   openElementPalette: (paletteBoundaryId = null) => set({ paletteOpen: true, paletteBoundaryId }),

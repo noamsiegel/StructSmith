@@ -1,4 +1,5 @@
 import type { NodeProps } from "@xyflow/react";
+import { GripVertical } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
@@ -6,7 +7,11 @@ import { DetailViewAction } from "../navigation/DetailNavigation";
 import type { BoundaryNodeData } from "./graph";
 
 /** A semantic boundary rendered from the live footprint of its visible members. */
-function BoundaryNodeComponent({ data, selected }: NodeProps & { data: BoundaryNodeData }) {
+function BoundaryNodeComponent({
+  data,
+  selected,
+  draggable,
+}: NodeProps & { data: BoundaryNodeData }) {
   const { t } = useTranslation();
   const accent =
     data.classification === "public"
@@ -27,12 +32,17 @@ function BoundaryNodeComponent({ data, selected }: NodeProps & { data: BoundaryN
       }}
     >
       <div
-        className="flex h-9 items-center gap-2 border-b px-3 py-2 text-xs font-bold uppercase tracking-wider backdrop-blur-sm"
+        className={cn(
+          "flex h-9 items-center gap-2 border-b px-3 py-2 text-xs font-bold uppercase tracking-wider backdrop-blur-sm",
+          draggable && "cursor-grab active:cursor-grabbing",
+        )}
+        title={draggable ? t("boundaries.moveGroupHint") : undefined}
         style={{
           borderColor: `color-mix(in oklch, ${accent} 45%, var(--canvas))`,
           backgroundColor: `color-mix(in oklch, ${accent} 34%, var(--canvas))`,
         }}
       >
+        {draggable && <GripVertical className="h-3 w-3 shrink-0" aria-hidden="true" />}
         <span
           className={cn(
             "h-2 w-2 rounded-sm",
