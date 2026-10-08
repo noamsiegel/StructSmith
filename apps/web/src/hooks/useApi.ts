@@ -94,6 +94,7 @@ export function useApiErrorHandler(): (error: unknown) => void {
 }
 
 export interface CommandInput {
+  expectedRevision?: number;
   operations: ArchitectureOperationInput[];
   label: string;
   /** Skip the undo entry (used by the undo/redo machinery itself). */
@@ -111,12 +112,13 @@ export function useApplyOperations(workspaceId: string) {
   const endSave = useEditorStore((state) => state.endSave);
 
   return useMutation({
-    mutationFn: async ({ operations, label }: CommandInput) => {
+    mutationFn: async ({ operations, label, expectedRevision }: CommandInput) => {
       beginSave();
       try {
         return await api.applyOperations(workspaceId, {
           operations: operations as never,
           label,
+          expectedRevision,
         });
       } finally {
         endSave();

@@ -183,6 +183,7 @@ export function fromRelationship(
 }
 
 const defaultSettings: ViewSettings = {
+  commentPins: [],
   showBoundaries: true,
   snapToGrid: false,
   autoLayoutDirection: "LR",

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { LayoutAlgorithmSchema, LayoutDirectionSchema } from "./enums";
 import {
+  AddViewCommentSchema,
   CreateBoundarySchema,
   CreateElementSchema,
   CreateRecordSchema,
@@ -115,6 +116,12 @@ export const UpdateViewOpSchema = z.object({
   data: UpdateViewSchema,
 });
 
+export const AddViewCommentOpSchema = z.object({
+  op: z.literal("addViewComment"),
+  viewId: IdSchema,
+  data: AddViewCommentSchema,
+});
+
 export const DeleteViewOpSchema = z.object({
   op: z.literal("deleteView"),
   viewId: IdSchema,
@@ -189,6 +196,7 @@ export const ArchitectureOperationSchema = z.discriminatedUnion("op", [
   DeleteRelationshipOpSchema,
   CreateViewOpSchema,
   UpdateViewOpSchema,
+  AddViewCommentOpSchema,
   DeleteViewOpSchema,
   SetViewElementsOpSchema,
   SetViewRelationshipsOpSchema,

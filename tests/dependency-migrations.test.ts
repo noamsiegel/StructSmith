@@ -23,6 +23,7 @@ describe("Zod view settings", () => {
       showRelationshipLabels: true,
       showFullTitles: false,
       showDescriptions: false,
+      commentPins: [],
     });
   });
 
@@ -60,6 +61,7 @@ describe("Zod view settings", () => {
         showRelationshipLabels: false,
         showFullTitles: true,
         showDescriptions: true,
+        commentPins: [],
       });
     } finally {
       close();

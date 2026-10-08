@@ -1,4 +1,15 @@
 {
+  "comments": {
+    "add": "Comment (C)",
+    "placeHint": "Click to place a comment · Enter to center · Esc to cancel",
+    "addTitle": "Add comment",
+    "title": "Comment",
+    "viewOwned": "Saved on this view.",
+    "textLabel": "Comment text",
+    "post": "Post comment",
+    "added": "Add view comment",
+    "openPin": "Open comment {{number}}"
+  },
   "statusOverlay": {
     "title": "Implementation status overlay",
     "off": "Overlay off",

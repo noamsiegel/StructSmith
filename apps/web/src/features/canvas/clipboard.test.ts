@@ -55,6 +55,7 @@ const view: ViewDetail = {
     showRelationshipLabels: true,
     showFullTitles: false,
     showDescriptions: false,
+    commentPins: [],
   },
   createdAt: timestamp,
   updatedAt: timestamp,

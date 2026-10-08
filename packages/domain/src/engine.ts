@@ -1,4 +1,5 @@
 import type {
+  AddViewCommentInput,
   ArchitectureBoundary,
   ArchitectureElement,
   ArchitectureRecord,
@@ -24,7 +25,7 @@ import type {
   Workspace,
   WorkspaceMode,
 } from "@structsmith/contracts";
-import { ERROR_CODES } from "@structsmith/contracts";
+import { AddViewCommentSchema, ERROR_CODES } from "@structsmith/contracts";
 import { badRequest, DomainError, ruleViolation } from "./errors";
 import { createId, nowIso, uniqueKey } from "./ids";
 import { edgeLabel, resolveRelationshipsForView } from "./implied";
@@ -37,6 +38,7 @@ import { checkParent, descendantsOf, wouldCreateCycle } from "./rules";
 /* ------------------------------------------------------------------ */
 
 export const defaultViewSettings: ViewSettings = {
+  commentPins: [],
   showBoundaries: true,
   snapToGrid: false,
   autoLayoutDirection: "LR",
@@ -537,6 +539,19 @@ export function updateView(
   };
   repos.views.update(next);
   return next;
+}
+
+export function addViewComment(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  input: AddViewCommentInput,
+): ArchitectureView {
+  const current = requireView(repos, viewId, workspace.id);
+  const pin = { ...AddViewCommentSchema.parse(input), id: createId("comment") };
+  return updateView(repos, workspace, viewId, {
+    settings: { commentPins: [...current.settings.commentPins, pin] },
+  });
 }
 
 export function deleteView(repos: Repositories, workspace: Workspace, viewId: string): void {

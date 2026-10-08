@@ -40,6 +40,7 @@ import { iconFor } from "../icons";
 import type { ViewLocation } from "../navigation/history";
 import { useCopyAgentReference } from "../reference/useCopyAgentReference";
 import { BoundaryNode } from "./BoundaryNode";
+import { CanvasComments } from "./CanvasComments";
 import { buildPasteOperations, createDiagramClipboard, type DiagramCopyMode } from "./clipboard";
 import { ElementNode } from "./ElementNode";
 import {
@@ -97,6 +98,7 @@ export function Canvas({
 }: CanvasProps) {
   const { t } = useTranslation();
   const flow = useReactFlow();
+  const canvasRef = useRef<HTMLDivElement>(null);
   const onError = useApiErrorHandler();
   const applyOperations = useApplyOperations(workspaceId);
   const copyReference = useCopyAgentReference();
@@ -1100,6 +1102,7 @@ export function Canvas({
 
   return (
     <div
+      ref={canvasRef}
       className="relative h-full w-full"
       onDrop={onDrop}
       onDragOver={(event) => {
@@ -1179,6 +1182,7 @@ export function Canvas({
         proOptions={{ hideAttribution: false }}
         deleteKeyCode={["Delete", "Backspace"]}
       >
+        <CanvasComments key={view.id} workspaceId={workspaceId} view={view} canvasRef={canvasRef} />
         <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="var(--canvas-dot)" />
         <Controls showInteractive={false} position="bottom-left" />
         <MiniMap

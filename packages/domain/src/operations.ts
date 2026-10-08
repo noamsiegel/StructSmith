@@ -172,6 +172,16 @@ export function applyOperations(
         applied.push({ op: operation.op, id: view.id });
         break;
       }
+      case "addViewComment": {
+        const view = engine.addViewComment(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.data,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
       case "deleteView": {
         const id = refs.resolve(operation.viewId);
         engine.deleteView(repos, workspace, id);

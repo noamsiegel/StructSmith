@@ -1,4 +1,15 @@
 {
+  "comments": {
+    "add": "Komentarz (C)",
+    "placeHint": "Kliknij, aby dodać komentarz · Enter na środku · Esc anuluje",
+    "addTitle": "Dodaj komentarz",
+    "title": "Komentarz",
+    "viewOwned": "Zapisany w tym widoku.",
+    "textLabel": "Treść komentarza",
+    "post": "Dodaj komentarz",
+    "added": "Dodaj komentarz do widoku",
+    "openPin": "Otwórz komentarz {{number}}"
+  },
   "statusOverlay": {
     "title": "Nakładka statusu wdrożenia",
     "off": "Bez nakładki",

@@ -188,7 +188,24 @@ export type UpdateRelationshipInput = z.infer<typeof UpdateRelationshipSchema>;
 /* Views                                                               */
 /* ------------------------------------------------------------------ */
 
+export const ViewCommentSchema = z.object({
+  id: IdSchema,
+  x: z.number().finite(),
+  y: z.number().finite(),
+  text: z.string().trim().min(1).max(4000),
+});
+export type ViewComment = z.infer<typeof ViewCommentSchema>;
+export const AddViewCommentSchema = ViewCommentSchema.omit({ id: true });
+export type AddViewCommentInput = z.infer<typeof AddViewCommentSchema>;
+
 export const ViewSettingsSchema = z.object({
+  commentPins: z
+    .array(ViewCommentSchema)
+    .refine(
+      (pins) => new Set(pins.map((pin) => pin.id)).size === pins.length,
+      "Comment IDs must be unique.",
+    )
+    .default([]),
   showBoundaries: z
     .boolean()
     .describe("Render boundaries from the active boundaryLayer without changing membership.")
@@ -229,6 +246,7 @@ export type ViewSettings = z.infer<typeof ViewSettingsSchema>;
 // Zod 4 applies defaults even inside optional fields. A patch must only carry
 // explicitly supplied settings, otherwise it resets the other stored values.
 const ViewSettingsPatchSchema = z.object({
+  commentPins: ViewSettingsSchema.shape.commentPins.unwrap().optional(),
   showBoundaries: ViewSettingsSchema.shape.showBoundaries.unwrap().optional(),
   snapToGrid: ViewSettingsSchema.shape.snapToGrid.unwrap().optional(),
   autoLayoutDirection: ViewSettingsSchema.shape.autoLayoutDirection.unwrap().optional(),
