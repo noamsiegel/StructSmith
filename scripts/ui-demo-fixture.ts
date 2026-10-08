@@ -183,7 +183,7 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         description: `Native ${kind}: select, recolor, connect and reload.`,
       }),
     );
-    view(
+    const nativeFlowView = view(
       "native-flow",
       { name: "01b - Native connected workflow", kind: "workflow" },
       nativeFlow.map((elementId, index) => ({
@@ -204,6 +204,20 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         interactionStyle: "sync",
       });
     }
+    services.views.saveLayout(
+      UI_DEMO_WORKSPACE_ID,
+      nativeFlowView,
+      [],
+      nativeFlow.slice(1).map((_, offset) => ({
+        relationshipId: `demo-native-edge-${offset + 1}`,
+        presentation:
+          offset < 3
+            ? { sourceSide: "right", targetSide: "left" }
+            : offset === 3
+              ? { sourceSide: "bottom", targetSide: "top" }
+              : { sourceSide: "left", targetSide: "right" },
+      })),
+    );
     const annotationView = view(
       "annotations",
       {
