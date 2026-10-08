@@ -16,6 +16,12 @@ describe("view annotation geometry and table paste", () => {
       ["stay", ""],
     ]);
   });
+  test("preserves quoted spreadsheet cells with newlines tabs and escaped quotes", () => {
+    expect(pasteTableCells([["keep"]], '"line one\nline two"\t"quoted ""value"""\n', 0, 1)).toEqual(
+      [["keep", "line one\nline two", 'quoted "value"']],
+    );
+    expect(() => pasteTableCells([["keep"]], '"unclosed\ncell', 0, 0)).toThrow();
+  });
   test("rejects oversized pasted tables without mutating cells", () => {
     const cells = [["keep"]];
     expect(() => pasteTableCells(cells, Array(21).fill("a").join("\t"), 0, 0)).toThrow();

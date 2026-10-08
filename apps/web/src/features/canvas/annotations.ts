@@ -58,11 +58,32 @@ export function pasteTableCells(
   row: number,
   column: number,
 ): string[][] {
-  const pasted = value
-    .replace(/\r\n?/g, "\n")
-    .replace(/\n$/, "")
-    .split("\n")
-    .map((line) => line.split("\t"));
+  const pasted: string[][] = [[]];
+  let cell = "";
+  let quoted = false;
+  const text = value.replace(/\r\n?/g, "\n");
+  for (let index = 0; index < text.length; index++) {
+    const character = text[index];
+    if (character === '"' && (quoted || cell.length === 0)) {
+      if (quoted && text[index + 1] === '"') {
+        cell += '"';
+        index++;
+      } else quoted = !quoted;
+    } else if (!quoted && (character === "\t" || character === "\n")) {
+      pasted[pasted.length - 1]?.push(cell);
+      cell = "";
+      if (character === "\n") pasted.push([]);
+    } else cell += character;
+  }
+  if (quoted) throw new Error("invalid");
+  pasted[pasted.length - 1]?.push(cell);
+  if (
+    pasted.length > 1 &&
+    pasted[pasted.length - 1]?.length === 1 &&
+    pasted[pasted.length - 1]?.[0] === "" &&
+    text.endsWith("\n")
+  )
+    pasted.pop();
   const rows = Math.max(cells.length, row + pasted.length);
   const columns = Math.max(
     cells[0]?.length ?? 1,
