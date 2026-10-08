@@ -34,12 +34,14 @@ import {
   ERROR_CODES,
   UpdateViewCommentSchema,
 } from "@structsmith/contracts";
+import { detailViewsFor } from "./detail-views";
 import { badRequest, DomainError, ruleViolation } from "./errors";
 import { createId, nowIso, uniqueKey } from "./ids";
 import { edgeLabel, resolveRelationshipsForView } from "./implied";
 import { computeLayout, estimateElementSize } from "./layout";
 import type { Repositories } from "./ports";
 import { checkParent, descendantsOf, wouldCreateCycle } from "./rules";
+import { validateViewScenarios } from "./scenarios";
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
@@ -211,6 +213,10 @@ export function deleteElement(
       repos.elements.update({ ...child, parentId: element.parentId, updatedAt: nowIso() });
     }
   }
+
+  const removed = new Set(targets.map((target) => target.id));
+  for (const view of repos.views.listByWorkspace(workspace.id))
+    detachViewComments(repos, view.id, removed);
 
   for (const target of targets) {
     for (const relationshipId of repos.relationships.deleteByElement(target.id)) {
@@ -487,6 +493,65 @@ export function deleteRelationship(
 /* Views                                                               */
 /* ------------------------------------------------------------------ */
 
+function validateExplorationSettings(
+  repos: Repositories,
+  workspace: Workspace,
+  view: ArchitectureView,
+  settings: UpdateViewInput["settings"],
+  elementIds: readonly string[],
+): void {
+  if (settings?.preferredDetailViews) {
+    const views = repos.views.listByWorkspace(workspace.id);
+    for (const [elementId, detailId] of Object.entries(settings.preferredDetailViews)) {
+      const element = requireElement(repos, elementId, workspace.id);
+      if (
+        !elementIds.includes(elementId) ||
+        !detailViewsFor(element, views, view.id).some((candidate) => candidate.id === detailId)
+      ) {
+        throw ruleViolation(
+          "Preferred details must refer to an element in this view and one of its detail views.",
+        );
+      }
+    }
+  }
+  if (settings?.scenarios)
+    validateViewScenarios(
+      settings.scenarios,
+      elementIds,
+      repos.elements.listByWorkspace(workspace.id),
+      repos.relationships.listByWorkspace(workspace.id),
+    );
+}
+
+function detachViewComments(
+  repos: Repositories,
+  viewId: string,
+  elementIds: ReadonlySet<string>,
+): void {
+  const view = repos.views.findById(viewId);
+  if (!view?.settings.commentPins.some((pin) => pin.elementId && elementIds.has(pin.elementId)))
+    return;
+  const placements = new Map(
+    repos.views.listElements(viewId).map((entry) => [entry.elementId, entry]),
+  );
+  repos.views.update({
+    ...view,
+    updatedAt: nowIso(),
+    settings: {
+      ...view.settings,
+      commentPins: view.settings.commentPins.map((pin) => {
+        const placement =
+          pin.elementId && elementIds.has(pin.elementId)
+            ? placements.get(pin.elementId)
+            : undefined;
+        return placement
+          ? { ...pin, elementId: null, x: pin.x + placement.x, y: pin.y + placement.y }
+          : pin;
+      }),
+    },
+  });
+}
+
 export function createView(
   repos: Repositories,
   workspace: Workspace,
@@ -511,6 +576,7 @@ export function createView(
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+  validateExplorationSettings(repos, workspace, view, input.settings, input.elementIds ?? []);
   repos.views.insert(view);
 
   if (input.elementIds?.length) {
@@ -547,6 +613,13 @@ export function updateView(
     settings: { ...current.settings, ...(input.settings ?? {}) },
     updatedAt: nowIso(),
   };
+  validateExplorationSettings(
+    repos,
+    workspace,
+    next,
+    input.settings,
+    repos.views.listElements(viewId).map((entry) => entry.elementId),
+  );
   repos.views.update(next);
   return next;
 }
@@ -721,6 +794,7 @@ export function setViewElements(
   const existingIds = new Set(existing.map((entry) => entry.elementId));
 
   if (mode === "remove") {
+    detachViewComments(repos, viewId, wanted);
     for (const elementId of wanted) {
       repos.boundaries.removeViewElementMembership(viewId, elementId);
       repos.views.removeElement(viewId, elementId);
@@ -729,6 +803,13 @@ export function setViewElements(
   }
 
   if (mode === "replace") {
+    detachViewComments(
+      repos,
+      viewId,
+      new Set(
+        existing.filter((entry) => !wanted.has(entry.elementId)).map((entry) => entry.elementId),
+      ),
+    );
     for (const entry of existing) {
       if (!wanted.has(entry.elementId)) repos.views.removeElement(viewId, entry.elementId);
       if (!wanted.has(entry.elementId)) {

@@ -1,4 +1,4 @@
-import { canOpenElementDetails, detailViewsFor } from "@structsmith/domain";
+import { canOpenElementDetails, preferredDetailView } from "@structsmith/domain";
 import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -75,6 +75,7 @@ export function StudioPage(props: StudioPageProps) {
 function WorkspaceStudio(props: StudioPageProps) {
   const [navigation, setNavigation] = useState(emptyNavigation);
   const [navigationReset, setNavigationReset] = useState(0);
+  const [tagFocus, setTagFocus] = useState<string | null>(null);
   const [statusOverlay, setStatusOverlay] = useState<StatusOverlay>("status");
   const resetHistory = useHistoryStore((state) => state.reset);
   const clearSelection = useEditorStore((state) => state.clearSelection);
@@ -86,6 +87,8 @@ function WorkspaceStudio(props: StudioPageProps) {
     <ReactFlowProvider key={`${props.viewId ?? "initial"}:${navigationReset}`}>
       <StudioContent
         {...props}
+        tagFocus={tagFocus}
+        setTagFocus={setTagFocus}
         statusOverlay={statusOverlay}
         setStatusOverlay={setStatusOverlay}
         navigation={navigation}
@@ -108,10 +111,14 @@ function StudioContent({
   resetNavigation,
   statusOverlay,
   setStatusOverlay,
+  tagFocus,
+  setTagFocus,
 }: StudioPageProps & {
   navigation: ViewNavigation;
   setNavigation: Dispatch<SetStateAction<ViewNavigation>>;
   resetNavigation: () => void;
+  tagFocus: string | null;
+  setTagFocus: Dispatch<SetStateAction<string | null>>;
   statusOverlay: StatusOverlay;
   setStatusOverlay: Dispatch<SetStateAction<StatusOverlay>>;
 }) {
@@ -167,6 +174,10 @@ function StudioContent({
       panel.collapse();
     }
   };
+  useEffect(() => {
+    const panel = inspectorPanel.current;
+    if (inspectorPanelVisible && panel?.isCollapsed()) panel.expand();
+  }, [inspectorPanelVisible, inspectorPanel]);
   const handledReference = useRef<string | null>(null);
   const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
   const [layoutFitRequest, setLayoutFitRequest] = useState(0);
@@ -235,8 +246,13 @@ function StudioContent({
     const element = elements.find((item) => item.id === elementId);
     if (!element || !canOpenElementDetails(element, elements, viewList, activeViewId)) return;
     select({ type: "element", id: element.id });
-    const candidates = detailViewsFor(element, viewList, activeViewId);
-    if (candidates.length === 1 && candidates[0]) selectView(candidates[0].id);
+    const destination = preferredDetailView(
+      element,
+      viewList,
+      activeViewId,
+      activeView?.settings.preferredDetailViews ?? {},
+    );
+    if (destination) selectView(destination.id);
     else setDetailElementId(elementId);
   };
   const canOpenDetails = (elementId: string): boolean => {
@@ -409,6 +425,14 @@ function StudioContent({
                   inspectorPanelVisible={inspectorPanelVisible}
                   onToggleModelPanel={() => toggleSidebar("model")}
                   onToggleInspectorPanel={() => toggleSidebar("inspector")}
+                  tags={[
+                    ...new Set([
+                      ...elements.flatMap((element) => element.tags),
+                      ...relationships.flatMap((relationship) => relationship.tags),
+                    ]),
+                  ].sort()}
+                  tagFocus={tagFocus}
+                  onTagFocusChange={setTagFocus}
                   statusOverlay={statusOverlay}
                   onStatusOverlayChange={setStatusOverlay}
                   current={activeView}
@@ -432,6 +456,7 @@ function StudioContent({
                     <Canvas
                       key={view.data.id}
                       workspaceId={workspaceId}
+                      tagFocus={tagFocus}
                       statusOverlay={statusOverlay}
                       view={view.data}
                       elements={elements}
@@ -532,6 +557,7 @@ function StudioContent({
             relationships={relationships}
             views={viewList}
             currentViewId={activeViewId}
+            preferredDetailViews={activeView?.settings.preferredDetailViews}
             onClose={() => setDetailElementId(null)}
             onOpenView={selectView}
           />

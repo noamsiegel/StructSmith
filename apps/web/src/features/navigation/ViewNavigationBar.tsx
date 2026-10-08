@@ -23,6 +23,9 @@ export function ViewNavigationBar({
   onEditView,
   statusOverlay,
   onStatusOverlayChange,
+  tags,
+  tagFocus,
+  onTagFocusChange,
   modelPanelVisible,
   inspectorPanelVisible,
   onToggleModelPanel,
@@ -34,6 +37,9 @@ export function ViewNavigationBar({
   back: readonly ViewLocation[];
   onBack: (index: number) => void;
   onEditView: () => void;
+  tags: readonly string[];
+  tagFocus: string | null;
+  onTagFocusChange: (tag: string | null) => void;
   statusOverlay: StatusOverlay;
   onStatusOverlayChange: (overlay: StatusOverlay) => void;
   modelPanelVisible: boolean;
@@ -139,6 +145,22 @@ export function ViewNavigationBar({
             {(["off", "status", "liveOnly"] as const).map((mode) => (
               <SelectItem key={mode} value={mode}>
                 {t(`statusOverlay.${mode}`)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select
+          value={tagFocus ? `tag:${tagFocus}` : "all"}
+          onValueChange={(value) => onTagFocusChange(value === "all" ? null : value.slice(4))}
+        >
+          <SelectTrigger className="h-7 w-32 shrink-0 text-xs" aria-label={t("tagFocus.title")}>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">{t("tagFocus.all")}</SelectItem>
+            {tags.map((tag) => (
+              <SelectItem key={tag} value={`tag:${tag}`}>
+                {tag}
               </SelectItem>
             ))}
           </SelectContent>

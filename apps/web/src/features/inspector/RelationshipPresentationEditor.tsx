@@ -190,6 +190,26 @@ export function RelationshipPresentationEditor({
           "top",
           "bottom",
         ])}
+        {(["sourceSlot", "targetSlot"] as const).map((key) => (
+          <div className="space-y-1" key={key}>
+            <Label>{t(`relationshipPresentation.${key}`)}</Label>
+            <Select
+              value={String(presentation?.[key] ?? 1)}
+              onValueChange={(value) => patch({ [key]: Number(value) })}
+            >
+              <SelectTrigger aria-label={t(`relationshipPresentation.${key}`)}>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[0, 1, 2].map((slot) => (
+                  <SelectItem key={slot} value={String(slot)}>
+                    {t(`relationshipPresentation.slot${slot}`)}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ))}
         <NumberField
           label={t("relationshipPresentation.labelPosition")}
           value={placement?.labelPosition ?? 0.5}

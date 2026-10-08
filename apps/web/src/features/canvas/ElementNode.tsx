@@ -1,4 +1,4 @@
-import { Handle, type NodeProps, Position } from "@xyflow/react";
+import type { NodeProps } from "@xyflow/react";
 import { AlertTriangle, Lock } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
@@ -7,6 +7,7 @@ import { cn } from "@/lib/utils";
 import { iconFor } from "../icons";
 import { DetailViewAction } from "../navigation/DetailNavigation";
 import { InlineExpansionAction } from "../navigation/InlineExpansion";
+import { ConnectionHandles } from "./ConnectionHandles";
 import type { ElementNodeData } from "./graph";
 import { statusColor } from "./statusOverlay";
 
@@ -45,10 +46,7 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
           element.external ? "bg-ownership-external" : "bg-ownership-internal",
         )}
       />
-      <Handle type="target" position={Position.Left} />
-      <Handle type="target" position={Position.Top} id="t" />
-      <Handle type="target" position={Position.Right} id="target-r" />
-      <Handle type="target" position={Position.Bottom} id="target-b" />
+      <ConnectionHandles />
 
       <div className="flex min-w-0 flex-1 flex-col justify-between px-3 py-2.5">
         <div className="flex items-start gap-2">
@@ -128,11 +126,6 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
           </span>
         </div>
       </div>
-
-      <Handle type="source" position={Position.Right} />
-      <Handle type="source" position={Position.Bottom} id="b" />
-      <Handle type="source" position={Position.Left} id="source-l" />
-      <Handle type="source" position={Position.Top} id="source-t" />
     </div>
   );
 }

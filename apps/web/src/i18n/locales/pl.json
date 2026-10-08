@@ -39,7 +39,17 @@
     "threadActions": "Działania komentarza",
     "replyActions": "Działania odpowiedzi {{number}}",
     "commentPlaceholder": "Napisz komentarz…",
-    "replyPlaceholder": "Odpowiedz w tym wątku…"
+    "replyPlaceholder": "Odpowiedz w tym wątku…",
+    "threads": "Comments",
+    "search": "Search comments and replies",
+    "unread": "Unread",
+    "replyCount_one": "{{count}} reply",
+    "replyCount_other": "{{count}} replies",
+    "attached": "Attached to object",
+    "noMatches": "No comments match your search.",
+    "noThreads": "No open comments. Press C to add one.",
+    "localUnreadHint": "Unread status is saved in this browser.",
+    "updatedLabel": "Updated"
   },
   "statusOverlay": {
     "title": "Nakładka statusu wdrożenia",
@@ -75,7 +85,11 @@
     "showModelPanel": "Pokaż panel modelu",
     "hideModelPanel": "Ukryj panel modelu",
     "showInspectorPanel": "Pokaż panel inspektora",
-    "hideInspectorPanel": "Ukryj panel inspektora"
+    "hideInspectorPanel": "Ukryj panel inspektora",
+    "rememberDetails": "Remember for this diagram",
+    "expandInline": "Expand in place",
+    "collapseInline": "Collapse in place",
+    "expansionLimit": "Four visible levels maximum. Open details to continue."
   },
   "common": {
     "add": "Dodaj",
@@ -708,7 +722,12 @@
     "right": "Prawa",
     "top": "Góra",
     "bottom": "Dół",
-    "auto": "Automatycznie"
+    "auto": "Automatycznie",
+    "sourceSlot": "Source attachment",
+    "targetSlot": "Target attachment",
+    "slot0": "First quarter",
+    "slot1": "Center",
+    "slot2": "Third quarter"
   },
   "dependencies": {
     "title": "Dependencies",
@@ -727,5 +746,42 @@
     "open": "Open {{kind}}",
     "invalid": "Enter an HTTP or HTTPS URL without embedded credentials.",
     "saved": "Updated resource links"
+  },
+  "scenarios": {
+    "title": "Scenarios",
+    "choose": "Choose a scenario",
+    "create": "Create scenario",
+    "name": "Scenario name",
+    "stepNumber": "Step {{number}}",
+    "element": "Element",
+    "stepTitle": "Step title",
+    "description": "What happens in this step? (optional)",
+    "arrival": "Arrival connection",
+    "noConnection": "No arrival connection",
+    "connection": "Direct connection",
+    "addStep": "Add step",
+    "removeStep": "Remove step",
+    "moveUp": "Move step up",
+    "moveDown": "Move step down",
+    "progress": "Step {{number}} of {{count}}",
+    "ready": "{{count}} steps. Follow the path through this diagram.",
+    "play": "Start walkthrough",
+    "stop": "Stop walkthrough",
+    "back": "Back",
+    "next": "Next",
+    "edit": "Edit scenario",
+    "delete": "Delete scenario",
+    "confirmDelete": "Delete \"{{name}}\"? Diagram elements and connections will remain.",
+    "empty": "Create a scenario to walk through a normal or exception path using the elements on this diagram.",
+    "changed": "Update scenarios",
+    "required": "Add a scenario name and a title for every step.",
+    "invalidReferences": "A step refers to a missing element or invalid arrival connection. Choose elements in this view and direct connections from the previous step.",
+    "saveFailed": "Could not save. If the workspace changed, cancel and reopen the editor before retrying. Your draft is still here.",
+    "missingElement": "Missing element",
+    "stale": "This step's element or connection was removed. Edit the scenario to repair it, or continue to the next step."
+  },
+  "tagFocus": {
+    "title": "Focus by tag",
+    "all": "All tags"
   }
 }

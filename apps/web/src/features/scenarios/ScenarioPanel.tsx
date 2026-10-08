@@ -6,6 +6,7 @@ import {
   ViewScenarioSchema,
   type ViewScenarioStep,
 } from "@structsmith/contracts";
+import { clearInvalidScenarioArrivals, validateViewScenarios } from "@structsmith/domain";
 import {
   ArrowDown,
   ArrowUp,
@@ -32,10 +33,6 @@ import {
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useApplyOperations, useWorkspace } from "@/hooks/useApi";
-import {
-  clearInvalidScenarioArrivals,
-  validateViewScenarios,
-} from "../../../../../packages/domain/src/scenarios";
 
 type DraftStep = ViewScenarioStep & { key: string };
 type DraftScenario = Omit<ViewScenario, "steps"> & { steps: DraftStep[] };
@@ -49,8 +46,8 @@ export function ScenarioPanel({
 }: {
   workspaceId: string;
   view: ViewDetail;
-  elements: ArchitectureElement[];
-  relationships: ArchitectureRelationship[];
+  elements: readonly ArchitectureElement[];
+  relationships: readonly ArchitectureRelationship[];
   onStep: (step: ViewScenarioStep | null) => void;
 }) {
   const { t } = useTranslation();

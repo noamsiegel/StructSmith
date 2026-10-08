@@ -6,8 +6,10 @@ import type {
   ViewDetail,
   ViewElement,
   ViewRelationshipPatch,
+  ViewScenarioStep,
   Workspace,
 } from "@structsmith/contracts";
+import { deriveExpandedView } from "@structsmith/domain";
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -22,6 +24,7 @@ import {
   type NodeMouseHandler,
   type OnNodeDrag,
   type OnSelectionChangeParams,
+  Panel,
   ReactFlow,
   SelectionMode,
   useNodes,
@@ -39,7 +42,9 @@ import { useEditorStore } from "@/store/editor";
 import { useHistoryStore } from "@/store/history";
 import { iconFor } from "../icons";
 import type { ViewLocation } from "../navigation/history";
+import { InlineExpansionContext } from "../navigation/InlineExpansion";
 import { useCopyAgentReference } from "../reference/useCopyAgentReference";
+import { ScenarioPanel } from "../scenarios/ScenarioPanel";
 import { BoundaryNode } from "./BoundaryNode";
 import { CanvasComments } from "./CanvasComments";
 import { buildPasteOperations, createDiagramClipboard, type DiagramCopyMode } from "./clipboard";
@@ -57,10 +62,12 @@ import {
   NODE_WIDTH,
   type RelationshipEdgeData,
 } from "./graph";
+import { inlineFrames } from "./inlineFrames";
 import { type ContextMenuItem, NodeContextMenu } from "./NodeContextMenu";
 import { RelationshipEdge } from "./RelationshipEdge";
-import { sideFromHandle } from "./relationshipGeometry";
+import { sideFromHandle, slotFromHandle } from "./relationshipGeometry";
 import type { StatusOverlay } from "./statusOverlay";
+import { focusGraphByTag } from "./tagFocus";
 
 /** An implied edge carries a derived id, so always resolve the real one. */
 const relationshipIdOf = (edge: { id: string; data?: Record<string, unknown> }): string =>
@@ -82,6 +89,7 @@ interface CanvasProps {
   initialLocation?: ViewLocation;
   layoutFitRequest: number;
   statusOverlay: StatusOverlay;
+  tagFocus: string | null;
   onOpenDetails: (elementId: string) => void;
   canOpenDetails: (elementId: string) => boolean;
 }
@@ -96,6 +104,7 @@ export function Canvas({
   initialLocation,
   layoutFitRequest,
   statusOverlay,
+  tagFocus,
   onOpenDetails,
   canOpenDetails,
 }: CanvasProps) {
@@ -118,9 +127,31 @@ export function Canvas({
   const clipboard = useEditorStore((state) => state.clipboard);
   const setClipboard = useEditorStore((state) => state.setClipboard);
 
-  const graph = useMemo(
-    () => buildGraph({ view, elements, relationships, records, statusOverlay }),
-    [view, elements, relationships, records, statusOverlay],
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const [scenarioStep, setScenarioStep] = useState<ViewScenarioStep | null>(null);
+  const expansion = useMemo(
+    () => deriveExpandedView(view, elements, expandedIds),
+    [view, elements, expandedIds],
+  );
+  const graph = useMemo(() => {
+    const built = buildGraph({
+      view: expansion.view,
+      elements,
+      relationships,
+      records,
+      statusOverlay,
+    });
+    return { ...built, ...focusGraphByTag(built.nodes, built.edges, tagFocus) };
+  }, [expansion.view, elements, relationships, records, statusOverlay, tagFocus]);
+  const onScenarioStep = useCallback(
+    (step: ViewScenarioStep | null) => {
+      setScenarioStep(step);
+      if (step) {
+        select({ type: "element", id: step.elementId });
+        useEditorStore.getState().requestFocus(step.elementId);
+      }
+    },
+    [select],
   );
   const elementsById = useMemo(
     () => new Map(elements.map((element) => [element.id, element])),
@@ -304,11 +335,13 @@ export function Canvas({
   const flushLayout = useCallback(() => {
     const pending = [...pendingLayout.current.entries()];
     pendingLayout.current.clear();
-    const entries = pending.map(([elementId, position]) => ({
-      elementId,
-      x: Math.round(position.x),
-      y: Math.round(position.y),
-    }));
+    const entries = pending
+      .filter(([elementId]) => view.elements.some((entry) => entry.elementId === elementId))
+      .map(([elementId, position]) => ({
+        elementId,
+        x: Math.round(position.x),
+        y: Math.round(position.y),
+      }));
     if (entries.length === 0) return;
 
     const previous = entries.map(({ elementId }) => {
@@ -510,7 +543,7 @@ export function Canvas({
   /* ------------------------------- interactions ----------------------------- */
 
   const createRelationship = useCallback(
-    (sourceElementId: string, targetElementId: string) => {
+    (sourceElementId: string, targetElementId: string, connection?: Connection) => {
       if (sourceElementId === targetElementId) return;
       const source = elementsById.get(sourceElementId)?.name ?? sourceElementId;
       const target = elementsById.get(targetElementId)?.name ?? targetElementId;
@@ -523,6 +556,25 @@ export function Canvas({
               ref: "relationship",
               data: { sourceElementId, targetElementId, interactionStyle: "sync" },
             },
+            ...(connection
+              ? [
+                  {
+                    op: "setViewRelationships" as const,
+                    viewId: view.id,
+                    relationships: [
+                      {
+                        relationshipId: "@relationship",
+                        presentation: {
+                          sourceSide: sideFromHandle(connection.sourceHandle, "source"),
+                          targetSide: sideFromHandle(connection.targetHandle, "target"),
+                          sourceSlot: slotFromHandle(connection.sourceHandle),
+                          targetSlot: slotFromHandle(connection.targetHandle),
+                        },
+                      },
+                    ],
+                  },
+                ]
+              : []),
           ],
         },
         {
@@ -535,13 +587,13 @@ export function Canvas({
         },
       );
     },
-    [applyOperations, elementsById, select],
+    [applyOperations, elementsById, select, view.id],
   );
 
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
-      createRelationship(connection.source, connection.target);
+      createRelationship(connection.source, connection.target, connection);
     },
     [createRelationship],
   );
@@ -1082,7 +1134,20 @@ export function Canvas({
         draggable: placements.length > 0 && !placements.some((entry) => entry.locked),
       };
     });
-    return [...frames, ...nodes];
+    const expandedFrames = inlineFrames(sources, elementsById, expansion.expandedElementIds).map(
+      (frame) => ({
+        ...frame,
+        selected: selection.type === "element" && selection.id === frame.id,
+      }),
+    );
+    const transformed = new Set(expandedFrames.map((frame) => frame.id));
+    return [...frames, ...expandedFrames, ...nodes.filter((node) => !transformed.has(node.id))].map(
+      (node) => ({
+        ...node,
+        className:
+          scenarioStep?.elementId === node.id ? "ring-2 ring-primary rounded-lg" : undefined,
+      }),
+    );
   }, [
     nodes,
     elementsById,
@@ -1091,6 +1156,8 @@ export function Canvas({
     view.settings.boundaryLayer,
     view.elements,
     selection,
+    expansion.expandedElementIds,
+    scenarioStep,
   ]);
 
   const changeRelationshipPresentation = useCallback(
@@ -1121,6 +1188,14 @@ export function Canvas({
     () =>
       edges.map((edge) => ({
         ...edge,
+        style: {
+          ...edge.style,
+          opacity: scenarioStep
+            ? edge.data?.relationshipIds?.includes(scenarioStep.relationshipId ?? "")
+              ? 1
+              : 0.25
+            : edge.style?.opacity,
+        },
         data: edge.data
           ? {
               ...edge.data,
@@ -1143,158 +1218,205 @@ export function Canvas({
             }
           : undefined,
       })),
-    [edges, changeRelationshipPresentation],
+    [edges, changeRelationshipPresentation, scenarioStep],
   );
 
+  const expansionFit = useRef(expandedIds);
+  useEffect(() => {
+    if (expansionFit.current === expandedIds || !nodesInitialized) return;
+    expansionFit.current = expandedIds;
+    void flow.fitView({ padding: 0.2, duration: 250, maxZoom: 1 });
+  }, [expandedIds, nodesInitialized, flow]);
+
   return (
-    <div
-      ref={canvasRef}
-      className="relative h-full w-full"
-      onDrop={onDrop}
-      onDragOver={(event) => {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "copy";
+    <InlineExpansionContext.Provider
+      value={{
+        elements,
+        expandedElementIds: expansion.expandedElementIds,
+        depths: expansion.depths,
+        enabled: !connectFrom,
+        toggle: (elementId) =>
+          setExpandedIds((current) => {
+            const next = new Set(current);
+            if (next.has(elementId)) next.delete(elementId);
+            else next.add(elementId);
+            return next;
+          }),
       }}
     >
-      <ReactFlow
-        nodes={allNodes}
-        edges={editableEdges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
-        onNodeDragStart={onNodeDragStart}
-        onNodeDrag={onNodeDrag}
-        onNodeDragStop={onNodeDragStop}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onReconnect={(edge, connection) => {
-          if (connection.source !== edge.source || connection.target !== edge.target) return;
-          const relationshipId = relationshipIdOf(edge);
-          void changeRelationshipPresentation([
-            {
-              relationshipId,
-              presentation: {
-                sourceSide: sideFromHandle(connection.sourceHandle, "source"),
-                targetSide: sideFromHandle(connection.targetHandle, "target"),
-              },
-            },
-          ]).catch(() => undefined);
+      <div
+        ref={canvasRef}
+        className="relative h-full w-full"
+        onDrop={onDrop}
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
         }}
-        onSelectionChange={onSelectionChange}
-        onNodeClick={onNodeClick}
-        onNodeDoubleClick={(event, node) => {
-          if (
-            connectFrom ||
-            Date.now() < ignoreDetailsUntil.current ||
-            event.ctrlKey ||
-            event.metaKey ||
-            event.altKey ||
-            event.shiftKey ||
-            (event.target as HTMLElement).closest("button, input, textarea, a, .react-flow__handle")
-          )
-            return;
-          const elementId = node.type === "boundary" ? node.data.elementId : node.id;
-          if (elementId) onOpenDetails(String(elementId));
-        }}
-        zoomOnDoubleClick={false}
-        onNodeContextMenu={onNodeContextMenu}
-        onEdgeContextMenu={onEdgeContextMenu}
-        onPaneClick={() => {
-          setMenu(null);
-          clearSelection();
-          setNodes((current) =>
-            current.map((node) => (node.selected ? { ...node, selected: false } : node)),
-          );
-          setEdges((current) =>
-            current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
-          );
-        }}
-        onDelete={deleteSelection}
-        selectionMode={SelectionMode.Partial}
-        panOnDrag
-        selectionKeyCode={primaryModifierKeyCode()}
-        multiSelectionKeyCode={primaryModifierKeyCode()}
-        // A selected boundary covers a large area. Keep the explicit graph
-        // layering (boundaries < edges < elements) so cards remain clickable.
-        elevateNodesOnSelect={false}
-        snapToGrid={view.settings.snapToGrid}
-        snapGrid={[16, 16]}
-        minZoom={0.15}
-        maxZoom={2.5}
-        defaultViewport={initialViewport.current}
-        fitView={!initialViewport.current}
-        panOnScroll
-        zoomOnScroll={false}
-        zoomActivationKeyCode={["Meta", "Control"]}
-        fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
-        proOptions={{ hideAttribution: false }}
-        deleteKeyCode={["Delete", "Backspace"]}
       >
-        <CanvasComments key={view.id} workspaceId={workspaceId} view={view} canvasRef={canvasRef} />
-        <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="var(--canvas-dot)" />
-        <Controls showInteractive={false} position="bottom-left" />
-        <MiniMap
-          pannable
-          zoomable
-          position="bottom-right"
-          nodeStrokeWidth={2}
-          maskColor="transparent"
-        />
-      </ReactFlow>
+        <ReactFlow
+          nodes={allNodes}
+          edges={editableEdges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange}
+          onNodeDragStart={onNodeDragStart}
+          onNodeDrag={onNodeDrag}
+          onNodeDragStop={onNodeDragStop}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onReconnect={(edge, connection) => {
+            if (connection.source !== edge.source || connection.target !== edge.target) return;
+            const relationshipId = relationshipIdOf(edge);
+            void changeRelationshipPresentation([
+              {
+                relationshipId,
+                presentation: {
+                  sourceSide: sideFromHandle(connection.sourceHandle, "source"),
+                  targetSide: sideFromHandle(connection.targetHandle, "target"),
+                  sourceSlot: slotFromHandle(connection.sourceHandle),
+                  targetSlot: slotFromHandle(connection.targetHandle),
+                },
+              },
+            ]).catch(() => undefined);
+          }}
+          onSelectionChange={onSelectionChange}
+          onNodeClick={onNodeClick}
+          onNodeDoubleClick={(event, node) => {
+            if (
+              connectFrom ||
+              Date.now() < ignoreDetailsUntil.current ||
+              event.ctrlKey ||
+              event.metaKey ||
+              event.altKey ||
+              event.shiftKey ||
+              (event.target as HTMLElement).closest(
+                "button, input, textarea, a, .react-flow__handle",
+              )
+            )
+              return;
+            const elementId = node.type === "boundary" ? node.data.elementId : node.id;
+            if (elementId) onOpenDetails(String(elementId));
+          }}
+          zoomOnDoubleClick={false}
+          onNodeContextMenu={onNodeContextMenu}
+          onEdgeContextMenu={onEdgeContextMenu}
+          onPaneClick={() => {
+            setMenu(null);
+            clearSelection();
+            setNodes((current) =>
+              current.map((node) => (node.selected ? { ...node, selected: false } : node)),
+            );
+            setEdges((current) =>
+              current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+            );
+          }}
+          onDelete={deleteSelection}
+          selectionMode={SelectionMode.Partial}
+          panOnDrag
+          selectionKeyCode={primaryModifierKeyCode()}
+          multiSelectionKeyCode={primaryModifierKeyCode()}
+          // A selected boundary covers a large area. Keep the explicit graph
+          // layering (boundaries < edges < elements) so cards remain clickable.
+          elevateNodesOnSelect={false}
+          snapToGrid={view.settings.snapToGrid}
+          snapGrid={[16, 16]}
+          minZoom={0.15}
+          maxZoom={2.5}
+          defaultViewport={initialViewport.current}
+          fitView={!initialViewport.current}
+          panOnScroll
+          zoomOnScroll={false}
+          zoomActivationKeyCode={["Meta", "Control"]}
+          fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
+          proOptions={{ hideAttribution: false }}
+          deleteKeyCode={["Delete", "Backspace"]}
+        >
+          <Panel position="top-left">
+            <ScenarioPanel
+              key={view.id}
+              workspaceId={workspaceId}
+              view={view}
+              elements={elements}
+              relationships={relationships}
+              onStep={onScenarioStep}
+            />
+          </Panel>
+          <CanvasComments
+            key={view.id}
+            workspaceId={workspaceId}
+            view={view}
+            canvasRef={canvasRef}
+          />
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={18}
+            size={1}
+            color="var(--canvas-dot)"
+          />
+          <Controls showInteractive={false} position="bottom-left" />
+          <MiniMap
+            pannable
+            zoomable
+            position="bottom-right"
+            nodeStrokeWidth={2}
+            maskColor="transparent"
+          />
+        </ReactFlow>
 
-      {graph.nodes.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
-          <p className="text-sm font-medium">{t("canvas.empty")}</p>
-          <p className="max-w-xs text-xs text-muted-foreground">
-            {t(statusOverlay === "liveOnly" ? "statusOverlay.emptyHint" : "canvas.emptyHint")}
-          </p>
-        </div>
-      )}
+        {graph.nodes.length === 0 && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
+            <p className="text-sm font-medium">{t("canvas.empty")}</p>
+            <p className="max-w-xs text-xs text-muted-foreground">
+              {t(statusOverlay === "liveOnly" ? "statusOverlay.emptyHint" : "canvas.emptyHint")}
+            </p>
+          </div>
+        )}
 
-      {graph.hiddenCount > 0 && (
-        <div className="pointer-events-none absolute right-3 top-3 rounded border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground">
-          {t("canvas.hiddenElements", { count: graph.hiddenCount })}
-        </div>
-      )}
+        {graph.hiddenCount > 0 && (
+          <div className="pointer-events-none absolute right-3 top-16 rounded border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground">
+            {t("canvas.hiddenElements", { count: graph.hiddenCount })}
+          </div>
+        )}
 
-      {graph.nodes.length > 0 && (
-        <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-md border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider shadow-sm backdrop-blur-sm">
-          {view.kind === "workflow" &&
-            (["workflowGroup", "action", "decision", "outcome"] as const).map((kind) => {
-              const Icon = iconFor(kind, null);
-              return (
-                <span key={kind} className="flex items-center gap-1">
-                  <Icon className="h-3 w-3" aria-hidden="true" />
-                  {t(`kinds.${kind}`)}
-                </span>
-              );
-            })}
-          <span className="text-muted-foreground">{t("canvas.legend")}</span>
-          {statusOverlay !== "off" && (
-            <>
-              <span style={{ color: "var(--status-live)" }}>{t("statusOverlay.live")}</span>
-              <span style={{ color: "var(--status-planned)" }}>{t("statusOverlay.planned")}</span>
-              <span className="text-muted-foreground">{t("statusOverlay.untagged")}</span>
-            </>
-          )}
-          <span className="flex items-center gap-1 text-ownership-internal">
-            <span className="h-2 w-2 rounded-sm bg-ownership-internal" />
-            {t("inspector.internal")}
-          </span>
-          <span className="flex items-center gap-1 text-ownership-external">
-            <span className="h-2 w-2 rounded-sm border border-dashed border-ownership-external bg-ownership-external/15" />
-            {t("inspector.external")}
-          </span>
-        </div>
-      )}
+        {graph.nodes.length > 0 && (
+          <div className="pointer-events-none absolute left-12 bottom-3 max-w-[calc(100%-16rem)] flex flex-wrap items-center gap-2 rounded-md border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider shadow-sm backdrop-blur-sm">
+            {view.kind === "workflow" &&
+              (["workflowGroup", "action", "decision", "outcome"] as const).map((kind) => {
+                const Icon = iconFor(kind, null);
+                return (
+                  <span key={kind} className="flex items-center gap-1">
+                    <Icon className="h-3 w-3" aria-hidden="true" />
+                    {t(`kinds.${kind}`)}
+                  </span>
+                );
+              })}
+            <span className="text-muted-foreground">{t("canvas.legend")}</span>
+            {statusOverlay !== "off" && (
+              <>
+                <span style={{ color: "var(--status-live)" }}>{t("statusOverlay.live")}</span>
+                <span style={{ color: "var(--status-planned)" }}>{t("statusOverlay.planned")}</span>
+                <span className="text-muted-foreground">{t("statusOverlay.untagged")}</span>
+              </>
+            )}
+            <span className="flex items-center gap-1 text-ownership-internal">
+              <span className="h-2 w-2 rounded-sm bg-ownership-internal" />
+              {t("inspector.internal")}
+            </span>
+            <span className="flex items-center gap-1 text-ownership-external">
+              <span className="h-2 w-2 rounded-sm border border-dashed border-ownership-external bg-ownership-external/15" />
+              {t("inspector.external")}
+            </span>
+          </div>
+        )}
 
-      {connectFrom && (
-        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
-          {t("contextMenu.connect")}: {elementsById.get(connectFrom)?.name}
-        </div>
-      )}
+        {connectFrom && (
+          <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
+            {t("contextMenu.connect")}: {elementsById.get(connectFrom)?.name}
+          </div>
+        )}
 
-      {menu && <NodeContextMenu {...menu} onClose={() => setMenu(null)} />}
-    </div>
+        {menu && <NodeContextMenu {...menu} onClose={() => setMenu(null)} />}
+      </div>
+    </InlineExpansionContext.Provider>
   );
 }

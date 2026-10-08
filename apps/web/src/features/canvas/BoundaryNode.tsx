@@ -4,6 +4,8 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { cn } from "@/lib/utils";
 import { DetailViewAction } from "../navigation/DetailNavigation";
+import { InlineExpansionAction } from "../navigation/InlineExpansion";
+import { ConnectionHandles } from "./ConnectionHandles";
 import type { BoundaryNodeData } from "./graph";
 
 /** A semantic boundary rendered from the live footprint of its visible members. */
@@ -31,6 +33,7 @@ function BoundaryNodeComponent({
         outlineOffset: selected ? 2 : undefined,
       }}
     >
+      {data.elementId && <ConnectionHandles />}
       <div
         className={cn(
           "flex h-9 items-center gap-2 border-b px-3 py-2 text-xs font-bold uppercase tracking-wider backdrop-blur-sm",
@@ -64,6 +67,7 @@ function BoundaryNodeComponent({
               ? t(`kinds.${data.kind}`)
               : t(`boundaries.layer.${data.layer}`)}
         </span>
+        {data.elementId && <InlineExpansionAction elementId={data.elementId} compact />}
         {data.elementId && <DetailViewAction elementId={data.elementId} compact />}
       </div>
     </div>
