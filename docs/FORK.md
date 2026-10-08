@@ -18,6 +18,24 @@ to them using ordinary relationships. Group outlines, decision icons and outcome
 shapes distinguish their roles without depending on color.
 Workflow views include a compact legend using the same icons as their cards.
 
+## Implementation status overlay
+
+Tag elements or relationships with `status:live` or `status:planned`. The Status
+control shows text badges and blue solid or purple dashed connectors. Live means
+implemented behavior; it does not confirm deployment or feature-flag enablement.
+Keep proposed policies distinct from existing components even when they share a
+functional detail view. Untagged objects retain their original presentation;
+conflicting tags or aggregated relationships with differing statuses show Mixed
+status.
+
+Relationship tags take precedence over endpoint inference. Without an explicit
+tag, a relationship touching a planned element is planned, and one connecting
+two live elements is live. Live only retains explicitly live objects and
+relationships whose real endpoints are live, before overview aggregation.
+Overlay off restores saved presentation. The control remains selected while
+navigating within a workspace and resets to Status on reload; it does not change
+model data or saved coordinates.
+
 Opening a saved detail view creates no model edits. A group without a saved view
 offers the existing explicit creation dialog; custom leaves without a saved view
 do not show an empty navigation shortcut.

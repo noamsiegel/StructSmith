@@ -15,6 +15,12 @@ import {
   resolveRelationshipsForView,
 } from "@structsmith/domain";
 import type { Edge, Node } from "@xyflow/react";
+import {
+  type ImplementationStatus,
+  relationshipStatus,
+  type StatusOverlay,
+  statusFromTags,
+} from "./statusOverlay";
 
 export const NODE_WIDTH = DEFAULT_NODE_WIDTH;
 export const NODE_HEIGHT = DEFAULT_NODE_HEIGHT;
@@ -28,6 +34,7 @@ export interface ElementNodeData extends Record<string, unknown> {
   showFullTitles: boolean;
   showDescriptions: boolean;
   minimumHeight: number;
+  status: ImplementationStatus | null;
 }
 
 export interface BoundaryNodeData extends Record<string, unknown> {
@@ -49,6 +56,7 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
   routing: ViewDetail["settings"]["relationshipRouting"];
   showLabel: boolean;
   placement?: ViewRelationship;
+  status: ImplementationStatus | null;
   onLabelOffsetChange?: (relationshipId: string, offset: ControlPoint) => Promise<void>;
 }
 
@@ -60,6 +68,7 @@ interface BuildInput {
   elements: readonly ArchitectureElement[];
   relationships: readonly ArchitectureRelationship[];
   records: readonly ArchitectureRecord[];
+  statusOverlay?: StatusOverlay;
 }
 
 /** Risk indicators stay subtle — the canvas must not turn into a christmas tree. */
@@ -83,14 +92,25 @@ function riskSeverities(records: readonly ArchitectureRecord[]): Map<string, "hi
  * never owns data — it renders what a view declares visible, where the view
  * says it is.
  */
-export function buildGraph({ view, elements, relationships, records }: BuildInput): {
+export function buildGraph({
+  view,
+  elements,
+  relationships,
+  records,
+  statusOverlay = "off",
+}: BuildInput): {
   nodes: FlowNode[];
   edges: FlowEdge[];
   hiddenCount: number;
 } {
   const byId = new Map(elements.map((element) => [element.id, element]));
   const placements = view.elements.filter((entry) => byId.has(entry.elementId));
-  const visible = placements.filter((entry) => !entry.hidden);
+  const visible = placements.filter(
+    (entry) =>
+      !entry.hidden &&
+      (statusOverlay !== "liveOnly" ||
+        statusFromTags(byId.get(entry.elementId)?.tags ?? []) === "live"),
+  );
   const visibleIds = new Set(visible.map((entry) => entry.elementId));
   const severities = riskSeverities(records);
 
@@ -112,6 +132,7 @@ export function buildGraph({ view, elements, relationships, records }: BuildInpu
         showFullTitles: view.settings.showFullTitles,
         showDescriptions: view.settings.showDescriptions,
         minimumHeight: size.height,
+        status: statusOverlay === "off" ? null : statusFromTags(element.tags),
       },
       // Keep semantic boundaries above the canvas background, relationship
       // paths above their fills, and cards above both.
@@ -131,7 +152,16 @@ export function buildGraph({ view, elements, relationships, records }: BuildInpu
 
   const edges: FlowEdge[] = resolveRelationshipsForView(
     elements,
-    relationships.filter((relationship) => !hiddenRelationships.has(relationship.id)),
+    relationships.filter((relationship) => {
+      if (hiddenRelationships.has(relationship.id)) return false;
+      if (statusOverlay !== "liveOnly") return true;
+      // Filter real endpoints before lifting, so a planned child cannot create a live shortcut.
+      return (
+        relationshipStatus(relationship, byId) === "live" &&
+        statusFromTags(byId.get(relationship.sourceElementId)?.tags ?? []) === "live" &&
+        statusFromTags(byId.get(relationship.targetElementId)?.tags ?? []) === "live"
+      );
+    }),
     visibleIds,
   ).map((edge) => {
     const first = edge.relationships[0] as ArchitectureRelationship;
@@ -140,6 +170,9 @@ export function buildGraph({ view, elements, relationships, records }: BuildInpu
     // unambiguous, so it stays selectable and editable; only a merged edge
     // (several relationships behind one line) is not.
     const unambiguous = edge.relationships.length === 1;
+    const statuses = new Set(edge.relationships.map((item) => relationshipStatus(item, byId)));
+    const status =
+      statusOverlay === "off" ? null : statuses.size > 1 ? "conflict" : ([...statuses][0] ?? null);
     return {
       id: edge.id,
       type: "relationship",
@@ -165,6 +198,7 @@ export function buildGraph({ view, elements, relationships, records }: BuildInpu
         count: edge.relationships.length,
         routing: view.settings.relationshipRouting,
         showLabel: view.settings.showRelationshipLabels,
+        status,
       },
     };
   });

@@ -1,4 +1,15 @@
 {
+  "statusOverlay": {
+    "title": "Nakładka statusu wdrożenia",
+    "off": "Bez nakładki",
+    "status": "Status",
+    "liveOnly": "Tylko aktywne",
+    "live": "Aktywne",
+    "planned": "Planowane",
+    "conflict": "Mieszany status",
+    "untagged": "Bez tagu: bez zmian",
+    "emptyHint": "Brak obiektów oznaczonych jako aktywne. Wybierz Status lub Bez nakładki, aby zobaczyć wszystkie obiekty."
+  },
   "navigation": {
     "title": "Nawigacja po diagramach",
     "back": "Wstecz",

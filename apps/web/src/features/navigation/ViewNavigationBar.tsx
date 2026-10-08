@@ -2,6 +2,14 @@ import type { ArchitectureElement, ArchitectureView } from "@structsmith/contrac
 import { ArrowLeft, ChevronRight, Settings2 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import type { StatusOverlay } from "../canvas/statusOverlay";
 import type { ViewLocation } from "./history";
 
 export function ViewNavigationBar({
@@ -11,6 +19,8 @@ export function ViewNavigationBar({
   back,
   onBack,
   onEditView,
+  statusOverlay,
+  onStatusOverlayChange,
 }: {
   current: ArchitectureView | null;
   elements: readonly ArchitectureElement[];
@@ -18,6 +28,8 @@ export function ViewNavigationBar({
   back: readonly ViewLocation[];
   onBack: (index: number) => void;
   onEditView: () => void;
+  statusOverlay: StatusOverlay;
+  onStatusOverlayChange: (overlay: StatusOverlay) => void;
 }) {
   const { t } = useTranslation();
   const trail = back.flatMap((entry, index) => {
@@ -78,6 +90,21 @@ export function ViewNavigationBar({
           </Button>
         )}
       </div>
+      <Select
+        value={statusOverlay}
+        onValueChange={(value) => onStatusOverlayChange(value as StatusOverlay)}
+      >
+        <SelectTrigger className="h-7 w-32 shrink-0 text-xs" aria-label={t("statusOverlay.title")}>
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {(["off", "status", "liveOnly"] as const).map((mode) => (
+            <SelectItem key={mode} value={mode}>
+              {t(`statusOverlay.${mode}`)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
       {scope.length > 0 && (
         <span
           className="max-w-[35%] truncate text-[11px] text-muted-foreground"

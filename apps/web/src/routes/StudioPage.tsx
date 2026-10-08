@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { toast } from "sonner";
 import { Canvas } from "@/features/canvas/Canvas";
+import type { StatusOverlay } from "@/features/canvas/statusOverlay";
 import { useChatStore } from "@/features/chat/store";
 import { CommandPalette } from "@/features/command/CommandPalette";
 import { ElementPalette } from "@/features/command/ElementPalette";
@@ -57,6 +58,7 @@ export function StudioPage(props: StudioPageProps) {
 function WorkspaceStudio(props: StudioPageProps) {
   const [navigation, setNavigation] = useState(emptyNavigation);
   const [navigationReset, setNavigationReset] = useState(0);
+  const [statusOverlay, setStatusOverlay] = useState<StatusOverlay>("status");
   const resetHistory = useHistoryStore((state) => state.reset);
   const clearSelection = useEditorStore((state) => state.clearSelection);
   useEffect(() => {
@@ -67,6 +69,8 @@ function WorkspaceStudio(props: StudioPageProps) {
     <ReactFlowProvider key={`${props.viewId ?? "initial"}:${navigationReset}`}>
       <StudioContent
         {...props}
+        statusOverlay={statusOverlay}
+        setStatusOverlay={setStatusOverlay}
         navigation={navigation}
         setNavigation={setNavigation}
         resetNavigation={() => setNavigationReset((value) => value + 1)}
@@ -85,10 +89,14 @@ function StudioContent({
   navigation,
   setNavigation,
   resetNavigation,
+  statusOverlay,
+  setStatusOverlay,
 }: StudioPageProps & {
   navigation: ViewNavigation;
   setNavigation: Dispatch<SetStateAction<ViewNavigation>>;
   resetNavigation: () => void;
+  statusOverlay: StatusOverlay;
+  setStatusOverlay: Dispatch<SetStateAction<StatusOverlay>>;
 }) {
   const { t } = useTranslation();
   const flow = useReactFlow();
@@ -323,6 +331,8 @@ function StudioContent({
             <Panel minSize="30%">
               <div className="flex h-full flex-col">
                 <ViewNavigationBar
+                  statusOverlay={statusOverlay}
+                  onStatusOverlayChange={setStatusOverlay}
                   current={activeView}
                   elements={elements}
                   views={viewList}
@@ -343,6 +353,7 @@ function StudioContent({
                     <Canvas
                       key={view.data.id}
                       workspaceId={workspaceId}
+                      statusOverlay={statusOverlay}
                       view={view.data}
                       elements={elements}
                       boundaries={boundaries}

@@ -54,6 +54,7 @@ import {
 import { type ContextMenuItem, NodeContextMenu } from "./NodeContextMenu";
 import { RelationshipEdge } from "./RelationshipEdge";
 import { sideFromHandle } from "./relationshipGeometry";
+import type { StatusOverlay } from "./statusOverlay";
 
 /** An implied edge carries a derived id, so always resolve the real one. */
 const relationshipIdOf = (edge: { id: string; data?: Record<string, unknown> }): string =>
@@ -73,6 +74,7 @@ interface CanvasProps {
   relationships: readonly ArchitectureRelationship[];
   records: readonly ArchitectureRecord[];
   initialLocation?: ViewLocation;
+  statusOverlay: StatusOverlay;
   onOpenDetails: (elementId: string) => void;
   canOpenDetails: (elementId: string) => boolean;
 }
@@ -85,6 +87,7 @@ export function Canvas({
   relationships,
   records,
   initialLocation,
+  statusOverlay,
   onOpenDetails,
   canOpenDetails,
 }: CanvasProps) {
@@ -108,8 +111,8 @@ export function Canvas({
   const setClipboard = useEditorStore((state) => state.setClipboard);
 
   const graph = useMemo(
-    () => buildGraph({ view, elements, relationships, records }),
-    [view, elements, relationships, records],
+    () => buildGraph({ view, elements, relationships, records, statusOverlay }),
+    [view, elements, relationships, records, statusOverlay],
   );
   const elementsById = useMemo(
     () => new Map(elements.map((element) => [element.id, element])),
@@ -1066,7 +1069,9 @@ export function Canvas({
       {graph.nodes.length === 0 && (
         <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
           <p className="text-sm font-medium">{t("canvas.empty")}</p>
-          <p className="max-w-xs text-xs text-muted-foreground">{t("canvas.emptyHint")}</p>
+          <p className="max-w-xs text-xs text-muted-foreground">
+            {t(statusOverlay === "liveOnly" ? "statusOverlay.emptyHint" : "canvas.emptyHint")}
+          </p>
         </div>
       )}
 
@@ -1089,6 +1094,13 @@ export function Canvas({
               );
             })}
           <span className="text-muted-foreground">{t("canvas.legend")}</span>
+          {statusOverlay !== "off" && (
+            <>
+              <span style={{ color: "var(--status-live)" }}>{t("statusOverlay.live")}</span>
+              <span style={{ color: "var(--status-planned)" }}>{t("statusOverlay.planned")}</span>
+              <span className="text-muted-foreground">{t("statusOverlay.untagged")}</span>
+            </>
+          )}
           <span className="flex items-center gap-1 text-ownership-internal">
             <span className="h-2 w-2 rounded-sm bg-ownership-internal" />
             {t("inspector.internal")}

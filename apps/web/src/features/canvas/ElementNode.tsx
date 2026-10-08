@@ -2,10 +2,12 @@ import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { AlertTriangle, Lock } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { iconFor } from "../icons";
 import { DetailViewAction } from "../navigation/DetailNavigation";
 import type { ElementNodeData } from "./graph";
+import { statusColor } from "./statusOverlay";
 
 /** Custom node (spec §33) — icon, name, technology and a small kind/role badge. */
 function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNodeData }) {
@@ -20,7 +22,10 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
 
   return (
     <div
-      style={{ minHeight: minimumHeight }}
+      style={{
+        minHeight: minimumHeight,
+        borderColor: data.status ? statusColor(data.status) : undefined,
+      }}
       className={cn(
         "as-node group relative flex h-full w-full overflow-visible rounded-md border shadow-sm transition-[border-color,background-color,box-shadow]",
         element.kind === "workflowGroup" && "border-double border-4",
@@ -91,6 +96,19 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
         )}
 
         <div className="mt-2 flex min-w-0 items-center gap-1.5">
+          {data.status && (
+            <Badge
+              variant="outline"
+              className="shrink-0 text-[9px] normal-case tracking-normal"
+              style={{
+                color: statusColor(data.status),
+                borderColor: statusColor(data.status),
+                backgroundColor: `color-mix(in srgb, ${statusColor(data.status)} 10%, var(--card))`,
+              }}
+            >
+              {t(`statusOverlay.${data.status}`)}
+            </Badge>
+          )}
           {!workflow && (
             <span
               className={cn(

@@ -39,6 +39,8 @@
   --ownership-internal: oklch(0.49 0.18 258);
   --ownership-external: oklch(0.53 0.15 70);
   --boundary: oklch(0.55 0.02 260);
+  --status-live: oklch(0.45 0.17 258);
+  --status-planned: oklch(0.46 0.19 305);
 }
 
 .dark {
@@ -76,6 +78,8 @@
   --ownership-internal: oklch(0.74 0.145 258);
   --ownership-external: oklch(0.8 0.14 76);
   --boundary: oklch(0.74 0.025 260);
+  --status-live: oklch(0.76 0.13 258);
+  --status-planned: oklch(0.78 0.14 305);
 }
 
 @theme inline {

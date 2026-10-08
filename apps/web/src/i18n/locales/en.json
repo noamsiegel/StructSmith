@@ -1,4 +1,15 @@
 {
+  "statusOverlay": {
+    "title": "Implementation status overlay",
+    "off": "Overlay off",
+    "status": "Status",
+    "liveOnly": "Live only",
+    "live": "Live",
+    "planned": "Planned",
+    "conflict": "Mixed status",
+    "untagged": "Untagged: unchanged",
+    "emptyHint": "No explicitly live objects in this view. Choose Status or Overlay off to see all objects."
+  },
   "navigation": {
     "title": "Diagram navigation",
     "back": "Back",

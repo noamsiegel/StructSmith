@@ -15,6 +15,7 @@ import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/store/editor";
 import type { RelationshipEdgeData } from "./graph";
 import { manualRelationshipPath, relationshipDash } from "./relationshipGeometry";
+import { statusColor, statusStroke } from "./statusOverlay";
 
 export type RelationshipFocus = "normal" | "connected" | "dimmed";
 
@@ -57,6 +58,7 @@ function RelationshipEdgeComponent({
   const select = useEditorStore((state) => state.select);
   const focus = relationshipFocus(activeElementId, source, target);
   const presentation = data?.placement?.presentation;
+  const strokeStyle = data?.status ? statusStroke(data.status) : presentation?.strokeStyle;
   const sourceArrow = presentation?.sourceArrow ?? "none";
   const targetArrow = presentation?.targetArrow ?? "arrowclosed";
   const pathOptions = { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
@@ -93,12 +95,20 @@ function RelationshipEdgeComponent({
   const labelX = (pathLabel?.x ?? defaultX) + offset.x;
   const labelY = (pathLabel?.y ?? defaultY) + offset.y;
   const stroke =
-    presentation?.color ?? (selected || focus === "connected" ? "var(--primary)" : "var(--edge)");
+    (data?.status ? statusColor(data.status) : presentation?.color) ??
+    (selected || focus === "connected" ? "var(--primary)" : "var(--edge)");
   const width =
     presentation?.strokeWidth ??
     (selected ? 2 : focus === "connected" ? 2.4 : data?.implied ? 1.1 : 1.4);
-  const label =
+  const originalLabel =
     data?.implied && (data?.count ?? 0) > 1 ? `${data.label} (${data.count})` : (data?.label ?? "");
+  const label =
+    data?.status === "conflict"
+      ? `${t("statusOverlay.conflict")}${originalLabel ? ` · ${originalLabel}` : ""}`
+      : originalLabel;
+  const showLabel =
+    Boolean(label || data?.status === "conflict") &&
+    (data?.showLabel !== false || selected || data?.status === "conflict");
   const editable = (data?.count ?? 0) === 1 && Boolean(data?.onLabelOffsetChange);
   const labelSaves = useRef<Promise<void>>(Promise.resolve());
   const labelSaveSequence = useRef(0);
@@ -152,18 +162,15 @@ function RelationshipEdgeComponent({
         markerEnd={targetArrow === "none" ? undefined : `url(#${markerId}-1)`}
         style={{
           strokeWidth: width,
-          strokeDasharray: relationshipDash(
-            data?.relationship.interactionStyle,
-            presentation?.strokeStyle,
-          ),
-          strokeLinecap: presentation?.strokeStyle === "dotted" ? "round" : undefined,
+          strokeDasharray: relationshipDash(data?.relationship.interactionStyle, strokeStyle),
+          strokeLinecap: strokeStyle === "dotted" ? "round" : undefined,
           stroke,
           opacity: focus === "dimmed" ? 0.7 : 1,
           filter: focus === "connected" ? "drop-shadow(0 0 3px var(--primary))" : undefined,
           transition: "stroke 150ms, stroke-width 150ms, opacity 150ms, filter 150ms",
         }}
       />
-      {label && (data?.showLabel !== false || selected) && (
+      {showLabel && (
         <EdgeLabelRenderer>
           <Button
             type="button"
