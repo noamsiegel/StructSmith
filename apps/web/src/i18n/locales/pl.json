@@ -582,7 +582,14 @@
     "workflowGroup": "Podproces",
     "action": "Działanie",
     "decision": "Decyzja",
-    "outcome": "Wynik"
+    "outcome": "Wynik",
+    "data": "Dane",
+    "document": "Dokument",
+    "start": "Początek",
+    "end": "Koniec",
+    "fork": "Rozgałęzienie",
+    "join": "Synchronizacja",
+    "merge": "Scalenie"
   },
   "roles": {
     "frontend": "Frontend",
@@ -639,7 +646,14 @@
     "workflowGroup": "Podproces",
     "action": "Działanie",
     "decision": "Decyzja",
-    "outcome": "Wynik"
+    "outcome": "Wynik",
+    "data": "Dane",
+    "document": "Dokument",
+    "start": "Początek",
+    "end": "Koniec",
+    "fork": "Rozgałęzienie",
+    "join": "Synchronizacja",
+    "merge": "Scalenie"
   },
   "views": {
     "create": "Nowy widok",

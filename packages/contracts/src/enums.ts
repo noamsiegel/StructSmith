@@ -11,6 +11,13 @@ export const elementKinds = [
   "action",
   "decision",
   "outcome",
+  "data",
+  "document",
+  "start",
+  "end",
+  "fork",
+  "join",
+  "merge",
   "custom",
 ] as const;
 export const ElementKindSchema = z.enum(elementKinds);

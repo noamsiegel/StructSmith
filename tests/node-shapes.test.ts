@@ -11,6 +11,13 @@ test("shapes distinguish flow semantics and databases without inventing C4 level
   expect(elementShape({ kind: "component", role: "database" })).toBe("cylinder");
   expect(elementShape({ kind: "container", role: "database" })).toBe("cylinder");
   expect(elementShape({ kind: "container", role: "queue" })).toBe("rectangle");
+  expect(elementShape({ kind: "data", role: null })).toBe("data");
+  expect(elementShape({ kind: "document", role: null })).toBe("document");
+  expect(elementShape({ kind: "start", role: null })).toBe("start");
+  expect(elementShape({ kind: "end", role: null })).toBe("end");
+  expect(elementShape({ kind: "fork", role: null })).toBe("bar");
+  expect(elementShape({ kind: "join", role: null })).toBe("bar");
+  expect(elementShape({ kind: "merge", role: null })).toBe("diamond");
 });
 
 test("diamond layout reserves a readable text rectangle and DB caps clear content", () => {
@@ -74,6 +81,10 @@ test("diamond layout reserves a readable text rectangle and DB caps clear conten
 test("compact database and outcome shapes retain an explicitly saved height", () => {
   for (const shape of [
     { kind: "container" as const, role: "database" as const },
+    ...(["data", "document", "start", "end", "fork", "join", "merge"] as const).map((kind) => ({
+      kind,
+      role: null,
+    })),
     { kind: "outcome" as const, role: null },
   ]) {
     const element = { ...shape, name: "Saved", description: null, technology: null };
@@ -81,6 +92,17 @@ test("compact database and outcome shapes retain an explicitly saved height", ()
     const first = estimateElementSize(element, settings, { height: 200 });
     expect(first.height).toBe(200);
     expect(estimateElementSize(element, settings, first).height).toBe(200);
+  }
+});
+
+test("control symbols reserve room above their readable external titles", () => {
+  const base = { name: "Capture", description: null, technology: null, role: null };
+  const settings = { showFullTitles: true, showDescriptions: false };
+  const action = estimateElementSize({ ...base, kind: "action" }, settings);
+  for (const kind of ["start", "end", "fork", "join"] as const) {
+    expect(estimateElementSize({ ...base, kind }, settings).height).toBeGreaterThanOrEqual(
+      action.height + 30,
+    );
   }
 });
 
@@ -92,6 +114,10 @@ test("legacy title settings and saved heights cannot clip wrapped card content",
     { kind: "decision" as const, role: null },
     { kind: "workflowGroup" as const, role: null },
     { kind: "container" as const, role: "database" as const },
+    ...(["data", "document", "start", "end", "fork", "join", "merge"] as const).map((kind) => ({
+      kind,
+      role: null,
+    })),
   ]) {
     const short = { ...shape, name: "Rule", description: null, technology: null };
     const long = {

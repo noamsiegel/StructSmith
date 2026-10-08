@@ -72,5 +72,12 @@ export const presets: readonly ElementPreset[] = [
   { id: "action", label: "Action", kind: "action", role: null, icon: "Play" },
   { id: "decision", label: "Decision", kind: "decision", role: null, icon: "Diamond" },
   { id: "outcome", label: "Outcome", kind: "outcome", role: null, icon: "CircleCheck" },
+  { id: "data", label: "Data", kind: "data", role: null, icon: "ArrowRightLeft" },
+  { id: "document", label: "Document", kind: "document", role: null, icon: "FileText" },
+  { id: "start", label: "Start", kind: "start", role: null, icon: "Circle" },
+  { id: "end", label: "End", kind: "end", role: null, icon: "CircleStop" },
+  { id: "fork", label: "Fork", kind: "fork", role: null, icon: "GitFork" },
+  { id: "join", label: "Join", kind: "join", role: null, icon: "GitMerge" },
+  { id: "merge", label: "Merge", kind: "merge", role: null, icon: "Merge" },
   { id: "custom", label: "Custom", kind: "custom", role: "custom", icon: "Shapes" },
 ];

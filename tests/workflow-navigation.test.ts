@@ -129,7 +129,37 @@ test("native workflow semantics coexist with strict C4 and survive documents, im
         parentId: decision.id,
       }),
     ).toThrow();
-    for (const kind of ["decision", "outcome"] as const) {
+    for (const kind of [
+      "decision",
+      "outcome",
+      "data",
+      "document",
+      "start",
+      "end",
+      "fork",
+      "join",
+      "merge",
+    ] as const) {
+      const native = services.elements.create(workspace.id, {
+        kind,
+        name: kind,
+        parentId: group.id,
+      }).result;
+      expect(() =>
+        services.elements.create(workspace.id, {
+          kind: "action",
+          name: "Invalid child",
+          parentId: native.id,
+        }),
+      ).toThrow("cannot contain other elements");
+      expect(
+        canOpenElementDetails(
+          native,
+          services.elements.list(workspace.id),
+          services.views.list(workspace.id),
+          view.id,
+        ),
+      ).toBe(false);
       expect(() => services.elements.update(workspace.id, group.id, { kind })).toThrow();
       expect(services.elements.list(workspace.id).find((item) => item.id === group.id)?.kind).toBe(
         "workflowGroup",

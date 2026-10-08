@@ -577,7 +577,14 @@
     "workflowGroup": "Subprocess",
     "action": "Action",
     "decision": "Decision",
-    "outcome": "Outcome"
+    "outcome": "Outcome",
+    "data": "Data",
+    "document": "Document",
+    "start": "Start",
+    "end": "End",
+    "fork": "Fork",
+    "join": "Join",
+    "merge": "Merge"
   },
   "roles": {
     "frontend": "Frontend",
@@ -634,7 +641,14 @@
     "workflowGroup": "Subprocess",
     "action": "Action",
     "decision": "Decision",
-    "outcome": "Outcome"
+    "outcome": "Outcome",
+    "data": "Data",
+    "document": "Document",
+    "start": "Start",
+    "end": "End",
+    "fork": "Fork",
+    "join": "Join",
+    "merge": "Merge"
   },
   "views": {
     "create": "New view",

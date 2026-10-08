@@ -2,7 +2,19 @@ import type { ArchitectureElement, ElementKind } from "@structsmith/contracts";
 import { elementKinds } from "@structsmith/contracts";
 import { checkParent, presets } from "@structsmith/domain";
 
-const workflowKinds: readonly ElementKind[] = ["workflowGroup", "action", "decision", "outcome"];
+const workflowKinds: readonly ElementKind[] = [
+  "workflowGroup",
+  "action",
+  "decision",
+  "outcome",
+  "data",
+  "document",
+  "start",
+  "end",
+  "fork",
+  "join",
+  "merge",
+];
 
 export const elementTypeOptions = [
   ...presets.filter((preset) => workflowKinds.includes(preset.kind)),

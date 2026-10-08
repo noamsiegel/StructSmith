@@ -190,7 +190,21 @@ export function ViewNavigationBar({
             <h3 className="font-semibold">{t("canvas.diagramLegend")}</h3>
             {current?.kind === "workflow" && (
               <div className="grid grid-cols-2 gap-x-3 gap-y-2">
-                {(["workflowGroup", "action", "decision", "outcome"] as const).map((kind) => {
+                {(
+                  [
+                    "workflowGroup",
+                    "action",
+                    "decision",
+                    "outcome",
+                    "data",
+                    "document",
+                    "start",
+                    "end",
+                    "fork",
+                    "join",
+                    "merge",
+                  ] as const
+                ).map((kind) => {
                   const Icon = iconFor(kind, null);
                   return (
                     <span key={kind} className="flex items-center gap-1.5">

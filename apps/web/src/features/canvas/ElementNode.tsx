@@ -18,9 +18,22 @@ function ElementNodeComponent({ data, selected, width }: NodeProps & { data: Ele
   const { t } = useTranslation();
   const { element, severity, locked, showDescriptions, minimumHeight } = data;
   const Icon = iconFor(element.kind, element.role);
-  const workflow = ["workflowGroup", "action", "decision", "outcome"].includes(element.kind);
+  const workflow = [
+    "workflowGroup",
+    "action",
+    "decision",
+    "outcome",
+    "data",
+    "document",
+    "start",
+    "end",
+    "fork",
+    "join",
+    "merge",
+  ].includes(element.kind);
   const shape = elementShape(element);
   const diamond = shape === "diamond";
+  const control = shape === "start" || shape === "end" || shape === "bar" ? shape : undefined;
   const stroke =
     data.color ??
     (data.status
@@ -51,25 +64,34 @@ function ElementNodeComponent({ data, selected, width }: NodeProps & { data: Ele
         selected={selected}
         external={element.external}
       />
-      <ConnectionHandles diamond={diamond} />
+      <ConnectionHandles
+        diamond={diamond}
+        sloped={shape === "data"}
+        control={control}
+        width={width ?? DEFAULT_NODE_WIDTH}
+      />
 
       <div
         className="relative flex min-w-0 flex-1 flex-col justify-between"
         style={{
           paddingInline: diamond
             ? "calc(25% + 12px)"
-            : shape === "terminal"
-              ? 20
-              : shape === "subprocess"
-                ? 16
-                : 12,
-          paddingTop: diamond
-            ? minimumHeight / 4
-            : shape === "cylinder"
-              ? 24
+            : shape === "data"
+              ? 32
               : shape === "terminal"
-                ? 14
-                : 10,
+                ? 20
+                : shape === "subprocess"
+                  ? 16
+                  : 12,
+          paddingTop: control
+            ? 40
+            : diamond
+              ? minimumHeight / 4
+              : shape === "cylinder"
+                ? 24
+                : shape === "terminal"
+                  ? 14
+                  : 10,
           paddingBottom: diamond
             ? minimumHeight / 4
             : shape === "cylinder"
@@ -79,17 +101,19 @@ function ElementNodeComponent({ data, selected, width }: NodeProps & { data: Ele
                 : 10,
         }}
       >
-        <div className="flex items-start gap-2">
-          <span
-            className={cn(
-              "flex h-6 w-6 shrink-0 items-center justify-center rounded",
-              element.external
-                ? "bg-ownership-external/15 text-ownership-external"
-                : "bg-ownership-internal/15 text-ownership-internal",
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" />
-          </span>
+        <div className={cn("flex items-start gap-2", control && "text-center")}>
+          {!control && (
+            <span
+              className={cn(
+                "flex h-6 w-6 shrink-0 items-center justify-center rounded",
+                element.external
+                  ? "bg-ownership-external/15 text-ownership-external"
+                  : "bg-ownership-internal/15 text-ownership-internal",
+              )}
+            >
+              <Icon className="h-3.5 w-3.5" />
+            </span>
+          )}
           <div className="min-w-0 flex-1">
             <div
               title={element.name}

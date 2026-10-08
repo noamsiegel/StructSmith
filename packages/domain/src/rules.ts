@@ -12,6 +12,13 @@ const ALLOWED_PARENTS: Record<ElementKind, readonly ElementKind[]> = {
   action: ["workflowGroup", "action", "custom"],
   decision: ["workflowGroup", "action", "custom"],
   outcome: ["workflowGroup", "action", "custom"],
+  data: ["workflowGroup", "action", "custom"],
+  document: ["workflowGroup", "action", "custom"],
+  start: ["workflowGroup", "action", "custom"],
+  end: ["workflowGroup", "action", "custom"],
+  fork: ["workflowGroup", "action", "custom"],
+  join: ["workflowGroup", "action", "custom"],
+  merge: ["workflowGroup", "action", "custom"],
   custom: [
     "person",
     "softwareSystem",
@@ -26,7 +33,18 @@ const ALLOWED_PARENTS: Record<ElementKind, readonly ElementKind[]> = {
 };
 
 /** Kinds that can never contain children. */
-export const LEAF_KINDS: readonly ElementKind[] = ["person", "decision", "outcome"];
+export const LEAF_KINDS: readonly ElementKind[] = [
+  "person",
+  "decision",
+  "outcome",
+  "data",
+  "document",
+  "start",
+  "end",
+  "fork",
+  "join",
+  "merge",
+];
 
 export interface HierarchyProblem {
   code: string;

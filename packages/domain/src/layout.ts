@@ -48,7 +48,8 @@ export function estimateElementSize(
     ? Math.max(size.width ?? 0, DEFAULT_NODE_WIDTH * 2)
     : Math.max(size.width ?? DEFAULT_NODE_WIDTH, 160);
   const contentWidth = diamond ? width / 2 : width;
-  const verticalInset = shape === "cylinder" ? 24 : shape === "terminal" ? 8 : 0;
+  const control = shape === "start" || shape === "end" || shape === "bar";
+  const verticalInset = control ? 30 : shape === "cylinder" ? 24 : shape === "terminal" ? 8 : 0;
   const minimumHeight = Math.max(
     size.height ?? 0,
     diamond ? DEFAULT_NODE_HEIGHT * 2 : DEFAULT_NODE_HEIGHT + verticalInset,
@@ -60,7 +61,15 @@ export function estimateElementSize(
     };
   }
 
-  const paddingInline = diamond ? 24 : shape === "terminal" ? 40 : shape === "subprocess" ? 32 : 24;
+  const paddingInline = diamond
+    ? 24
+    : shape === "data"
+      ? 64
+      : shape === "terminal"
+        ? 40
+        : shape === "subprocess"
+          ? 32
+          : 24;
   // Title actions live in the footer; reserve icon and warning/lock indicators.
   const titleWidth = contentWidth - paddingInline - 52 - (size.locked ? 20 : 0);
   const titleLines = wrappedLines(element.name, titleWidth, 7.5);

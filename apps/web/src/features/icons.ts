@@ -1,18 +1,25 @@
 import type { ElementKind, ElementRole } from "@structsmith/contracts";
 import {
+  ArrowRightLeft,
   Box,
   Boxes,
+  Circle,
   CircleCheck,
+  CircleStop,
   Cloud,
   Cog,
   Component,
   Database,
   Diamond,
+  FileText,
+  GitFork,
+  GitMerge,
   Globe,
   HardDrive,
   KeyRound,
   Layers,
   type LucideIcon,
+  Merge,
   Network,
   Play,
   Server,
@@ -55,11 +62,33 @@ const KIND_ICONS: Record<ElementKind, LucideIcon> = {
   action: Play,
   decision: Diamond,
   outcome: CircleCheck,
+  data: ArrowRightLeft,
+  document: FileText,
+  start: Circle,
+  end: CircleStop,
+  fork: GitFork,
+  join: GitMerge,
+  merge: Merge,
   custom: Shapes,
 };
 
 export function iconFor(kind: ElementKind, role: ElementRole | null): LucideIcon {
-  if (["workflowGroup", "action", "decision", "outcome"].includes(kind)) return KIND_ICONS[kind];
+  if (
+    [
+      "workflowGroup",
+      "action",
+      "decision",
+      "outcome",
+      "data",
+      "document",
+      "start",
+      "end",
+      "fork",
+      "join",
+      "merge",
+    ].includes(kind)
+  )
+    return KIND_ICONS[kind];
   return (role ? ROLE_ICONS[role] : undefined) ?? KIND_ICONS[kind];
 }
 
