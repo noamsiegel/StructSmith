@@ -6,7 +6,7 @@ import type {
 } from "@structsmith/contracts";
 import { Panel, useNodes, useReactFlow, useViewport, ViewportPortal } from "@xyflow/react";
 import { Check, Ellipsis, MessageSquare, Pencil, RotateCcw, Search, Trash2, X } from "lucide-react";
-import { type RefObject, useEffect, useId, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -32,6 +32,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useApplyOperations, useWorkspace } from "@/hooks/useApi";
 import {
+  canDismissComment,
   commentCanvasPosition,
   commentContentState,
   commentMatchesSearch,
@@ -249,13 +250,34 @@ export function CanvasComments({
     };
   }, [mode, workspace.data, canvasRef, flow, view.elements]);
 
-  const close = () => {
+  const close = useCallback(() => {
     if (command.isPending) return;
     setDraft(null);
     setOpenedId(null);
     setMessageDraft(null);
     setConfirmDelete(null);
-  };
+  }, [command.isPending]);
+  useEffect(() => {
+    if (!draft && !openedId && !threadsOpen) return;
+    const canvas = canvasRef.current;
+    const dismiss = (event: MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (
+        canDismissComment({
+          dirty,
+          pending: command.isPending,
+          confirmingDelete: confirmDelete !== null,
+          insideControl: Boolean(target?.closest("[data-comment-control]")),
+        })
+      ) {
+        close();
+        setThreadsOpen(false);
+      }
+    };
+    // React Flow intercepts the later click that Radix uses for deferred dismissal.
+    canvas?.addEventListener("click", dismiss, true);
+    return () => canvas?.removeEventListener("click", dismiss, true);
+  }, [canvasRef, draft, openedId, threadsOpen, dirty, command.isPending, confirmDelete, close]);
   const apply = async (operation: ArchitectureOperationInput, revision: number, label: string) => {
     if (command.isPending) return false;
     try {
@@ -630,10 +652,12 @@ export function CanvasComments({
           onInteractOutside={(event) => {
             const target = event.target instanceof Element ? event.target : null;
             if (
-              dirty ||
-              command.isPending ||
-              confirmDelete !== null ||
-              target?.closest("[data-comment-control]")
+              !canDismissComment({
+                dirty,
+                pending: command.isPending,
+                confirmingDelete: confirmDelete !== null,
+                insideControl: Boolean(target?.closest("[data-comment-control]")),
+              })
             )
               event.preventDefault();
           }}

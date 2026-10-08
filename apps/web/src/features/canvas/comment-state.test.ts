@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import type { ViewComment } from "@structsmith/contracts";
 import {
+  canDismissComment,
   commentCanvasPosition,
   commentContentState,
   commentMatchesSearch,
@@ -53,4 +54,13 @@ test("seen storage rejects malformed records and thread search includes replies"
   expect(commentMatchesSearch(pin, "worker")).toBe(true);
   expect(commentMatchesSearch(pin, "missing")).toBe(false);
   expect(commentMatchesSearch(pin, "")).toBe(true);
+});
+
+test("outside dismissal preserves unsaved text, pending saves, deletion confirmation and comment controls", () => {
+  const clean = { dirty: false, pending: false, confirmingDelete: false, insideControl: false };
+  expect(canDismissComment(clean)).toBe(true);
+  expect(canDismissComment({ ...clean, dirty: true })).toBe(false);
+  expect(canDismissComment({ ...clean, pending: true })).toBe(false);
+  expect(canDismissComment({ ...clean, confirmingDelete: true })).toBe(false);
+  expect(canDismissComment({ ...clean, insideControl: true })).toBe(false);
 });

@@ -40,3 +40,17 @@ export function commentMatchesSearch(pin: ViewComment, query: string): boolean {
     )
   );
 }
+
+export function canDismissComment({
+  dirty,
+  pending,
+  confirmingDelete,
+  insideControl,
+}: {
+  dirty: boolean;
+  pending: boolean;
+  confirmingDelete: boolean;
+  insideControl: boolean;
+}): boolean {
+  return !dirty && !pending && !confirmingDelete && !insideControl;
+}
