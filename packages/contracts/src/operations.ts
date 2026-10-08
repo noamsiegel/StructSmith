@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { LayoutAlgorithmSchema, LayoutDirectionSchema } from "./enums";
 import {
+  AddViewCommentReplySchema,
+  AddViewCommentSchema,
   CreateBoundarySchema,
   CreateElementSchema,
   CreateRecordSchema,
@@ -12,6 +14,7 @@ import {
   UpdateElementSchema,
   UpdateRecordSchema,
   UpdateRelationshipSchema,
+  UpdateViewCommentSchema,
   UpdateViewSchema,
   ValidationResultSchema,
   ViewRelationshipPatchSchema,
@@ -115,6 +118,47 @@ export const UpdateViewOpSchema = z.object({
   data: UpdateViewSchema,
 });
 
+export const AddViewCommentOpSchema = z.object({
+  op: z.literal("addViewComment"),
+  viewId: IdSchema,
+  data: AddViewCommentSchema,
+});
+
+export const UpdateViewCommentOpSchema = z.object({
+  op: z.literal("updateViewComment"),
+  viewId: IdSchema,
+  commentId: IdSchema,
+  data: UpdateViewCommentSchema,
+});
+
+export const DeleteViewCommentOpSchema = z.object({
+  op: z.literal("deleteViewComment"),
+  viewId: IdSchema,
+  commentId: IdSchema,
+});
+
+export const AddViewCommentReplyOpSchema = z.object({
+  op: z.literal("addViewCommentReply"),
+  viewId: IdSchema,
+  commentId: IdSchema,
+  data: AddViewCommentReplySchema,
+});
+
+export const UpdateViewCommentReplyOpSchema = z.object({
+  op: z.literal("updateViewCommentReply"),
+  viewId: IdSchema,
+  commentId: IdSchema,
+  replyId: IdSchema,
+  data: AddViewCommentReplySchema,
+});
+
+export const DeleteViewCommentReplyOpSchema = z.object({
+  op: z.literal("deleteViewCommentReply"),
+  viewId: IdSchema,
+  commentId: IdSchema,
+  replyId: IdSchema,
+});
+
 export const DeleteViewOpSchema = z.object({
   op: z.literal("deleteView"),
   viewId: IdSchema,
@@ -189,6 +233,12 @@ export const ArchitectureOperationSchema = z.discriminatedUnion("op", [
   DeleteRelationshipOpSchema,
   CreateViewOpSchema,
   UpdateViewOpSchema,
+  AddViewCommentOpSchema,
+  UpdateViewCommentOpSchema,
+  DeleteViewCommentOpSchema,
+  AddViewCommentReplyOpSchema,
+  UpdateViewCommentReplyOpSchema,
+  DeleteViewCommentReplyOpSchema,
   DeleteViewOpSchema,
   SetViewElementsOpSchema,
   SetViewRelationshipsOpSchema,

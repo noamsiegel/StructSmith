@@ -100,6 +100,41 @@ export class ImportService {
             id: viewId,
             workspaceId: newId,
             scopeElementId: view.scopeElementId ? mapId(view.scopeElementId) : null,
+            settings: {
+              ...view.settings,
+              nodeColors: Object.fromEntries(
+                Object.entries(view.settings.nodeColors).map(([key, color]) => [
+                  key.startsWith("boundary:")
+                    ? `boundary:${mapId(key.slice("boundary:".length))}`
+                    : mapId(key),
+                  color,
+                ]),
+              ),
+              sectionFrames: Object.fromEntries(
+                Object.entries(view.settings.sectionFrames).map(([key, frame]) => [
+                  `boundary:${mapId(key.slice("boundary:".length))}`,
+                  frame,
+                ]),
+              ),
+              preferredDetailViews: Object.fromEntries(
+                Object.entries(view.settings.preferredDetailViews).map(([elementId, detailId]) => [
+                  mapId(elementId),
+                  mapId(detailId),
+                ]),
+              ),
+              scenarios: view.settings.scenarios.map((scenario) => ({
+                ...scenario,
+                steps: scenario.steps.map((step) => ({
+                  ...step,
+                  elementId: mapId(step.elementId),
+                  relationshipId: step.relationshipId ? mapId(step.relationshipId) : undefined,
+                })),
+              })),
+              commentPins: view.settings.commentPins.map((pin) => ({
+                ...pin,
+                elementId: pin.elementId ? mapId(pin.elementId) : pin.elementId,
+              })),
+            },
             elements: view.elements.map((entry) => ({
               ...entry,
               viewId,

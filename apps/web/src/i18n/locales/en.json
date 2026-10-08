@@ -1,4 +1,65 @@
 {
+  "comments": {
+    "add": "Comment (C)",
+    "placeHint": "Click to place a comment · Enter to center · Esc to cancel",
+    "addTitle": "Add comment",
+    "title": "Comment",
+    "viewOwned": "Saved on this view.",
+    "textLabel": "Comment text",
+    "post": "Post comment",
+    "added": "Add view comment",
+    "openPin": "Open comment {{number}}",
+    "showResolved": "Show resolved",
+    "openResolvedPin": "Open resolved comment {{number}}",
+    "resolved": "Resolved",
+    "edit": "Edit",
+    "save": "Save changes",
+    "delete": "Delete",
+    "deleteThread": "Delete thread",
+    "deleteTitle": "Delete comment thread?",
+    "deleteWarning_one": "Delete this comment and its {{count}} reply? Undo can restore the thread.",
+    "deleteWarning_other": "Delete this comment and its {{count}} replies? Undo can restore the thread.",
+    "replies": "Replies",
+    "reply": "Reply",
+    "replyText": "Reply text",
+    "editReplyText": "Edit reply text",
+    "postReply": "Post reply",
+    "editReply": "Edit reply {{number}}",
+    "deleteReply": "Delete reply {{number}}",
+    "resolve": "Resolve",
+    "reopen": "Reopen",
+    "updated": "Edit view comment",
+    "deleted": "Delete view comment thread",
+    "replied": "Reply to view comment",
+    "replyDeleted": "Delete view comment reply",
+    "markedResolved": "Resolve view comment",
+    "reopened": "Reopen view comment",
+    "threadActions": "Comment actions",
+    "replyActions": "Reply {{number}} actions",
+    "commentPlaceholder": "Write a comment…",
+    "replyPlaceholder": "Reply to this thread…",
+    "threads": "Comments",
+    "search": "Search comments and replies",
+    "unread": "Unread",
+    "replyCount_one": "{{count}} reply",
+    "replyCount_other": "{{count}} replies",
+    "attached": "Attached to object",
+    "noMatches": "No comments match your search.",
+    "noThreads": "No open comments. Press C to add one.",
+    "localUnreadHint": "Unread status is saved in this browser.",
+    "updatedLabel": "Updated"
+  },
+  "statusOverlay": {
+    "title": "Implementation status overlay",
+    "off": "Overlay off",
+    "status": "Status",
+    "liveOnly": "Live only",
+    "live": "Live",
+    "planned": "Planned",
+    "conflict": "Mixed status",
+    "untagged": "Untagged: unchanged",
+    "emptyHint": "No explicitly live objects in this view. Choose Status or Overlay off to see all objects."
+  },
   "navigation": {
     "title": "Diagram navigation",
     "back": "Back",
@@ -14,7 +75,15 @@
     "seedContents": "Include children and connected context",
     "seedDescription_one": "1 existing element. Clear this option to start with an empty view.",
     "seedDescription_other": "{{count}} existing elements. Clear this option to start with an empty view.",
-    "doubleClick": "Double-click a system or container"
+    "doubleClick": "Double-click a system or container",
+    "showModelPanel": "Show model panel",
+    "hideModelPanel": "Hide model panel",
+    "showInspectorPanel": "Show inspector panel",
+    "hideInspectorPanel": "Hide inspector panel",
+    "rememberDetails": "Remember for this diagram",
+    "expandInline": "Expand in place",
+    "collapseInline": "Collapse in place",
+    "expansionLimit": "Four visible levels maximum. Open details to continue."
   },
   "common": {
     "add": "Add",
@@ -129,6 +198,8 @@
     "activeTheme": "Active theme: {{theme}}"
   },
   "topbar": {
+    "toggleModelPanel": "Toggle Model sidebar",
+    "toggleInspectorPanel": "Toggle Inspector sidebar",
     "workspace": "Workspace",
     "view": "View",
     "add": "Add",
@@ -210,7 +281,8 @@
   },
   "palette": {
     "title": "Add element",
-    "hint": "Presets create the right kind and role — you can change both later."
+    "hint": "Presets create the right kind and role — you can change both later.",
+    "added": "Added {{name}}"
   },
   "canvas": {
     "legend": "Ownership",
@@ -219,7 +291,8 @@
     "hiddenElements": "{{count}} hidden",
     "copiedElements": "Copied {{count}} element(s)",
     "pastedElements": "Pasted {{count}} element(s)",
-    "deletedSelection": "Removed selected items"
+    "deletedSelection": "Removed selected items",
+    "diagramLegend": "Diagram legend"
   },
   "contextMenu": {
     "edit": "Edit",
@@ -371,8 +444,44 @@
     "fitView": "Fit view",
     "clearSelection": "Clear selection",
     "pan": "Pan canvas",
+    "panVertical": "Pan up and down",
+    "panHorizontal": "Pan left and right",
+    "panTrackpad": "Pan with trackpad",
+    "twoFingerScroll": "two-finger scroll",
+    "scroll": "scroll",
+    "zoom": "Zoom canvas",
     "click": "click",
-    "dragCanvas": "drag canvas"
+    "dragCanvas": "drag canvas",
+    "groups": {
+      "editor": "Editor",
+      "canvas": "Canvas",
+      "connectors": "Connectors",
+      "comments": "Comments",
+      "controls": "Controls and dialogs",
+      "chat": "Agent chat"
+    },
+    "saveStatus": "Show save status (changes save automatically)",
+    "moveElement": "Move a focused, selected element",
+    "moveElementFast": "Move a focused, selected element farther",
+    "arrowKeys": "Arrow keys",
+    "moveLabel": "Move a focused connector label along its line",
+    "moveLabelFast": "Move a focused connector label by 10 units",
+    "moveSegment": "Move a focused connector segment perpendicular to its line",
+    "moveSegmentFast": "Move a focused connector segment by 10 units",
+    "cancelDrag": "Cancel connector dragging",
+    "commentCenter": "Place a comment at the view center (comment mode)",
+    "commentCancel": "Leave comment mode or close a thread",
+    "nextControl": "Focus the next control",
+    "previousControl": "Focus the previous control",
+    "chooseResult": "Choose a search result or menu item",
+    "toolbarNavigation": "Navigate the creation toolbar",
+    "dismiss": "Close a dialog or menu",
+    "commitField": "Save an editable field",
+    "cancelField": "Cancel an editable field",
+    "chatSend": "Send the current chat message",
+    "chatNewline": "Insert a newline in the chat message",
+    "chatReorder": "Pick up, move and drop a chat topic",
+    "chatCancelReorder": "Cancel reordering a chat topic"
   },
   "status": {
     "revision": "rev {{revision}}",
@@ -394,8 +503,23 @@
     "conflict": "Someone else changed this workspace — reloading the latest version.",
     "layoutSaved": "Layout saved"
   },
+  "elementTypes": {
+    "title": "Change type",
+    "changed": "Change element type",
+    "invalid": "This type is incompatible with the element's parent or contents."
+  },
+  "sections": {
+    "fit": "Fit section to contents",
+    "title": "Section",
+    "newName": "New section",
+    "add": "Add section",
+    "rename": "Rename section",
+    "updated": "Updated section",
+    "membershipChanged": "Moved objects between sections"
+  },
   "boundaries": {
     "title": "Boundaries",
+    "moveGroupHint": "Drag to move this group and its members",
     "newName": "New boundary",
     "created": "Created boundary",
     "updated": "Updated boundary",
@@ -420,7 +544,7 @@
       "networkZone": "Network zone",
       "trustZone": "Trust zone",
       "complianceScope": "Compliance scope",
-      "custom": "Custom"
+      "custom": "Section"
     },
     "classification": {
       "public": "Public",
@@ -442,7 +566,11 @@
     "component": "Component",
     "deploymentNode": "Deployment node",
     "infrastructureNode": "Infrastructure node",
-    "custom": "Custom"
+    "custom": "Custom",
+    "workflowGroup": "Workflow group",
+    "action": "Action",
+    "decision": "Decision",
+    "outcome": "Outcome"
   },
   "roles": {
     "frontend": "Frontend",
@@ -477,7 +605,8 @@
     "container": "Container",
     "component": "Component",
     "deployment": "Deployment",
-    "custom": "Custom"
+    "custom": "Custom",
+    "workflow": "Workflow"
   },
   "presets": {
     "person": "Person",
@@ -494,7 +623,11 @@
     "identityProvider": "Identity provider",
     "externalApi": "External API",
     "component": "Component",
-    "custom": "Custom"
+    "custom": "Custom",
+    "workflowGroup": "Workflow group",
+    "action": "Action",
+    "decision": "Decision",
+    "outcome": "Outcome"
   },
   "views": {
     "create": "New view",
@@ -595,5 +728,120 @@
     "directoryHint": "Absolute path on the server. Used for reading local code; leave empty for architecture only. Project assignment stays fixed.",
     "confirmDelete": "Confirm delete",
     "retry": "Retry"
+  },
+  "relationshipPresentation": {
+    "moveSegment": "Move segment {{index}}: {{label}}",
+    "moveSegmentHint": "Drag the line or this handle. Arrow keys move perpendicular to the segment; Shift moves 10. Escape cancels.",
+    "mergedRouteHint": "This line represents multiple relationships. Drag its handles to change their shared route; open a detail view to edit individual relationships.",
+    "title": "Connector appearance",
+    "color": "Color",
+    "strokeWidth": "Line width",
+    "strokeStyle": "Line style",
+    "sourceArrow": "Start arrow",
+    "targetArrow": "End arrow",
+    "sourceSide": "Start side",
+    "targetSide": "End side",
+    "labelPosition": "Position along line (0-1)",
+    "labelOffsetX": "Label offset X",
+    "labelOffsetY": "Label offset Y",
+    "reset": "Reset appearance",
+    "updated": "Update connector appearance",
+    "moveLabel": "Move label: {{label}}",
+    "moveLabelHint": "Drag to any connector segment. Text stays horizontal. Arrow keys move along the line; Shift moves 10 units. Escape cancels dragging.",
+    "solid": "Solid",
+    "dashed": "Dashed",
+    "dotted": "Dotted",
+    "none": "None",
+    "arrow": "Open arrow",
+    "arrowclosed": "Filled arrow",
+    "left": "Left",
+    "right": "Right",
+    "top": "Top",
+    "bottom": "Bottom",
+    "auto": "Auto",
+    "sourceSlot": "Source attachment",
+    "targetSlot": "Target attachment",
+    "slot0": "First quarter",
+    "slot1": "Center",
+    "slot2": "Third quarter"
+  },
+  "dependencies": {
+    "title": "Dependencies",
+    "incoming": "Incoming",
+    "outgoing": "Outgoing",
+    "none": "No dependencies.",
+    "via": "via {{name}}",
+    "unlabeled": "Unlabeled connection",
+    "usedIn": "Appears in {{count}} diagrams",
+    "noViews": "Not placed in a diagram."
+  },
+  "resourceLinks": {
+    "title": "Resources",
+    "implementation": "Implementation",
+    "runbook": "Runbook",
+    "open": "Open {{kind}}",
+    "invalid": "Enter an HTTP or HTTPS URL without embedded credentials.",
+    "saved": "Updated resource links"
+  },
+  "scenarios": {
+    "title": "Scenarios",
+    "choose": "Choose a scenario",
+    "create": "Create scenario",
+    "name": "Scenario name",
+    "stepNumber": "Step {{number}}",
+    "element": "Element",
+    "stepTitle": "Step title",
+    "description": "What happens in this step? (optional)",
+    "arrival": "Arrival connection",
+    "noConnection": "No arrival connection",
+    "connection": "Direct connection",
+    "addStep": "Add step",
+    "removeStep": "Remove step",
+    "moveUp": "Move step up",
+    "moveDown": "Move step down",
+    "progress": "Step {{number}} of {{count}}",
+    "ready": "{{count}} steps. Follow the path through this diagram.",
+    "play": "Start walkthrough",
+    "stop": "Stop walkthrough",
+    "back": "Back",
+    "next": "Next",
+    "edit": "Edit scenario",
+    "delete": "Delete scenario",
+    "confirmDelete": "Delete \"{{name}}\"? Diagram elements and connections will remain.",
+    "empty": "Create a scenario to walk through a normal or exception path using the elements on this diagram.",
+    "changed": "Update scenarios",
+    "required": "Add a scenario name and a title for every step.",
+    "invalidReferences": "A step refers to a missing element or invalid arrival connection. Choose elements in this view and direct connections from the previous step.",
+    "saveFailed": "Could not save. If the workspace changed, cancel and reopen the editor before retrying. Your draft is still here.",
+    "missingElement": "Missing element",
+    "stale": "This step's element or connection was removed. Edit the scenario to repair it, or continue to the next step."
+  },
+  "tagFocus": {
+    "title": "Focus by tag",
+    "all": "All tags",
+    "empty": "No objects or connections in this diagram use this tag."
+  },
+  "creationToolbar": {
+    "title": "Add to diagram",
+    "add": "Add {{name}}",
+    "workflowGroup": "Group",
+    "action": "Action",
+    "decision": "Decision",
+    "outcome": "Outcome",
+    "more": "More",
+    "moreHint": "More elements"
+  },
+  "selectionColors": {
+    "toolbar": "Selection formatting",
+    "change": "Change color",
+    "color": "Color",
+    "mixed": "Mixed colors",
+    "palette": "Color palette",
+    "use": "Use {{color}}",
+    "custom": "Hex color",
+    "customPicker": "Choose custom color",
+    "apply": "Apply",
+    "reset": "Reset color",
+    "updated": "Update selection color"
   }
 }

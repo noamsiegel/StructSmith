@@ -1,4 +1,6 @@
 import type {
+  AddViewCommentInput,
+  AddViewCommentReplyInput,
   ArchitectureBoundary,
   ArchitectureElement,
   ArchitectureRecord,
@@ -16,7 +18,9 @@ import type {
   UpdateElementInput,
   UpdateRecordInput,
   UpdateRelationshipInput,
+  UpdateViewCommentInput,
   UpdateViewInput,
+  ViewComment,
   ViewElement,
   ViewRelationship,
   ViewRelationshipPatch,
@@ -24,19 +28,31 @@ import type {
   Workspace,
   WorkspaceMode,
 } from "@structsmith/contracts";
-import { ERROR_CODES } from "@structsmith/contracts";
+import {
+  AddViewCommentReplySchema,
+  AddViewCommentSchema,
+  ERROR_CODES,
+  UpdateViewCommentSchema,
+} from "@structsmith/contracts";
+import { detailViewsFor } from "./detail-views";
 import { badRequest, DomainError, ruleViolation } from "./errors";
 import { createId, nowIso, uniqueKey } from "./ids";
 import { edgeLabel, resolveRelationshipsForView } from "./implied";
 import { computeLayout, estimateElementSize } from "./layout";
 import type { Repositories } from "./ports";
 import { checkParent, descendantsOf, wouldCreateCycle } from "./rules";
+import { validateViewScenarios } from "./scenarios";
 
 /* ------------------------------------------------------------------ */
 /* Helpers                                                             */
 /* ------------------------------------------------------------------ */
 
 export const defaultViewSettings: ViewSettings = {
+  nodeColors: {},
+  sectionFrames: {},
+  preferredDetailViews: {},
+  scenarios: [],
+  commentPins: [],
   showBoundaries: true,
   snapToGrid: false,
   autoLayoutDirection: "LR",
@@ -149,13 +165,6 @@ export function updateElement(
     parentId = input.parentId;
     if (parentId === elementId) throw badRequest("An element cannot be its own parent.");
     if (parentId) {
-      const parent = requireElement(repos, parentId, workspace.id);
-      enforceHierarchy(
-        workspace.mode,
-        { kind: input.kind ?? current.kind, name: input.name ?? current.name },
-        parent,
-        warnings,
-      );
       const all = repos.elements.listByWorkspace(workspace.id);
       const parentOf = new Map(all.map((item) => [item.id, item.parentId]));
       if (wouldCreateCycle(elementId, parentId, (id) => parentOf.get(id) ?? null)) {
@@ -178,6 +187,15 @@ export function updateElement(
     properties: input.properties ?? current.properties,
     updatedAt: nowIso(),
   };
+  if (input.parentId !== undefined || input.kind !== undefined) {
+    const parent = parentId ? requireElement(repos, parentId, workspace.id) : undefined;
+    enforceHierarchy(workspace.mode, next, parent, warnings);
+    if (input.kind !== undefined && input.kind !== current.kind) {
+      for (const child of repos.elements.listByWorkspace(workspace.id)) {
+        if (child.parentId === elementId) enforceHierarchy(workspace.mode, child, next, warnings);
+      }
+    }
+  }
   repos.elements.update(next);
   return next;
 }
@@ -198,6 +216,11 @@ export function deleteElement(
     }
   }
 
+  const removed = new Set(targets.map((target) => target.id));
+  for (const view of repos.views.listByWorkspace(workspace.id))
+    detachViewComments(repos, view.id, removed);
+  pruneRemovedNodeSettings(repos, workspace, removed);
+
   for (const target of targets) {
     for (const relationshipId of repos.relationships.deleteByElement(target.id)) {
       repos.views.removeRelationshipEverywhere(relationshipId);
@@ -208,6 +231,7 @@ export function deleteElement(
     repos.elements.delete(target.id);
   }
 
+  prunePreferredDetailViews(repos, workspace);
   return targets.map((target) => target.id);
 }
 
@@ -380,6 +404,7 @@ export function deleteBoundary(
       });
     }
   }
+  pruneRemovedNodeSettings(repos, workspace, new Set(targets.map((target) => target.id)));
   for (const target of [...targets].reverse()) repos.boundaries.delete(target.id);
   return targets.map((target) => target.id);
 }
@@ -473,6 +498,172 @@ export function deleteRelationship(
 /* Views                                                               */
 /* ------------------------------------------------------------------ */
 
+function prunePreferredDetailViews(repos: Repositories, workspace: Workspace): void {
+  const views = repos.views.listByWorkspace(workspace.id);
+  const elements = new Map(
+    repos.elements.listByWorkspace(workspace.id).map((element) => [element.id, element]),
+  );
+  for (const view of views) {
+    const entries = Object.entries(view.settings.preferredDetailViews);
+    if (!entries.length) continue;
+    const present = new Set(repos.views.listElements(view.id).map((entry) => entry.elementId));
+    const valid = entries.filter(([elementId, detailId]) => {
+      const element = elements.get(elementId);
+      return (
+        element &&
+        present.has(elementId) &&
+        detailViewsFor(element, views, view.id).some((candidate) => candidate.id === detailId)
+      );
+    });
+    if (valid.length !== entries.length)
+      repos.views.update({
+        ...view,
+        updatedAt: nowIso(),
+        settings: { ...view.settings, preferredDetailViews: Object.fromEntries(valid) },
+      });
+  }
+}
+
+function pruneRemovedNodeSettings(
+  repos: Repositories,
+  workspace: Workspace,
+  removed: ReadonlySet<string>,
+): void {
+  for (const view of repos.views.listByWorkspace(workspace.id)) {
+    const sectionFrames = Object.fromEntries(
+      Object.entries(view.settings.sectionFrames).filter(
+        ([key]) => !removed.has(key.slice("boundary:".length)),
+      ),
+    );
+    const nodeColors = Object.fromEntries(
+      Object.entries(view.settings.nodeColors).filter(
+        ([key]) => !removed.has(key.startsWith("boundary:") ? key.slice("boundary:".length) : key),
+      ),
+    );
+    if (
+      Object.keys(sectionFrames).length !== Object.keys(view.settings.sectionFrames).length ||
+      Object.keys(nodeColors).length !== Object.keys(view.settings.nodeColors).length
+    )
+      repos.views.update({
+        ...view,
+        settings: { ...view.settings, sectionFrames, nodeColors },
+        updatedAt: nowIso(),
+      });
+  }
+}
+
+function validateExplorationSettings(
+  repos: Repositories,
+  workspace: Workspace,
+  view: ArchitectureView,
+  settings: UpdateViewInput["settings"],
+  elementIds: readonly string[],
+): void {
+  if (settings?.nodeColors) {
+    for (const key of Object.keys(settings.nodeColors)) {
+      const id = key.startsWith("boundary:") ? key.slice("boundary:".length) : key;
+      const element = repos.elements.findById(id);
+      const boundary = key.startsWith("boundary:") ? repos.boundaries.findById(id) : undefined;
+      if (
+        element?.workspaceId === workspace.id ||
+        (boundary?.workspaceId === workspace.id && boundary.viewId === view.id)
+      )
+        continue;
+      throw ruleViolation(
+        "Colors must refer to an element in this workspace or a boundary in this view.",
+      );
+    }
+  }
+  if (settings?.sectionFrames) {
+    for (const key of Object.keys(settings.sectionFrames)) {
+      const id = key.slice("boundary:".length);
+      const boundary = repos.boundaries.findById(id);
+      if (
+        boundary?.workspaceId === workspace.id &&
+        boundary.viewId === view.id &&
+        boundary.kind === "custom"
+      )
+        continue;
+      const element = repos.elements.findById(id);
+      const isParentOnView = elementIds.some((elementId) => {
+        let current = repos.elements.findById(elementId);
+        const visited = new Set<string>();
+        while (current && !visited.has(current.id)) {
+          if (current.parentId === id) return true;
+          visited.add(current.id);
+          current = current.parentId ? repos.elements.findById(current.parentId) : undefined;
+        }
+        return false;
+      });
+      if (
+        !element ||
+        element.workspaceId !== workspace.id ||
+        element.kind !== "custom" ||
+        (!isParentOnView && !repos.views.findById(view.id)?.settings.sectionFrames[key])
+      )
+        throw ruleViolation(
+          "Section geometry must refer to a custom section in this workspace and view.",
+        );
+    }
+  }
+  if (settings?.preferredDetailViews) {
+    const views = repos.views.listByWorkspace(workspace.id);
+    for (const [elementId, detailId] of Object.entries(settings.preferredDetailViews)) {
+      const element = requireElement(repos, elementId, workspace.id);
+      if (
+        !elementIds.includes(elementId) ||
+        !detailViewsFor(element, views, view.id).some((candidate) => candidate.id === detailId)
+      ) {
+        throw ruleViolation(
+          "Preferred details must refer to an element in this view and one of its detail views.",
+        );
+      }
+    }
+  }
+  if (settings?.scenarios) {
+    const previous = repos.views.findById(view.id)?.settings.scenarios ?? [];
+    // Unchanged stale scenarios remain available for repair or deletion after model edits.
+    const changed = settings.scenarios.filter(
+      (scenario) => !previous.some((saved) => JSON.stringify(saved) === JSON.stringify(scenario)),
+    );
+    validateViewScenarios(
+      changed,
+      elementIds,
+      repos.elements.listByWorkspace(workspace.id),
+      repos.relationships.listByWorkspace(workspace.id),
+    );
+  }
+}
+
+function detachViewComments(
+  repos: Repositories,
+  viewId: string,
+  elementIds: ReadonlySet<string>,
+): void {
+  const view = repos.views.findById(viewId);
+  if (!view?.settings.commentPins.some((pin) => pin.elementId && elementIds.has(pin.elementId)))
+    return;
+  const placements = new Map(
+    repos.views.listElements(viewId).map((entry) => [entry.elementId, entry]),
+  );
+  repos.views.update({
+    ...view,
+    updatedAt: nowIso(),
+    settings: {
+      ...view.settings,
+      commentPins: view.settings.commentPins.map((pin) => {
+        const placement =
+          pin.elementId && elementIds.has(pin.elementId)
+            ? placements.get(pin.elementId)
+            : undefined;
+        return placement
+          ? { ...pin, elementId: null, x: pin.x + placement.x, y: pin.y + placement.y }
+          : pin;
+      }),
+    },
+  });
+}
+
 export function createView(
   repos: Repositories,
   workspace: Workspace,
@@ -497,6 +688,7 @@ export function createView(
     createdAt: timestamp,
     updatedAt: timestamp,
   };
+  validateExplorationSettings(repos, workspace, view, input.settings, input.elementIds ?? []);
   repos.views.insert(view);
 
   if (input.elementIds?.length) {
@@ -533,13 +725,173 @@ export function updateView(
     settings: { ...current.settings, ...(input.settings ?? {}) },
     updatedAt: nowIso(),
   };
+  validateExplorationSettings(
+    repos,
+    workspace,
+    next,
+    input.settings,
+    repos.views.listElements(viewId).map((entry) => entry.elementId),
+  );
   repos.views.update(next);
   return next;
+}
+
+export function addViewComment(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  input: AddViewCommentInput,
+): ArchitectureView {
+  const current = requireView(repos, viewId, workspace.id);
+  const data = AddViewCommentSchema.parse(input);
+  validateCommentAttachment(repos, workspace, viewId, data.elementId);
+  const timestamp = nowIso();
+  const pin = {
+    ...data,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    id: createId("comment"),
+    resolved: false,
+    replies: [],
+  };
+  return updateView(repos, workspace, viewId, {
+    settings: { commentPins: [...current.settings.commentPins, pin] },
+  });
+}
+
+function validateCommentAttachment(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  elementId: string | null | undefined,
+): void {
+  if (!elementId) return;
+  requireElement(repos, elementId, workspace.id);
+  if (!repos.views.listElements(viewId).some((entry) => entry.elementId === elementId))
+    throw badRequest(`Comment attachment "${elementId}" must be placed on this view.`);
+}
+
+function requireViewComment(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+) {
+  const view = requireView(repos, viewId, workspace.id);
+  const comment = view.settings.commentPins.find((pin) => pin.id === commentId);
+  if (!comment) throw badRequest(`Comment "${commentId}" does not exist on this view.`);
+  return { view, comment };
+}
+
+function replaceViewComment(
+  repos: Repositories,
+  workspace: Workspace,
+  view: ArchitectureView,
+  comment: ViewComment,
+) {
+  return updateView(repos, workspace, view.id, {
+    settings: {
+      commentPins: view.settings.commentPins.map((pin) => (pin.id === comment.id ? comment : pin)),
+    },
+  });
+}
+
+export function updateViewComment(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+  input: UpdateViewCommentInput,
+): ArchitectureView {
+  const { view, comment } = requireViewComment(repos, workspace, viewId, commentId);
+  const patch = UpdateViewCommentSchema.parse(input);
+  validateCommentAttachment(repos, workspace, viewId, patch.elementId);
+  return replaceViewComment(repos, workspace, view, {
+    ...comment,
+    ...patch,
+    updatedAt: nowIso(),
+  });
+}
+
+export function deleteViewComment(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+): ArchitectureView {
+  const { view } = requireViewComment(repos, workspace, viewId, commentId);
+  return updateView(repos, workspace, viewId, {
+    settings: { commentPins: view.settings.commentPins.filter((pin) => pin.id !== commentId) },
+  });
+}
+
+export function addViewCommentReply(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+  input: AddViewCommentReplyInput,
+): ArchitectureView {
+  const { view, comment } = requireViewComment(repos, workspace, viewId, commentId);
+  const timestamp = nowIso();
+  return replaceViewComment(repos, workspace, view, {
+    ...comment,
+    updatedAt: timestamp,
+    replies: [
+      ...comment.replies,
+      {
+        ...AddViewCommentReplySchema.parse(input),
+        id: createId("reply"),
+        createdAt: timestamp,
+        updatedAt: timestamp,
+      },
+    ],
+  });
+}
+
+export function updateViewCommentReply(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+  replyId: string,
+  input: AddViewCommentReplyInput,
+): ArchitectureView {
+  const { view, comment } = requireViewComment(repos, workspace, viewId, commentId);
+  if (!comment.replies.some((reply) => reply.id === replyId))
+    throw badRequest(`Reply "${replyId}" does not exist on this comment.`);
+  const patch = AddViewCommentReplySchema.parse(input);
+  const timestamp = nowIso();
+  return replaceViewComment(repos, workspace, view, {
+    ...comment,
+    updatedAt: timestamp,
+    replies: comment.replies.map((reply) =>
+      reply.id === replyId ? { ...reply, ...patch, updatedAt: timestamp } : reply,
+    ),
+  });
+}
+
+export function deleteViewCommentReply(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+  replyId: string,
+): ArchitectureView {
+  const { view, comment } = requireViewComment(repos, workspace, viewId, commentId);
+  if (!comment.replies.some((reply) => reply.id === replyId))
+    throw badRequest(`Reply "${replyId}" does not exist on this comment.`);
+  return replaceViewComment(repos, workspace, view, {
+    ...comment,
+    updatedAt: nowIso(),
+    replies: comment.replies.filter((reply) => reply.id !== replyId),
+  });
 }
 
 export function deleteView(repos: Repositories, workspace: Workspace, viewId: string): void {
   requireView(repos, viewId, workspace.id);
   repos.views.delete(viewId);
+  prunePreferredDetailViews(repos, workspace);
 }
 
 export function setViewElements(
@@ -555,14 +907,23 @@ export function setViewElements(
   const existingIds = new Set(existing.map((entry) => entry.elementId));
 
   if (mode === "remove") {
+    detachViewComments(repos, viewId, wanted);
     for (const elementId of wanted) {
       repos.boundaries.removeViewElementMembership(viewId, elementId);
       repos.views.removeElement(viewId, elementId);
     }
+    prunePreferredDetailViews(repos, workspace);
     return repos.views.listElements(viewId);
   }
 
   if (mode === "replace") {
+    detachViewComments(
+      repos,
+      viewId,
+      new Set(
+        existing.filter((entry) => !wanted.has(entry.elementId)).map((entry) => entry.elementId),
+      ),
+    );
     for (const entry of existing) {
       if (!wanted.has(entry.elementId)) repos.views.removeElement(viewId, entry.elementId);
       if (!wanted.has(entry.elementId)) {
@@ -591,6 +952,7 @@ export function setViewElements(
     placed = [...placed, entry];
   }
 
+  if (mode === "replace") prunePreferredDetailViews(repos, workspace);
   return repos.views.listElements(viewId);
 }
 
@@ -647,6 +1009,14 @@ export function setViewRelationships(
   );
 
   for (const patch of patches) {
+    const relationship = repos.relationships.findById(patch.relationshipId);
+    if (!relationship || relationship.workspaceId !== workspace.id) {
+      throw new DomainError(
+        ERROR_CODES.RELATIONSHIP_NOT_FOUND,
+        `Relationship "${patch.relationshipId}" does not exist.`,
+        404,
+      );
+    }
     const base: ViewRelationship = current.get(patch.relationshipId) ?? {
       viewId,
       relationshipId: patch.relationshipId,
@@ -654,12 +1024,20 @@ export function setViewRelationships(
       labelPosition: null,
       controlPoints: [],
     };
-    repos.views.upsertRelationship({
+    const next: ViewRelationship = {
       ...base,
       hidden: patch.hidden ?? base.hidden,
       labelPosition: patch.labelPosition !== undefined ? patch.labelPosition : base.labelPosition,
       controlPoints: patch.controlPoints ?? base.controlPoints,
-    });
+      presentation:
+        patch.presentation === null
+          ? null
+          : patch.presentation === undefined
+            ? base.presentation
+            : { ...base.presentation, ...patch.presentation },
+    };
+    repos.views.upsertRelationship(next);
+    current.set(patch.relationshipId, next);
   }
 
   return repos.views.listRelationships(viewId);
@@ -680,6 +1058,10 @@ export function autoLayoutView(
   const allElements = repos.elements.listByWorkspace(workspace.id);
   const elements = new Map(allElements.map((element) => [element.id, element] as const));
   const visible = new Set(entries.map((entry) => entry.elementId));
+  const relationshipPlacements = repos.views.listRelationships(viewId);
+  const hiddenRelationships = new Set(
+    relationshipPlacements.filter((entry) => entry.hidden).map((entry) => entry.relationshipId),
+  );
   const activeBoundaries = repos.boundaries
     .listByView(viewId)
     .filter((boundary) => boundary.layer === view.settings.boundaryLayer);
@@ -704,7 +1086,9 @@ export function autoLayoutView(
     }),
     resolveRelationshipsForView(
       allElements,
-      repos.relationships.listByWorkspace(workspace.id),
+      repos.relationships
+        .listByWorkspace(workspace.id)
+        .filter((relationship) => !hiddenRelationships.has(relationship.id)),
       visible,
     ).map((edge) => ({
       source: edge.sourceElementId,
@@ -727,6 +1111,43 @@ export function autoLayoutView(
     repos.views.upsertElement({ ...entry, x: position.x, y: position.y });
   }
 
+  for (const placement of relationshipPlacements) {
+    repos.views.upsertRelationship({
+      ...placement,
+      controlPoints: [],
+      labelPosition: null,
+      presentation: placement.presentation
+        ? {
+            ...placement.presentation,
+            labelOffset: { x: 0, y: 0 },
+            sourceSide: null,
+            targetSide: null,
+          }
+        : placement.presentation,
+    });
+  }
+
+  const sectionFrames = Object.fromEntries(
+    Object.entries(view.settings.sectionFrames).filter(([key]) => {
+      const id = key.slice("boundary:".length);
+      const boundary = repos.boundaries.findById(id);
+      if (boundary) {
+        if (boundary.layer !== view.settings.boundaryLayer) return true;
+        const nested = [boundary];
+        for (let index = 0; index < nested.length; index += 1)
+          nested.push(
+            ...activeBoundaries.filter(
+              (candidate) => candidate.parentBoundaryId === nested[index]?.id,
+            ),
+          );
+        return !nested.some((candidate) =>
+          candidate.elementIds.some((elementId) => visible.has(elementId)),
+        );
+      }
+      return !descendantsOf(id, allElements).some((element) => visible.has(element.id));
+    }),
+  );
+  updateView(repos, workspace, viewId, { settings: { sectionFrames } });
   return repos.views.listElements(viewId);
 }
 

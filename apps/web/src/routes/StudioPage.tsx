@@ -1,16 +1,28 @@
-import { detailViewKind, detailViewsFor } from "@structsmith/domain";
+import { canOpenElementDetails, preferredDetailView } from "@structsmith/domain";
 import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Group, Panel, Separator } from "react-resizable-panels";
+import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Canvas } from "@/features/canvas/Canvas";
+import { CANVAS_FIT_PADDING } from "@/features/canvas/graph";
+import type { StatusOverlay } from "@/features/canvas/statusOverlay";
 import { useChatStore } from "@/features/chat/store";
 import { CommandPalette } from "@/features/command/CommandPalette";
 import { ElementPalette } from "@/features/command/ElementPalette";
 import { KeyboardShortcutsDialog } from "@/features/command/KeyboardShortcutsDialog";
+import { isShortcutHelp } from "@/features/command/shortcuts";
 import { Explorer } from "@/features/explorer/Explorer";
-import { Inspector } from "@/features/inspector/Inspector";
+import { Inspector, ViewInspector } from "@/features/inspector/Inspector";
 import { DetailNavigationContext } from "@/features/navigation/DetailNavigation";
 import { DetailViewDialog } from "@/features/navigation/DetailViewDialog";
 import {
@@ -41,6 +53,14 @@ import { hasPrimaryModifier } from "@/lib/platform";
 import { useEditorStore } from "@/store/editor";
 import { useHistoryStore } from "@/store/history";
 
+export function sidebarShortcut(
+  event: Pick<KeyboardEvent, "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">,
+  editing: boolean,
+): "model" | "inspector" | null {
+  if (editing || !hasPrimaryModifier(event) || event.shiftKey || event.code !== "KeyB") return null;
+  return event.altKey ? "inspector" : "model";
+}
+
 interface StudioPageProps {
   workspaceId: string;
   viewId: string | null;
@@ -57,6 +77,8 @@ export function StudioPage(props: StudioPageProps) {
 function WorkspaceStudio(props: StudioPageProps) {
   const [navigation, setNavigation] = useState(emptyNavigation);
   const [navigationReset, setNavigationReset] = useState(0);
+  const [tagFocus, setTagFocus] = useState<string | null>(null);
+  const [statusOverlay, setStatusOverlay] = useState<StatusOverlay>("status");
   const resetHistory = useHistoryStore((state) => state.reset);
   const clearSelection = useEditorStore((state) => state.clearSelection);
   useEffect(() => {
@@ -67,6 +89,10 @@ function WorkspaceStudio(props: StudioPageProps) {
     <ReactFlowProvider key={`${props.viewId ?? "initial"}:${navigationReset}`}>
       <StudioContent
         {...props}
+        tagFocus={tagFocus}
+        setTagFocus={setTagFocus}
+        statusOverlay={statusOverlay}
+        setStatusOverlay={setStatusOverlay}
         navigation={navigation}
         setNavigation={setNavigation}
         resetNavigation={() => setNavigationReset((value) => value + 1)}
@@ -85,10 +111,18 @@ function StudioContent({
   navigation,
   setNavigation,
   resetNavigation,
+  statusOverlay,
+  setStatusOverlay,
+  tagFocus,
+  setTagFocus,
 }: StudioPageProps & {
   navigation: ViewNavigation;
   setNavigation: Dispatch<SetStateAction<ViewNavigation>>;
   resetNavigation: () => void;
+  tagFocus: string | null;
+  setTagFocus: Dispatch<SetStateAction<string | null>>;
+  statusOverlay: StatusOverlay;
+  setStatusOverlay: Dispatch<SetStateAction<StatusOverlay>>;
 }) {
   const { t } = useTranslation();
   const flow = useReactFlow();
@@ -118,7 +152,39 @@ function StudioContent({
   const setExplorerTab = useEditorStore((state) => state.setExplorerTab);
   const setCommandOpen = useEditorStore((state) => state.setCommandOpen);
   const setShortcutsOpen = useEditorStore((state) => state.setShortcutsOpen);
+  const modelPanel = usePanelRef();
+  const inspectorPanel = usePanelRef();
+  const modelPanelVisible = useEditorStore((state) => state.modelPanelVisible);
+  const inspectorPanelVisible = useEditorStore((state) => state.inspectorPanelVisible);
+  const sidebarDefaults = useRef({
+    model: modelPanelVisible ? "19%" : "0%",
+    inspector: inspectorPanelVisible ? "22%" : "0%",
+  });
+  const sidebarWidths = useRef({ model: "19%", inspector: "22%" });
+  const setModelPanelVisible = useEditorStore((state) => state.setModelPanelVisible);
+  const setInspectorPanelVisible = useEditorStore((state) => state.setInspectorPanelVisible);
+  const updateSidebarVisibility = (side: "model" | "inspector", visible: boolean): void => {
+    if (!visible && document.getElementById(`${side}-panel`)?.contains(document.activeElement))
+      document.getElementById(`toggle-${side}-panel`)?.focus();
+    (side === "model" ? setModelPanelVisible : setInspectorPanelVisible)(visible);
+  };
+  const toggleSidebar = (side: "model" | "inspector"): void => {
+    const panel = (side === "model" ? modelPanel : inspectorPanel).current;
+    if (!panel) return;
+    if (panel.isCollapsed()) panel.resize(sidebarWidths.current[side]);
+    else {
+      updateSidebarVisibility(side, false);
+      panel.collapse();
+    }
+  };
+  useEffect(() => {
+    const panel = inspectorPanel.current;
+    if (inspectorPanelVisible && panel?.isCollapsed())
+      panel.resize(sidebarWidths.current.inspector);
+  }, [inspectorPanelVisible, inspectorPanel]);
   const handledReference = useRef<string | null>(null);
+  const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
+  const [layoutFitRequest, setLayoutFitRequest] = useState(0);
   const [detailElementId, setDetailElementId] = useState<string | null>(null);
   const connectFrom = useEditorStore((state) => state.connectFrom);
 
@@ -182,26 +248,20 @@ function StudioContent({
   const openDetails = (elementId: string): void => {
     if (connectFrom) return;
     const element = elements.find((item) => item.id === elementId);
-    if (!element || !detailViewKind(element)) return;
+    if (!element || !canOpenElementDetails(element, elements, viewList, activeViewId)) return;
     select({ type: "element", id: element.id });
-    const candidates = detailViewsFor(element, viewList, activeViewId);
-    if (candidates.length === 1 && candidates[0]) selectView(candidates[0].id);
-    else if (
-      candidates.length > 0 ||
-      activeView?.scopeElementId !== element.id ||
-      activeView.kind !== detailViewKind(element)
-    )
-      setDetailElementId(elementId);
+    const destination = preferredDetailView(
+      element,
+      viewList,
+      activeViewId,
+      activeView?.settings.preferredDetailViews ?? {},
+    );
+    if (destination) selectView(destination.id);
+    else setDetailElementId(elementId);
   };
   const canOpenDetails = (elementId: string): boolean => {
     const element = elements.find((item) => item.id === elementId);
-    return Boolean(
-      element &&
-        detailViewKind(element) &&
-        (activeView?.scopeElementId !== element.id ||
-          activeView.kind !== detailViewKind(element) ||
-          detailViewsFor(element, viewList, activeViewId).length > 0),
-    );
+    return Boolean(element && canOpenElementDetails(element, elements, viewList, activeViewId));
   };
   const detailElement = elements.find((element) => element.id === detailElementId);
 
@@ -212,40 +272,59 @@ function StudioContent({
     if (!view.data) return;
     const rootElementId = selection.type === "element" ? selection.id : undefined;
     const settingsChanged = algorithm !== view.data.settings.autoLayoutAlgorithm;
-    applyOperations.mutate({
-      label: t("topbar.autoLayout"),
-      operations: [
-        ...(settingsChanged
-          ? [
-              {
-                op: "updateView" as const,
-                viewId: view.data.id,
-                data: { settings: { autoLayoutAlgorithm: algorithm } },
-              },
-            ]
-          : []),
-        {
-          op: "autoLayoutView",
-          viewId: view.data.id,
-          direction: view.data.settings.autoLayoutDirection,
-          algorithm,
-          rootElementId,
+    applyOperations.mutate(
+      {
+        label: t("topbar.autoLayout"),
+        operations: [
+          ...(settingsChanged
+            ? [
+                {
+                  op: "updateView" as const,
+                  viewId: view.data.id,
+                  data: { settings: { autoLayoutAlgorithm: algorithm } },
+                },
+              ]
+            : []),
+          {
+            op: "autoLayoutView",
+            viewId: view.data.id,
+            direction: view.data.settings.autoLayoutDirection,
+            algorithm,
+            rootElementId,
+          },
+        ],
+      },
+      {
+        onSuccess: async () => {
+          await view.refetch();
+          setLayoutFitRequest((request) => request + 1);
         },
-      ],
-    });
+      },
+    );
   };
 
-  const fitView = (): void => void flow.fitView({ duration: 300, padding: 0.2 });
+  const fitView = (): void => void flow.fitView({ duration: 300, padding: CANVAS_FIT_PADDING });
 
   /* ------------------------------- shortcuts ------------------------------- */
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       const target = event.target as HTMLElement | null;
-      const typing =
-        target?.tagName === "INPUT" ||
-        target?.tagName === "TEXTAREA" ||
-        target?.isContentEditable === true;
+      const typing = Boolean(
+        target?.isContentEditable ||
+          target?.closest?.(
+            "input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='textbox']",
+          ),
+      );
+      const sidebar = sidebarShortcut(
+        event,
+        typing || Boolean(target?.closest?.('[role="dialog"]')),
+      );
+      if (sidebar) {
+        event.preventDefault();
+        toggleSidebar(sidebar);
+        return;
+      }
       const primary = hasPrimaryModifier(event);
 
       if (primary && event.key.toLowerCase() === "k") {
@@ -253,7 +332,7 @@ function StudioContent({
         setCommandOpen(true);
         return;
       }
-      if (primary && event.key === "/") {
+      if (isShortcutHelp(event)) {
         event.preventDefault();
         setShortcutsOpen(true);
         return;
@@ -313,11 +392,26 @@ function StudioContent({
           onRedo={() => void history.redo()}
           onOpenMcp={onOpenMcp}
           onGoHome={onGoHome}
+          modelPanelVisible={modelPanelVisible}
+          onToggleModelPanel={() => toggleSidebar("model")}
         />
 
         <div className="min-h-0 flex-1">
           <Group orientation="horizontal">
-            <Panel defaultSize="19%" minSize="12%" maxSize="34%">
+            <Panel
+              id="model-panel"
+              panelRef={modelPanel}
+              collapsible
+              defaultSize={sidebarDefaults.current.model}
+              minSize="12%"
+              maxSize="34%"
+              inert={!modelPanelVisible}
+              aria-hidden={!modelPanelVisible}
+              onResize={(size) => {
+                if (size.inPixels > 0) sidebarWidths.current.model = `${size.asPercentage}%`;
+                updateSidebarVisibility("model", size.inPixels > 0);
+              }}
+            >
               <Explorer
                 workspaceId={workspaceId}
                 elements={elements}
@@ -334,6 +428,20 @@ function StudioContent({
             <Panel minSize="30%">
               <div className="flex h-full flex-col">
                 <ViewNavigationBar
+                  modelPanelVisible={modelPanelVisible}
+                  inspectorPanelVisible={inspectorPanelVisible}
+                  onToggleModelPanel={() => toggleSidebar("model")}
+                  onToggleInspectorPanel={() => toggleSidebar("inspector")}
+                  tags={[
+                    ...new Set([
+                      ...elements.flatMap((element) => element.tags),
+                      ...relationships.flatMap((relationship) => relationship.tags),
+                    ]),
+                  ].sort()}
+                  tagFocus={tagFocus}
+                  onTagFocusChange={setTagFocus}
+                  statusOverlay={statusOverlay}
+                  onStatusOverlayChange={setStatusOverlay}
                   current={activeView}
                   elements={elements}
                   views={viewList}
@@ -347,6 +455,7 @@ function StudioContent({
                       edges.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
                     );
                     useEditorStore.getState().clearSelection();
+                    setViewSettingsOpen(true);
                   }}
                 />
                 <div className="min-h-0 flex-1 bg-canvas">
@@ -354,12 +463,15 @@ function StudioContent({
                     <Canvas
                       key={view.data.id}
                       workspaceId={workspaceId}
+                      tagFocus={tagFocus}
+                      statusOverlay={statusOverlay}
                       view={view.data}
                       elements={elements}
                       boundaries={boundaries}
                       relationships={relationships}
                       records={recordList}
                       initialLocation={navigation.saved[view.data.id]}
+                      layoutFitRequest={layoutFitRequest}
                       onOpenDetails={openDetails}
                       canOpenDetails={canOpenDetails}
                     />
@@ -386,8 +498,23 @@ function StudioContent({
             </Panel>
 
             <Separator className="w-px bg-border transition-colors hover:bg-primary/40" />
-            <Panel defaultSize="22%" minSize="14%" maxSize="40%">
+            <Panel
+              id="inspector-panel"
+              panelRef={inspectorPanel}
+              collapsible
+              defaultSize={sidebarDefaults.current.inspector}
+              minSize="14%"
+              maxSize="40%"
+              inert={!inspectorPanelVisible}
+              aria-hidden={!inspectorPanelVisible}
+              onResize={(size) => {
+                if (size.inPixels > 0) sidebarWidths.current.inspector = `${size.asPercentage}%`;
+                updateSidebarVisibility("inspector", size.inPixels > 0);
+              }}
+            >
               <Inspector
+                views={viewList}
+                onOpenView={selectView}
                 workspaceId={workspaceId}
                 elements={elements}
                 boundaries={boundaries}
@@ -409,8 +536,40 @@ function StudioContent({
           mcpReadOnly={settings.data?.mcpReadOnly ?? false}
         />
 
-        <ElementPalette workspaceId={workspaceId} view={view.data ?? null} />
+        <ElementPalette
+          workspaceId={workspaceId}
+          view={view.data ?? null}
+          getCreationPoint={() => {
+            const bounds = document.querySelector(".react-flow")?.getBoundingClientRect();
+            return bounds
+              ? flow.screenToFlowPosition({
+                  x: bounds.left + bounds.width / 2,
+                  y: bounds.top + bounds.height / 2,
+                })
+              : { x: 0, y: 0 };
+          }}
+        />
         <KeyboardShortcutsDialog />
+        {view.data && (
+          <Dialog open={viewSettingsOpen} onOpenChange={setViewSettingsOpen}>
+            <DialogContent
+              hideClose
+              className="max-h-[85vh] overflow-y-auto"
+              aria-describedby={undefined}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <DialogHeader>
+                <DialogTitle>{t("inspector.viewSettings")}</DialogTitle>
+              </DialogHeader>
+              <ViewInspector key={view.data.id} view={view.data} workspaceId={workspaceId} />
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">{t("common.close")}</Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
         {detailElement && (
           <DetailViewDialog
             key={detailElement.id}
@@ -420,6 +579,7 @@ function StudioContent({
             relationships={relationships}
             views={viewList}
             currentViewId={activeViewId}
+            preferredDetailViews={activeView?.settings.preferredDetailViews}
             onClose={() => setDetailElementId(null)}
             onOpenView={selectView}
           />

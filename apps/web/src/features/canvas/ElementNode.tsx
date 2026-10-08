@@ -1,17 +1,34 @@
-import { Handle, type NodeProps, Position } from "@xyflow/react";
+import { DEFAULT_NODE_WIDTH, elementShape } from "@structsmith/domain";
+import type { NodeProps } from "@xyflow/react";
 import { AlertTriangle, Lock } from "lucide-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { iconFor } from "../icons";
 import { DetailViewAction } from "../navigation/DetailNavigation";
+import { InlineExpansionAction } from "../navigation/InlineExpansion";
+import { ConnectionHandles } from "./ConnectionHandles";
 import type { ElementNodeData } from "./graph";
+import { NodeSilhouette } from "./NodeSilhouette";
+import { statusColor } from "./statusOverlay";
 
 /** Custom node (spec §33) — icon, name, technology and a small kind/role badge. */
-function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNodeData }) {
+function ElementNodeComponent({ data, selected, width }: NodeProps & { data: ElementNodeData }) {
   const { t } = useTranslation();
   const { element, severity, locked, showFullTitles, showDescriptions, minimumHeight } = data;
   const Icon = iconFor(element.kind, element.role);
+  const workflow = ["workflowGroup", "action", "decision", "outcome"].includes(element.kind);
+  const shape = elementShape(element);
+  const diamond = shape === "diamond";
+  const stroke =
+    data.color ??
+    (data.status
+      ? statusColor(data.status)
+      : `var(--node-${element.external ? "external" : "internal"}-border)`);
+  const fill = data.color
+    ? `color-mix(in srgb, ${data.color} 16%, var(--card))`
+    : `var(--node-${element.external ? "external" : "internal"})`;
 
   const badge = [t(`kinds.${element.kind}`), element.role ? t(`roles.${element.role}`) : null]
     .filter(Boolean)
@@ -19,26 +36,49 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
 
   return (
     <div
-      style={{ minHeight: minimumHeight }}
-      className={cn(
-        "as-node group relative flex h-full w-full overflow-visible rounded-md border shadow-sm transition-[border-color,background-color,box-shadow]",
-        element.external
-          ? "border-dashed border-node-external-border bg-node-external shadow-ownership-external/5"
-          : "border-node-internal-border bg-node-internal shadow-ownership-internal/5",
-        selected && "shadow-md",
-      )}
+      style={{
+        minHeight: minimumHeight,
+        outline: "none",
+      }}
+      className="as-node group relative flex h-full w-full overflow-visible"
     >
-      <span
-        aria-hidden="true"
-        className={cn(
-          "w-1 shrink-0 rounded-l-[5px]",
-          element.external ? "bg-ownership-external" : "bg-ownership-internal",
-        )}
+      <NodeSilhouette
+        shape={shape}
+        width={width ?? DEFAULT_NODE_WIDTH}
+        height={minimumHeight}
+        fill={fill}
+        stroke={stroke}
+        selected={selected}
+        external={element.external}
       />
-      <Handle type="target" position={Position.Left} />
-      <Handle type="target" position={Position.Top} id="t" />
+      <ConnectionHandles diamond={diamond} />
 
-      <div className="flex min-w-0 flex-1 flex-col justify-between px-3 py-2.5">
+      <div
+        className="relative flex min-w-0 flex-1 flex-col justify-between"
+        style={{
+          paddingInline: diamond
+            ? "calc(25% + 12px)"
+            : shape === "terminal"
+              ? 20
+              : shape === "subprocess"
+                ? 16
+                : 12,
+          paddingTop: diamond
+            ? minimumHeight / 4
+            : shape === "cylinder"
+              ? 24
+              : shape === "terminal"
+                ? 14
+                : 10,
+          paddingBottom: diamond
+            ? minimumHeight / 4
+            : shape === "cylinder"
+              ? 16
+              : shape === "terminal"
+                ? 14
+                : 10,
+        }}
+      >
         <div className="flex items-start gap-2">
           <span
             className={cn(
@@ -76,6 +116,7 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
           )}
           {locked && <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />}
           <DetailViewAction elementId={element.id} compact />
+          <InlineExpansionAction elementId={element.id} compact />
         </div>
 
         {showDescriptions && element.description?.trim() && (
@@ -85,24 +126,36 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
         )}
 
         <div className="mt-2 flex min-w-0 items-center gap-1.5">
-          <span
-            className={cn(
-              "shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
-              element.external
-                ? "border-ownership-external/45 bg-ownership-external/10 text-ownership-external"
-                : "border-ownership-internal/45 bg-ownership-internal/10 text-ownership-internal",
-            )}
-          >
-            {element.external ? t("inspector.external") : t("inspector.internal")}
-          </span>
+          {data.status && (
+            <Badge
+              variant="outline"
+              className="shrink-0 text-[9px] normal-case tracking-normal"
+              style={{
+                color: statusColor(data.status),
+                borderColor: statusColor(data.status),
+                backgroundColor: `color-mix(in srgb, ${statusColor(data.status)} 10%, var(--card))`,
+              }}
+            >
+              {t(`statusOverlay.${data.status}`)}
+            </Badge>
+          )}
+          {!workflow && (
+            <span
+              className={cn(
+                "shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                element.external
+                  ? "border-ownership-external/45 bg-ownership-external/10 text-ownership-external"
+                  : "border-ownership-internal/45 bg-ownership-internal/10 text-ownership-internal",
+              )}
+            >
+              {element.external ? t("inspector.external") : t("inspector.internal")}
+            </span>
+          )}
           <span className="truncate text-[9.5px] font-medium uppercase tracking-wider text-muted-foreground">
             {badge}
           </span>
         </div>
       </div>
-
-      <Handle type="source" position={Position.Right} />
-      <Handle type="source" position={Position.Bottom} id="b" />
     </div>
   );
 }

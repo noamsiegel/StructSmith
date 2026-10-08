@@ -56,6 +56,7 @@ export function modelingGuide() {
       "Model each relationship once at the most specific meaningful C4 level.",
       "When a view hides descendants, StructSmith lifts and groups their relationships onto visible ancestors automatically. Do not add duplicate system-level relationships for a context view.",
       "Containers belong to software systems; components belong to containers.",
+      "Use workflowGroup, action, decision and outcome for process semantics, not fake C4 containers. Workflow steps can connect to existing runtime elements without changing their kinds.",
       "Use external=true for systems outside the modeled ownership boundary.",
       "Records capture assumptions, risks, unknowns, requirements, decisions and notes; they are not diagram nodes.",
       "Boundaries belong to a view. They group that view's elements by deployment, security, compliance or ownership semantics; they are not model elements or relationship endpoints.",
@@ -99,13 +100,20 @@ export function modelingGuide() {
       recommended: [
         "Create a systemContext view for actors (`kind: person`), the focal software system and external systems.",
         "Create a container view scoped to the focal software system for runtime building blocks.",
+        "Create a workflow view for decisions, actions and outcomes, optionally scoped to a workflowGroup or action. A custom group can open existing scoped custom/workflow views; scopeElementId connects the overview to its internals.",
         "Seed elementIds when creating the view and include autoLayoutView in the same batch.",
       ],
       relationshipBehavior:
-        "Visible relationships are derived from the semantic model. Descendant relationships may be lifted and grouped; explicit view relationship entries only customize visibility and routing.",
+        "Visible relationships are derived from the semantic model. Descendant relationships may be lifted and grouped; explicit view relationship entries customize visibility, routing and presentation without changing semantic endpoints.",
       boundaryBehavior:
         "Each view owns its boundary tree. The view boundaryLayer selects which layer is rendered and used by boundary-aware layout; showBoundaries controls rendering without deleting boundaries or memberships. Add elements to the view before assigning them to a boundary. Elements with no boundary in the active layer remain ordinary items in the view; 'Items in view' is a UI grouping, not a boundary object.",
       settings: {
+        nodeColors:
+          "Per-view #RRGGBB colors keyed by element ID or boundary:ID for group frames. Existing workspace elements and this view's boundaries are valid targets. Replace the map to remove a node color; connector colors use relationship presentation. Explicit colors override status outlines without changing tags.",
+        sectionFrames:
+          "View-owned custom Section rectangles keyed by boundary:ID, with finite x/y and width >= 120, height >= 80. Membership uses existing boundaries/custom parents. Move or fit frames with updateView, without moving semantic endpoints.",
+        commentPins:
+          "View-owned threads ({id,x,y,text,resolved,replies:[{id,text}]}); comment_list/comment_get read threads. comment_create/update/delete and comment_reply_create/update/delete share model_apply_operations revision guards and undo snapshots. Updating data.resolved resolves/reopens a thread. Deleting a parent removes all replies; deleting a reply leaves the parent. No per-person ownership, mentions or notifications.",
         showFullTitles: "Wrap full element titles instead of truncating them.",
         showDescriptions:
           "Show element descriptions inside cards; automatic layout reserves the additional height.",
@@ -114,12 +122,15 @@ export function modelingGuide() {
         boundaryLayer:
           "Select the deployment, security, compliance, ownership or custom layer rendered on the view.",
         relationshipRouting: "Draw connectors as orthogonal, curved or straight paths.",
-        showRelationshipLabels: "Show or hide relationship labels on this view.",
+        showRelationshipLabels:
+          "Legacy export preference; named connector labels are always visible on the canvas.",
         snapToGrid: "Snap manual element movement to the canvas grid.",
       },
       layouts: {
+        relationshipPresentation:
+          "Per-view relationship presentation supports color (#RRGGBB), strokeWidth (0.5-12), strokeStyle (solid/dashed/dotted), sourceArrow/targetArrow (none/arrow/arrowclosed), sourceSide/targetSide (left/right/top/bottom; null means automatic), and labelOffset ({x,y}). labelPosition (0-1) chooses a path anchor; defaults favor horizontal legs. Label offsets project onto the nearest connector segment, including vertical legs, while text stays horizontal. controlPoints set bends. Patch fields merge; null resets presentation. Grouped implied edges use the first relationship's presentation; dragging their labels or segments updates all contributing relationships atomically. They cannot be reconnected.",
         persistence:
-          "Manual positions, optional sizes, locks and relationship presentation are saved by view_set_layout or setLayout/setViewRelationships operations. Automatic layout overwrites only unlocked element coordinates.",
+          "Manual positions, optional sizes, locks and relationship presentation are saved by view_set_layout or setLayout/setViewRelationships operations. Automatic layout updates unlocked coordinates and clears manual connector bends and label offsets so stale geometry does not cross newly moved cards.",
         dagre:
           "Hierarchical layout and the default choice. It respects LR/TB direction and keeps members of active nested boundaries together.",
         force:

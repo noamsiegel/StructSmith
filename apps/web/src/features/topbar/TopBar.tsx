@@ -53,6 +53,8 @@ interface TopBarProps {
   onRedo: () => void;
   onOpenMcp: () => void;
   onGoHome: () => void;
+  modelPanelVisible: boolean;
+  onToggleModelPanel: () => void;
 }
 
 export function TopBar(props: TopBarProps) {
@@ -145,7 +147,12 @@ export function TopBar(props: TopBarProps) {
               {t("reference.copyView")}
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onSelect={() => setExplorerTab("views")}>
+          <DropdownMenuItem
+            onSelect={() => {
+              if (!props.modelPanelVisible) props.onToggleModelPanel();
+              setExplorerTab("views");
+            }}
+          >
             {t("topbar.newView")}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -164,6 +171,7 @@ export function TopBar(props: TopBarProps) {
             variant="ghost"
             size="iconSm"
             className="rounded-r-none"
+            aria-label={t("topbar.autoLayout")}
             onClick={() => props.onAutoLayout()}
           >
             <LayoutGrid className="h-3.5 w-3.5" />
@@ -199,19 +207,36 @@ export function TopBar(props: TopBarProps) {
       </div>
 
       <Tooltip label={`${t("topbar.fitView")} (F)`}>
-        <Button variant="ghost" size="iconSm" onClick={props.onFitView}>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          aria-label={t("topbar.fitView")}
+          onClick={props.onFitView}
+        >
           <Maximize className="h-3.5 w-3.5" />
         </Button>
       </Tooltip>
 
       <Tooltip label={`${t("topbar.undo")} (${primary}Z)`}>
-        <Button variant="ghost" size="iconSm" onClick={props.onUndo} disabled={!props.canUndo}>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          aria-label={t("topbar.undo")}
+          onClick={props.onUndo}
+          disabled={!props.canUndo}
+        >
           <Undo2 className="h-3.5 w-3.5" />
         </Button>
       </Tooltip>
 
       <Tooltip label={`${t("topbar.redo")} (${primary}Shift Z)`}>
-        <Button variant="ghost" size="iconSm" onClick={props.onRedo} disabled={!props.canRedo}>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          aria-label={t("topbar.redo")}
+          onClick={props.onRedo}
+          disabled={!props.canRedo}
+        >
           <Redo2 className="h-3.5 w-3.5" />
         </Button>
       </Tooltip>

@@ -168,7 +168,87 @@ export function applyOperations(
         const view = engine.updateView(repos, workspace, refs.resolve(operation.viewId), {
           ...operation.data,
           scopeElementId: refs.resolve(operation.data.scopeElementId),
+          settings: operation.data.settings
+            ? {
+                ...operation.data.settings,
+                ...(operation.data.settings.nodeColors
+                  ? {
+                      nodeColors: Object.fromEntries(
+                        Object.entries(operation.data.settings.nodeColors).map(([id, color]) => [
+                          refs.resolve(id),
+                          color,
+                        ]),
+                      ),
+                    }
+                  : {}),
+              }
+            : undefined,
         });
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "addViewComment": {
+        const view = engine.addViewComment(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.data,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "updateViewComment": {
+        const view = engine.updateViewComment(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.commentId,
+          operation.data,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "deleteViewComment": {
+        const view = engine.deleteViewComment(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.commentId,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "addViewCommentReply": {
+        const view = engine.addViewCommentReply(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.commentId,
+          operation.data,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "updateViewCommentReply": {
+        const view = engine.updateViewCommentReply(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.commentId,
+          operation.replyId,
+          operation.data,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "deleteViewCommentReply": {
+        const view = engine.deleteViewCommentReply(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.commentId,
+          operation.replyId,
+        );
         applied.push({ op: operation.op, id: view.id });
         break;
       }

@@ -5,6 +5,7 @@ import type {
   LayoutDirection,
   ViewSettings,
 } from "@structsmith/contracts";
+import { elementShape } from "./node-shapes";
 
 export const DEFAULT_NODE_WIDTH = 220;
 export const DEFAULT_NODE_HEIGHT = 96;
@@ -35,33 +36,51 @@ function wrappedLines(text: string, width: number, characterWidth: number): numb
  * can grow beyond this estimate for font differences; saved sizes stay intact.
  */
 export function estimateElementSize(
-  element: Pick<ArchitectureElement, "name" | "description" | "technology"> | undefined,
+  element:
+    | Pick<ArchitectureElement, "name" | "description" | "technology" | "kind" | "role">
+    | undefined,
   settings: Pick<ViewSettings, "showFullTitles" | "showDescriptions">,
   size: { width?: number | null; height?: number | null; locked?: boolean } = {},
 ): { width: number; height: number } {
-  const width = size.width ?? DEFAULT_NODE_WIDTH;
+  const shape = element ? elementShape(element) : "rectangle";
+  const diamond = shape === "diamond";
+  const width = diamond
+    ? Math.max(size.width ?? 0, DEFAULT_NODE_WIDTH * 2)
+    : (size.width ?? DEFAULT_NODE_WIDTH);
   const minimumHeight = size.height ?? DEFAULT_NODE_HEIGHT;
+  const contentWidth = diamond ? width / 2 : width;
+  const verticalInset = shape === "cylinder" ? 24 : shape === "terminal" ? 8 : 0;
   if (!element || (!settings.showFullTitles && !settings.showDescriptions)) {
-    return { width, height: minimumHeight };
+    return {
+      width,
+      height: diamond
+        ? Math.max(minimumHeight, DEFAULT_NODE_HEIGHT * 2)
+        : Math.max(minimumHeight, DEFAULT_NODE_HEIGHT + verticalInset),
+    };
   }
 
   // Horizontal padding, ownership stripe, icon and space for status indicators.
-  const titleWidth = width - 82 - (size.locked ? 20 : 0);
+  const titleWidth = contentWidth - 82 - (size.locked ? 20 : 0);
   const titleLines = settings.showFullTitles
     ? wrappedLines(element.name.replace(/\s+/g, " "), titleWidth, 7.5)
     : 1;
   const headerHeight = Math.max(24, titleLines * 16 + (element.technology ? 16 : 0));
   const description = settings.showDescriptions ? element.description?.trim() : null;
-  const descriptionHeight = description ? 8 + wrappedLines(description, width - 30, 6) * 16 : 0;
+  const descriptionHeight = description
+    ? 8 + wrappedLines(description, contentWidth - 30, 6) * 16
+    : 0;
   // Vertical padding/borders (22), footer gap (8) and ownership badge (20).
-  return { width, height: Math.max(minimumHeight, 50 + headerHeight + descriptionHeight) };
+  const contentHeight = 50 + headerHeight + descriptionHeight;
+  return {
+    width,
+    height: Math.max(minimumHeight, diamond ? contentHeight * 2 : contentHeight + verticalInset),
+  };
 }
 
 /** Must match the edge label chip in the web UI. */
 const LABEL_MAX_WIDTH = 170;
 const LABEL_CHAR_WIDTH = 5.4;
 const LABEL_LINE_HEIGHT = 13;
-const LABEL_MAX_LINES = 3;
 const LABEL_PADDING_X = 12;
 const LABEL_PADDING_Y = 8;
 
@@ -105,14 +124,14 @@ export interface LabelBox {
 }
 
 export function estimateLabelSize(label: string | undefined): LabelBox | null {
-  const text = label?.trim();
+  const text = label?.trim().replace(/\s+/g, " ");
   if (!text) return null;
 
   const naturalWidth = text.length * LABEL_CHAR_WIDTH;
-  const lines = Math.min(LABEL_MAX_LINES, Math.max(1, Math.ceil(naturalWidth / LABEL_MAX_WIDTH)));
+  const lines = wrappedLines(text, LABEL_MAX_WIDTH - LABEL_PADDING_X, LABEL_CHAR_WIDTH);
 
   return {
-    width: Math.round(Math.min(naturalWidth, LABEL_MAX_WIDTH) + LABEL_PADDING_X),
+    width: Math.round(Math.min(naturalWidth + LABEL_PADDING_X, LABEL_MAX_WIDTH)),
     height: lines * LABEL_LINE_HEIGHT + LABEL_PADDING_Y,
   };
 }
@@ -264,7 +283,16 @@ function computeCompoundDagreLayout(
   direction: LayoutDirection,
   groups: readonly LayoutGroup[],
 ): LayoutPosition[] {
+  const guide = new Map(
+    computeDagreLayout(
+      nodes.map((node) => ({ ...node, parentId: null, groupId: null })),
+      edges,
+      direction,
+      [],
+    ).map((position) => [position.id, direction === "LR" ? position.y : position.x] as const),
+  );
   const groupById = new Map(groups.map((group) => [group.id, group] as const));
+  const sizes = new Map(nodes.map((node) => [node.id, dimensions(node)] as const));
   const children = new Map<string | null, LayoutGroup[]>();
   for (const group of groups) {
     const parent = group.parentId && groupById.has(group.parentId) ? group.parentId : null;
@@ -325,16 +353,118 @@ function computeCompoundDagreLayout(
     });
     graph.setDefaultEdgeLabel(() => ({}));
     for (const item of items) graph.setNode(item.id, { width: item.width, height: item.height });
-    const itemIds = new Set(items.map((item) => item.id));
+    const itemById = new Map(items.map((item) => [item.id, item] as const));
+    const scopeEdges = new Map<string, { source: string; target: string; labels: Set<string> }>();
     for (const edge of edges) {
       const source = immediateItem(edge.source, scopeId);
       const target = immediateItem(edge.target, scopeId);
-      if (!source || !target || source === target || !itemIds.has(source) || !itemIds.has(target)) {
+      if (
+        !source ||
+        !target ||
+        source === target ||
+        !itemById.has(source) ||
+        !itemById.has(target)
+      ) {
         continue;
       }
-      graph.setEdge(source, target);
+      const key = JSON.stringify([source, target]);
+      const scoped = scopeEdges.get(key) ?? { source, target, labels: new Set<string>() };
+      if (edge.label) scoped.labels.add(edge.label);
+      scopeEdges.set(key, scoped);
     }
-    dagre.layout(graph);
+    for (const { source, target, labels } of scopeEdges.values()) {
+      const label = estimateLabelSize([...labels].join(", "));
+      graph.setEdge(
+        source,
+        target,
+        label ? { width: label.width, height: label.height, labelpos: "c" } : {},
+      );
+    }
+    const laneCoordinates = new Map(
+      items.map((item) => {
+        const nodeIds = item.id.startsWith("node:")
+          ? [item.id.slice(5)]
+          : [...(childLayouts.get(item.id.slice(6))?.positions.keys() ?? [])];
+        const coordinates = nodeIds.map((id) => guide.get(id) ?? 0).sort((a, b) => a - b);
+        return [item.id, coordinates[Math.floor(coordinates.length / 2)] ?? 0] as const;
+      }),
+    );
+    dagre.layout(graph, {
+      customOrder: (orderingGraph, order) => {
+        const ranks = new Map<number, string[]>();
+        for (const item of items) {
+          const rank = orderingGraph.node(item.id).rank as number;
+          const peers = ranks.get(rank) ?? [];
+          peers.push(item.id);
+          ranks.set(rank, peers);
+        }
+        const constraints = [...ranks.values()].flatMap((peers) => {
+          peers.sort((a, b) => (laneCoordinates.get(a) ?? 0) - (laneCoordinates.get(b) ?? 0));
+          return peers.flatMap((left, index) => {
+            const right = peers[index + 1];
+            return right === undefined ? [] : [{ left, right }];
+          });
+        });
+        order(orderingGraph, { constraints });
+        // Dagre performs no ordering sweeps when all items occupy rank zero.
+        if (ranks.size === 1) {
+          for (const peers of ranks.values()) {
+            peers.forEach((id, index) => {
+              orderingGraph.node(id).order = index;
+            });
+          }
+        }
+      },
+    });
+
+    const axis = direction === "LR" ? "y" : "x";
+    const extent = direction === "LR" ? "height" : "width";
+    const nodeCenter = (nodeId: string): number | null => {
+      const itemId = immediateItem(nodeId, scopeId);
+      const item = itemId ? itemById.get(itemId) : undefined;
+      const size = sizes.get(nodeId);
+      if (!item || !size) return null;
+      const offset = item.id.startsWith("group:")
+        ? (childLayouts.get(item.id.slice(6))?.positions.get(nodeId)?.[axis] ?? 0)
+        : 0;
+      return graph.node(item.id)[axis] - item[extent] / 2 + offset + size[extent] / 2;
+    };
+    for (const item of items) {
+      const memberIds = item.id.startsWith("node:")
+        ? [item.id.slice(5)]
+        : [...(childLayouts.get(item.id.slice(6))?.positions.keys() ?? [])];
+      const memberId = memberIds.length === 1 ? memberIds[0] : undefined;
+      if (!memberId) continue;
+      const neighborCenters = edges.flatMap((edge) => {
+        const neighbor =
+          edge.source === memberId ? edge.target : edge.target === memberId ? edge.source : null;
+        const center = neighbor ? nodeCenter(neighbor) : null;
+        return center === null ? [] : [center];
+      });
+      const center = nodeCenter(memberId);
+      const target = neighborCenters[0];
+      // A straight continuation attaches to its leaf node, not its enclosing frame.
+      if (
+        center === null ||
+        target === undefined ||
+        neighborCenters.some((value) => Math.abs(value - target) > 1)
+      )
+        continue;
+      const laid = graph.node(item.id) as { x: number; y: number };
+      const candidate = { ...laid, [axis]: laid[axis] + target - center };
+      if (candidate[axis] - item[extent] / 2 < (scopeId ? (axis === "y" ? 58 : 48) : 0)) {
+        continue;
+      }
+      const collision = items.some((peer) => {
+        if (peer.id === item.id) return false;
+        const other = graph.node(peer.id) as { x: number; y: number };
+        return (
+          Math.abs(candidate.x - other.x) < (item.width + peer.width) / 2 + BASE_NODE_GAP &&
+          Math.abs(candidate.y - other.y) < (item.height + peer.height) / 2 + BASE_NODE_GAP
+        );
+      });
+      if (!collision) laid[axis] = candidate[axis];
+    }
 
     const positions = new Map<string, { x: number; y: number }>();
     let maxX = 0;

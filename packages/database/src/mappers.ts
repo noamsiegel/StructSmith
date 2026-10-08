@@ -14,6 +14,7 @@ import type {
   InteractionStyle,
   RecordKind,
   RecordStatus,
+  RelationshipPresentation,
   Severity,
   ViewElement,
   ViewKind,
@@ -22,6 +23,7 @@ import type {
   Workspace,
   WorkspaceMode,
 } from "@structsmith/contracts";
+import { ViewSettingsSchema } from "@structsmith/contracts";
 import type {
   activity,
   boundaries,
@@ -182,6 +184,11 @@ export function fromRelationship(
 }
 
 const defaultSettings: ViewSettings = {
+  nodeColors: {},
+  commentPins: [],
+  preferredDetailViews: {},
+  scenarios: [],
+  sectionFrames: {},
   showBoundaries: true,
   snapToGrid: false,
   autoLayoutDirection: "LR",
@@ -194,6 +201,10 @@ const defaultSettings: ViewSettings = {
 };
 
 export function toView(row: Row<typeof views>): ArchitectureView {
+  const settings = {
+    ...defaultSettings,
+    ...parseJson<Partial<ViewSettings>>(row.settingsJson, {}),
+  };
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -202,7 +213,10 @@ export function toView(row: Row<typeof views>): ArchitectureView {
     description: row.description,
     kind: row.kind as ViewKind,
     scopeElementId: row.scopeElementId,
-    settings: { ...defaultSettings, ...parseJson<Partial<ViewSettings>>(row.settingsJson, {}) },
+    settings: {
+      ...settings,
+      commentPins: ViewSettingsSchema.shape.commentPins.parse(settings.commentPins),
+    },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -258,6 +272,7 @@ export function toViewRelationship(row: Row<typeof viewRelationships>): ViewRela
     hidden: toBool(row.hidden),
     labelPosition: row.labelPosition,
     controlPoints: parseJson<{ x: number; y: number }[]>(row.controlPointsJson, []),
+    presentation: parseJson<RelationshipPresentation | null>(row.presentationJson ?? "null", null),
   };
 }
 
@@ -268,6 +283,7 @@ export function fromViewRelationship(entry: ViewRelationship): Row<typeof viewRe
     hidden: fromBool(entry.hidden),
     labelPosition: entry.labelPosition,
     controlPointsJson: JSON.stringify(entry.controlPoints),
+    presentationJson: entry.presentation ? JSON.stringify(entry.presentation) : null,
   };
 }
 

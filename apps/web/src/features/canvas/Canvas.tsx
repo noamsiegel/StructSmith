@@ -3,8 +3,14 @@ import type {
   ArchitectureElement,
   ArchitectureRecord,
   ArchitectureRelationship,
+  SectionFrame,
   ViewDetail,
+  ViewElement,
+  ViewRelationshipPatch,
+  ViewScenarioStep,
+  Workspace,
 } from "@structsmith/contracts";
+import { deriveExpandedView, estimateElementSize } from "@structsmith/domain";
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -13,14 +19,16 @@ import {
   type Connection,
   Controls,
   type EdgeChange,
+  getViewportForBounds,
   MiniMap,
   type NodeChange,
   type NodeMouseHandler,
   type OnNodeDrag,
   type OnSelectionChangeParams,
+  Panel,
   ReactFlow,
   SelectionMode,
-  useNodesInitialized,
+  useNodes,
   useReactFlow,
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -30,17 +38,26 @@ import { useChatStore } from "@/features/chat/store";
 import { useApiErrorHandler, useApplyOperations } from "@/hooks/useApi";
 import { api } from "@/lib/api";
 import { hasPrimaryModifier, primaryModifierKeyCode } from "@/lib/platform";
-import { invalidateWorkspace } from "@/lib/query";
+import { invalidateWorkspace, queryClient, queryKeys } from "@/lib/query";
 import { useEditorStore } from "@/store/editor";
 import { useHistoryStore } from "@/store/history";
 import type { ViewLocation } from "../navigation/history";
+import { InlineExpansionContext } from "../navigation/InlineExpansion";
 import { useCopyAgentReference } from "../reference/useCopyAgentReference";
+import { ScenarioPanel } from "../scenarios/ScenarioPanel";
 import { BoundaryNode } from "./BoundaryNode";
+import { CanvasComments } from "./CanvasComments";
+import { CreationToolbar } from "./CreationToolbar";
 import { buildPasteOperations, createDiagramClipboard, type DiagramCopyMode } from "./clipboard";
+import { commandWheelViewport } from "./commandWheel";
 import { ElementNode } from "./ElementNode";
+import { ElementTypePicker } from "./ElementTypePicker";
 import {
   boundaryElementId,
+  boundaryMemberIds,
+  boundaryMoveEntries,
   buildGraph,
+  CANVAS_FIT_PADDING,
   computeCanvasBoundaries,
   type FlowEdge,
   type FlowNode,
@@ -49,8 +66,20 @@ import {
   NODE_WIDTH,
   type RelationshipEdgeData,
 } from "./graph";
+import { inlineFrames } from "./inlineFrames";
 import { type ContextMenuItem, NodeContextMenu } from "./NodeContextMenu";
 import { RelationshipEdge } from "./RelationshipEdge";
+import { sideFromHandle, slotFromHandle } from "./relationshipGeometry";
+import { SelectionColorToolbar } from "./SelectionColorToolbar";
+import {
+  fitSectionFrame,
+  sectionFrameEntries,
+  sectionMembershipOperations,
+  translateSectionFrames,
+} from "./sections";
+import { applyNodeColors } from "./selectionColors";
+import type { StatusOverlay } from "./statusOverlay";
+import { focusGraphByTag } from "./tagFocus";
 
 /** An implied edge carries a derived id, so always resolve the real one. */
 const relationshipIdOf = (edge: { id: string; data?: Record<string, unknown> }): string =>
@@ -70,6 +99,9 @@ interface CanvasProps {
   relationships: readonly ArchitectureRelationship[];
   records: readonly ArchitectureRecord[];
   initialLocation?: ViewLocation;
+  layoutFitRequest: number;
+  statusOverlay: StatusOverlay;
+  tagFocus: string | null;
   onOpenDetails: (elementId: string) => void;
   canOpenDetails: (elementId: string) => boolean;
 }
@@ -82,6 +114,9 @@ export function Canvas({
   relationships,
   records,
   initialLocation,
+  layoutFitRequest,
+  statusOverlay,
+  tagFocus,
   onOpenDetails,
   canOpenDetails,
 }: CanvasProps) {
@@ -104,9 +139,31 @@ export function Canvas({
   const clipboard = useEditorStore((state) => state.clipboard);
   const setClipboard = useEditorStore((state) => state.setClipboard);
 
-  const graph = useMemo(
-    () => buildGraph({ view, elements, relationships, records }),
-    [view, elements, relationships, records],
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const [scenarioStep, setScenarioStep] = useState<ViewScenarioStep | null>(null);
+  const expansion = useMemo(
+    () => deriveExpandedView(view, elements, expandedIds),
+    [view, elements, expandedIds],
+  );
+  const graph = useMemo(() => {
+    const built = buildGraph({
+      view: expansion.view,
+      elements,
+      relationships,
+      records,
+      statusOverlay,
+    });
+    return { ...built, ...focusGraphByTag(built.nodes, built.edges, tagFocus) };
+  }, [expansion.view, elements, relationships, records, statusOverlay, tagFocus]);
+  const onScenarioStep = useCallback(
+    (step: ViewScenarioStep | null) => {
+      setScenarioStep(step);
+      if (step) {
+        select({ type: "element", id: step.elementId });
+        useEditorStore.getState().requestFocus(step.elementId);
+      }
+    },
+    [select],
   );
   const elementsById = useMemo(
     () => new Map(elements.map((element) => [element.id, element])),
@@ -140,15 +197,30 @@ export function Canvas({
   const dragOrigins = useRef(new Map<string, { x: number; y: number }>());
   const layoutSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const ignoreDetailsUntil = useRef(0);
+  const [sectionFrames, setSectionFrames] = useState(view.settings.sectionFrames);
+  const dragSectionNodes = useRef<FlowNode[]>([]);
+  useEffect(() => setSectionFrames(view.settings.sectionFrames), [view.settings.sectionFrames]);
+  const boundaryDrag = useRef<{
+    id: string;
+    position: { x: number; y: number };
+    members: Set<string>;
+    placements: ViewElement[];
+    revision: number;
+    frames: Record<string, SectionFrame>;
+    nestedFrameIds: Set<string>;
+  } | null>(null);
 
   // A rebuild happens after every mutation; carry the current selection over so
   // the highlight does not blink off while the inspector still shows the item.
   useEffect(() => {
     setNodes((current) => {
-      const selected = new Set(current.filter((node) => node.selected).map((node) => node.id));
-      return selected.size === 0
-        ? graph.nodes
-        : graph.nodes.map((node) => (selected.has(node.id) ? { ...node, selected: true } : node));
+      const previous = new Map(current.map((node) => [node.id, node]));
+      return graph.nodes.map((node) => ({
+        ...node,
+        selected: previous.get(node.id)?.selected ?? node.selected,
+        // Keep edges mounted while ResizeObserver measures refreshed cards.
+        measured: previous.get(node.id)?.measured,
+      }));
     });
   }, [graph.nodes]);
 
@@ -167,18 +239,75 @@ export function Canvas({
    * and before the model query resolves, so entering a workspace from the home
    * screen would otherwise land on an unfitted canvas.
    */
-  const nodesInitialized = useNodesInitialized();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onCommandWheel = (event: WheelEvent) => {
+      if (!event.metaKey || event.ctrlKey) return;
+      if (!(event.target instanceof Element) || !event.target.closest(".react-flow")) return;
+      if (event.target.closest(".nowheel, .nopan, button, input, textarea, [role=dialog]")) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const bounds = canvas.getBoundingClientRect();
+      void flow.setViewport(
+        commandWheelViewport(
+          flow.getViewport(),
+          { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
+          event.deltaY,
+          event.deltaMode,
+        ),
+      );
+    };
+    canvas.addEventListener("wheel", onCommandWheel, { passive: false, capture: true });
+    return () => canvas.removeEventListener("wheel", onCommandWheel, true);
+  }, [flow]);
+  const renderedNodes = useNodes<FlowNode>();
+  // Boundary frames have no handles; only cards need measurement before fitting.
+  const nodesInitialized = graph.nodes.every((node) => {
+    const rendered = renderedNodes.find((entry) => entry.id === node.id);
+    return (rendered?.measured?.width ?? 0) > 0 && (rendered?.measured?.height ?? 0) > 0;
+  });
+  const fittedLayoutRequest = useRef(layoutFitRequest);
   const fittedViewId = useRef<string | null>(null);
   const initialViewport = useRef(initialLocation?.viewport);
 
   useEffect(() => {
-    if (!flow.viewportInitialized || (nodes.length > 0 && !nodesInitialized)) return;
+    if (!flow.viewportInitialized || nodes.length === 0 || !nodesInitialized) return;
     if (fittedViewId.current === view.id) return;
     fittedViewId.current = view.id;
     if (initialViewport.current) void flow.setViewport(initialViewport.current);
-    else if (nodes.length > 0) void flow.fitView({ padding: 0.25, maxZoom: 1, duration: 250 });
+    else if (nodes.length > 0)
+      void flow.fitView({ padding: CANVAS_FIT_PADDING, maxZoom: 1, duration: 250 });
     if (restoredSelection.current) select(restoredSelection.current);
   }, [nodesInitialized, nodes.length, view.id, flow, select]);
+
+  useEffect(() => {
+    if (fittedLayoutRequest.current === layoutFitRequest || !nodesInitialized) return;
+    const width = canvasRef.current?.clientWidth ?? 0;
+    const height = canvasRef.current?.clientHeight ?? 0;
+    if (width === 0 || height === 0) return;
+    const rendered = new Map(renderedNodes.map((node) => [node.id, node.position]));
+    if (
+      graph.nodes.some((node) => {
+        const position = rendered.get(node.id);
+        return !position || position.x !== node.position.x || position.y !== node.position.y;
+      })
+    )
+      return;
+    fittedLayoutRequest.current = layoutFitRequest;
+    void flow.setViewport(
+      getViewportForBounds(
+        flow.getNodesBounds(graph.nodes),
+        width,
+        height,
+        0.1,
+        1,
+        CANVAS_FIT_PADDING,
+      ),
+      { duration: 300 },
+    );
+  }, [layoutFitRequest, nodesInitialized, renderedNodes, graph.nodes, flow]);
 
   /**
    * Selecting an element outside the canvas (model tree, command palette) has
@@ -190,7 +319,13 @@ export function Canvas({
     const { elementId } = focusRequest;
 
     const node = flow.getNode(elementId);
-    if (node) void flow.fitView({ nodes: [{ id: node.id }], duration: 350, maxZoom: 1.2 });
+    if (node)
+      void flow.fitView({
+        nodes: [{ id: node.id }],
+        duration: 350,
+        maxZoom: 1.2,
+        padding: CANVAS_FIT_PADDING,
+      });
 
     setNodes((current) =>
       current.map((candidate) => {
@@ -253,11 +388,13 @@ export function Canvas({
   const flushLayout = useCallback(() => {
     const pending = [...pendingLayout.current.entries()];
     pendingLayout.current.clear();
-    const entries = pending.map(([elementId, position]) => ({
-      elementId,
-      x: Math.round(position.x),
-      y: Math.round(position.y),
-    }));
+    const entries = pending
+      .filter(([elementId]) => view.elements.some((entry) => entry.elementId === elementId))
+      .map(([elementId, position]) => ({
+        elementId,
+        x: Math.round(position.x),
+        y: Math.round(position.y),
+      }));
     if (entries.length === 0) return;
 
     const previous = entries.map(({ elementId }) => {
@@ -288,7 +425,9 @@ export function Canvas({
   const onNodesChange = useCallback(
     (changes: NodeChange[]) => {
       const relevant = changes.filter(
-        (change) => !("id" in change) || !isBoundaryId(change.id as string),
+        (change) =>
+          (!("id" in change) || !isBoundaryId(change.id as string)) &&
+          !(boundaryDrag.current && change.type === "position"),
       );
       setNodes((current) => applyNodeChanges(relevant, current) as FlowNode[]);
 
@@ -320,6 +459,62 @@ export function Canvas({
       if (layoutTimer.current) clearTimeout(layoutTimer.current);
       flushLayout();
       dragOrigins.current.clear();
+      boundaryDrag.current = null;
+      dragSectionNodes.current = flow
+        .getNodes()
+        .filter((item) => item.type === "boundary" && item.data.section) as FlowNode[];
+      const frames = { ...sectionFrames, ...sectionFrameEntries(dragSectionNodes.current) };
+      setSectionFrames(frames);
+      if (node.type === "boundary") {
+        const workspace = queryClient.getQueryData<Workspace>(queryKeys.workspace(workspaceId));
+        if (!workspace) return;
+        const members = boundaryMemberIds(
+          node.data,
+          elementsById,
+          boundaries,
+          view.settings.boundaryLayer,
+        );
+        const current = new Map(nodes.map((item) => [item.id, item.position]));
+        boundaryDrag.current = {
+          id: node.id,
+          position: node.position,
+          members,
+          placements: view.elements.map((entry) => ({ ...entry, ...current.get(entry.elementId) })),
+          revision: workspace.revision,
+          frames,
+          nestedFrameIds: new Set(
+            dragSectionNodes.current
+              .filter((candidate) => {
+                const candidateMembers = boundaryMemberIds(
+                  {
+                    boundaryId: candidate.data.boundaryId as string | undefined,
+                    elementId: candidate.data.elementId as string | undefined,
+                  },
+                  elementsById,
+                  boundaries,
+                  view.settings.boundaryLayer,
+                );
+                if (
+                  candidateMembers.size > 0 &&
+                  [...candidateMembers].every((elementId) => members.has(elementId))
+                )
+                  return true;
+                let parent = candidate.data.boundaryId
+                  ? boundaries.find((item) => item.id === candidate.data.boundaryId)
+                  : undefined;
+                const visited = new Set<string>();
+                while (parent && !visited.has(parent.id)) {
+                  if (parent.parentBoundaryId === node.data.boundaryId) return true;
+                  visited.add(parent.id);
+                  parent = boundaries.find((item) => item.id === parent?.parentBoundaryId);
+                }
+                return false;
+              })
+              .map((candidate) => candidate.id),
+          ),
+        };
+        return;
+      }
       for (const dragged of draggedNodes.length > 0 ? draggedNodes : [node]) {
         if (isBoundaryId(dragged.id)) continue;
         dragOrigins.current.set(dragged.id, {
@@ -328,11 +523,116 @@ export function Canvas({
         });
       }
     },
-    [flushLayout],
+    [flushLayout, workspaceId, elementsById, boundaries, view, nodes, flow, sectionFrames],
   );
+
+  const onNodeDrag = useCallback<OnNodeDrag<FlowNode>>((_event, node) => {
+    const drag = boundaryDrag.current;
+    if (!drag || drag.id !== node.id) return;
+    const entries = boundaryMoveEntries(drag.placements, drag.members, {
+      x: node.position.x - drag.position.x,
+      y: node.position.y - drag.position.y,
+    });
+    setSectionFrames(
+      translateSectionFrames(
+        drag.frames,
+        drag.id,
+        {
+          x: node.position.x - drag.position.x,
+          y: node.position.y - drag.position.y,
+        },
+        drag.nestedFrameIds,
+      ),
+    );
+    const positions = new Map(
+      entries.map((entry) => [entry.elementId, { x: entry.x, y: entry.y }]),
+    );
+    setNodes((current) =>
+      current.map((item) => ({ ...item, position: positions.get(item.id) ?? item.position })),
+    );
+  }, []);
 
   const onNodeDragStop = useCallback<OnNodeDrag<FlowNode>>(
     (_event, node, draggedNodes) => {
+      const drag = boundaryDrag.current;
+      onNodeDrag(_event, node, draggedNodes);
+      boundaryDrag.current = null;
+      if (drag && drag.id === node.id) {
+        const entries = boundaryMoveEntries(drag.placements, drag.members, {
+          x: node.position.x - drag.position.x,
+          y: node.position.y - drag.position.y,
+        });
+        const previous = new Map(drag.placements.map((entry) => [entry.elementId, entry]));
+        if (
+          node.position.x === drag.position.x &&
+          node.position.y === drag.position.y &&
+          entries.every(
+            (entry) =>
+              entry.x === previous.get(entry.elementId)?.x &&
+              entry.y === previous.get(entry.elementId)?.y,
+          )
+        )
+          return;
+        beginSave();
+        const request = layoutSaveQueue.current.then(() =>
+          api.applyOperations(workspaceId, {
+            expectedRevision: drag.revision,
+            label: t("toast.layoutSaved"),
+            operations: [
+              { op: "setLayout", viewId: view.id, entries },
+              {
+                op: "updateView",
+                viewId: view.id,
+                data: {
+                  settings: {
+                    sectionFrames: translateSectionFrames(
+                      drag.frames,
+                      drag.id,
+                      {
+                        x: node.position.x - drag.position.x,
+                        y: node.position.y - drag.position.y,
+                      },
+                      drag.nestedFrameIds,
+                    ),
+                  },
+                },
+              },
+            ],
+          }),
+        );
+        layoutSaveQueue.current = request.then(
+          () => undefined,
+          () => undefined,
+        );
+        void request
+          .then((result) => {
+            if (result.snapshotId)
+              pushHistory({
+                kind: "snapshot",
+                snapshotId: result.snapshotId,
+                label: t("toast.layoutSaved"),
+              });
+            invalidateWorkspace(workspaceId);
+          })
+          .catch((error) => {
+            setSectionFrames(drag.frames);
+            const previous = new Map(
+              drag.placements
+                .filter((entry) => drag.members.has(entry.elementId))
+                .map((entry) => [entry.elementId, { x: entry.x, y: entry.y }]),
+            );
+            setNodes((current) =>
+              current.map((item) => ({
+                ...item,
+                position: previous.get(item.id) ?? item.position,
+              })),
+            );
+            invalidateWorkspace(workspaceId);
+            onError(error);
+          })
+          .finally(endSave);
+        return;
+      }
       const moved = (draggedNodes.length > 0 ? draggedNodes : [node]).filter(
         (dragged) => !isBoundaryId(dragged.id),
       );
@@ -348,12 +648,58 @@ export function Canvas({
         return [{ elementId: dragged.id, before, after }];
       });
       dragOrigins.current.clear();
+      const membership = sectionMembershipOperations(
+        moved,
+        dragSectionNodes.current,
+        elementsById,
+        boundaries.filter(
+          (boundary) =>
+            boundary.viewId === view.id && boundary.layer === view.settings.boundaryLayer,
+        ),
+      );
+      if (dragSectionNodes.current.length > 0 && changes.length > 0) {
+        applyOperations.mutate(
+          {
+            label: t("sections.membershipChanged"),
+            operations: [
+              {
+                op: "setLayout",
+                viewId: view.id,
+                entries: changes.map(({ elementId, after }) => ({ elementId, ...after })),
+              },
+              { op: "updateView", viewId: view.id, data: { settings: { sectionFrames } } },
+              ...membership,
+            ],
+          },
+          {
+            onError: () => {
+              setSectionFrames(view.settings.sectionFrames);
+              invalidateWorkspace(workspaceId);
+            },
+          },
+        );
+        return;
+      }
       persistLayout(
         changes.map(({ elementId, after }) => ({ elementId, ...after })),
         changes.map(({ elementId, before }) => ({ elementId, ...before })),
       );
     },
-    [persistLayout],
+    [
+      persistLayout,
+      onNodeDrag,
+      beginSave,
+      endSave,
+      onError,
+      pushHistory,
+      t,
+      view,
+      workspaceId,
+      elementsById,
+      boundaries,
+      applyOperations,
+      sectionFrames,
+    ],
   );
 
   const onEdgesChange = useCallback(
@@ -365,7 +711,7 @@ export function Canvas({
   /* ------------------------------- interactions ----------------------------- */
 
   const createRelationship = useCallback(
-    (sourceElementId: string, targetElementId: string) => {
+    (sourceElementId: string, targetElementId: string, connection?: Connection) => {
       if (sourceElementId === targetElementId) return;
       const source = elementsById.get(sourceElementId)?.name ?? sourceElementId;
       const target = elementsById.get(targetElementId)?.name ?? targetElementId;
@@ -378,6 +724,25 @@ export function Canvas({
               ref: "relationship",
               data: { sourceElementId, targetElementId, interactionStyle: "sync" },
             },
+            ...(connection
+              ? [
+                  {
+                    op: "setViewRelationships" as const,
+                    viewId: view.id,
+                    relationships: [
+                      {
+                        relationshipId: "@relationship",
+                        presentation: {
+                          sourceSide: sideFromHandle(connection.sourceHandle, "source"),
+                          targetSide: sideFromHandle(connection.targetHandle, "target"),
+                          sourceSlot: slotFromHandle(connection.sourceHandle),
+                          targetSlot: slotFromHandle(connection.targetHandle),
+                        },
+                      },
+                    ],
+                  },
+                ]
+              : []),
           ],
         },
         {
@@ -390,13 +755,13 @@ export function Canvas({
         },
       );
     },
-    [applyOperations, elementsById, select],
+    [applyOperations, elementsById, select, view.id],
   );
 
   const onConnect = useCallback(
     (connection: Connection) => {
       if (!connection.source || !connection.target) return;
-      createRelationship(connection.source, connection.target);
+      createRelationship(connection.source, connection.target, connection);
     },
     [createRelationship],
   );
@@ -420,6 +785,8 @@ export function Canvas({
             id: isBoundaryId(node.id) ? boundaryElementId(node.id) : node.id,
           });
         }
+      } else if (edge && Number(edge.data?.count ?? 0) > 1) {
+        clearSelection();
       } else if (edge) {
         select({ type: "relationship", id: relationshipIdOf(edge) });
       } else {
@@ -432,6 +799,14 @@ export function Canvas({
   const onNodeClick = useCallback<NodeMouseHandler>(
     (_event, node) => {
       if (node.type === "boundary") {
+        setNodes((current) =>
+          current.map((candidate) =>
+            candidate.selected ? { ...candidate, selected: false } : candidate,
+          ),
+        );
+        setEdges((current) =>
+          current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+        );
         if (node.data?.boundaryId) {
           select({ type: "boundary", id: String(node.data.boundaryId) });
         } else if (node.data?.elementId) {
@@ -538,37 +913,21 @@ export function Canvas({
     (elementId: string) => {
       const element = elementsById.get(elementId);
       if (!element) return;
-      const placement = view.elements.find((entry) => entry.elementId === elementId);
+      const copied = createDiagramClipboard(
+        workspaceId,
+        view,
+        elements,
+        relationships,
+        [elementId],
+        "elements-only",
+      );
+      if (!copied) return;
       applyOperations.mutate({
         label: `Duplicated ${element.name}`,
-        operations: [
-          {
-            op: "createElement",
-            ref: "copy",
-            data: {
-              kind: element.kind,
-              role: element.role,
-              parentId: element.parentId,
-              name: `${element.name} (copy)`,
-              description: element.description,
-              technology: element.technology,
-              external: element.external,
-              tags: element.tags,
-              properties: element.properties,
-            },
-          },
-          { op: "setViewElements", viewId: view.id, elementIds: ["@copy"], mode: "add" },
-          {
-            op: "setLayout",
-            viewId: view.id,
-            entries: [
-              { elementId: "@copy", x: (placement?.x ?? 0) + 40, y: (placement?.y ?? 0) + 40 },
-            ],
-          },
-        ],
+        operations: buildPasteOperations(copied, workspaceId, view),
       });
     },
-    [applyOperations, elementsById, view.elements, view.id],
+    [applyOperations, elementsById, workspaceId, view, elements, relationships],
   );
 
   const copyElementsToClipboard = useCallback(
@@ -709,6 +1068,12 @@ export function Canvas({
   const onEdgeContextMenu = useCallback(
     (event: React.MouseEvent, edge: FlowEdge) => {
       event.preventDefault();
+      if ((edge.data?.count ?? 0) > 1) {
+        clearSelection();
+        setMenu(null);
+        toast.message(t("relationshipPresentation.mergedRouteHint"));
+        return;
+      }
       const relationshipId = relationshipIdOf(edge);
       const relationship = relationships.find((item) => item.id === relationshipId);
       select({ type: "relationship", id: relationshipId });
@@ -751,6 +1116,7 @@ export function Canvas({
     },
     [
       askAgent,
+      clearSelection,
       copyReference,
       deleteRelationships,
       elementsById,
@@ -862,7 +1228,7 @@ export function Canvas({
         event.preventDefault();
         applyOperations.mutate({
           label: t("canvas.pastedElements", { count: clipboard.elements.length }),
-          operations: buildPasteOperations(clipboard, workspaceId, view.id),
+          operations: buildPasteOperations(clipboard, workspaceId, view),
         });
         setClipboard({ ...clipboard, pasteCount: clipboard.pasteCount + 1 });
       }
@@ -883,6 +1249,13 @@ export function Canvas({
     workspaceId,
   ]);
 
+  const typeElement =
+    selection.type === "element"
+      ? elementsById.get(selection.id)
+      : selection.type === "elements" && selection.ids.length === 1
+        ? elementsById.get(selection.ids[0] as string)
+        : undefined;
+
   /* --------------------------------- render --------------------------------- */
 
   const allNodes = useMemo(() => {
@@ -892,8 +1265,12 @@ export function Canvas({
         id: node.id,
         x: node.position.x,
         y: node.position.y,
-        width: node.measured?.width ?? node.width ?? NODE_WIDTH,
-        height: node.measured?.height ?? node.height ?? NODE_HEIGHT,
+        width: expansion.expandedElementIds.has(node.id)
+          ? (node.width ?? NODE_WIDTH)
+          : (node.measured?.width ?? node.width ?? NODE_WIDTH),
+        height: expansion.expandedElementIds.has(node.id)
+          ? (node.height ?? (node.data.minimumHeight as number | undefined) ?? NODE_HEIGHT)
+          : (node.measured?.height ?? node.height ?? NODE_HEIGHT),
       }));
     const computedBoundaries = computeCanvasBoundaries(
       sources,
@@ -901,6 +1278,7 @@ export function Canvas({
       boundaries,
       view.settings.boundaryLayer,
       view.settings.showBoundaries,
+      sectionFrames,
     );
     // A parent shown as a boundary has no entry in `nodes`, so mirror the
     // selection onto it here.
@@ -914,127 +1292,489 @@ export function Canvas({
       ...boundary,
       selected: selection.type === "boundary" && selection.id === boundary.data.boundaryId,
     }));
-    return [...legacyBoundaries, ...semanticBoundaries, ...nodes];
+    const frames = [...legacyBoundaries, ...semanticBoundaries].map((boundary) => {
+      if (boundary.type !== "boundary") return boundary;
+      const members = boundaryMemberIds(
+        boundary.data,
+        elementsById,
+        boundaries,
+        view.settings.boundaryLayer,
+      );
+      const placements = view.elements.filter((entry) => members.has(entry.elementId));
+      const fitSources = [
+        ...sources,
+        ...placements
+          .filter((entry) => !sources.some((source) => source.id === entry.elementId))
+          .map((entry) => ({
+            id: entry.elementId,
+            x: entry.x,
+            y: entry.y,
+            ...estimateElementSize(
+              elementsById.get(entry.elementId),
+              {
+                showFullTitles: view.settings.showFullTitles,
+                showDescriptions: view.settings.showDescriptions,
+              },
+              entry,
+            ),
+          })),
+      ];
+      const fittedFrame = boundary.data.section ? fitSectionFrame(fitSources, members) : null;
+      return {
+        ...boundary,
+        draggable:
+          (placements.length > 0 || boundary.data.section === true) &&
+          !placements.some((entry) => entry.locked),
+        data: {
+          ...boundary.data,
+          onFit:
+            fittedFrame && !placements.some((entry) => entry.locked)
+              ? () => {
+                  const next = { ...sectionFrames, [boundary.id]: fittedFrame };
+                  setSectionFrames(next);
+                  applyOperations.mutate(
+                    {
+                      label: t("sections.fit"),
+                      operations: [
+                        {
+                          op: "updateView",
+                          viewId: view.id,
+                          data: { settings: { sectionFrames: next } },
+                        },
+                      ],
+                    },
+                    { onError: () => setSectionFrames(view.settings.sectionFrames) },
+                  );
+                }
+              : undefined,
+          onRename: boundary.data.section
+            ? (name: string) =>
+                applyOperations.mutate({
+                  label: t("sections.updated"),
+                  operations: [
+                    boundary.data.boundaryId
+                      ? {
+                          op: "updateBoundary",
+                          boundaryId: boundary.data.boundaryId,
+                          data: { name },
+                        }
+                      : {
+                          op: "updateElement",
+                          elementId: String(boundary.data.elementId),
+                          data: { name },
+                        },
+                  ],
+                })
+            : undefined,
+          onResizePreview: boundary.data.section
+            ? (frame: SectionFrame) =>
+                setSectionFrames((current) => ({ ...current, [boundary.id]: frame }))
+            : undefined,
+          onResize:
+            boundary.data.section && !placements.some((entry) => entry.locked)
+              ? (frame: SectionFrame) => {
+                  const next = { ...sectionFrames, [boundary.id]: frame };
+                  setSectionFrames(next);
+                  applyOperations.mutate(
+                    {
+                      label: t("sections.updated"),
+                      operations: [
+                        {
+                          op: "updateView",
+                          viewId: view.id,
+                          data: { settings: { sectionFrames: next } },
+                        },
+                      ],
+                    },
+                    { onError: () => setSectionFrames(view.settings.sectionFrames) },
+                  );
+                }
+              : undefined,
+        },
+      };
+    });
+    const expandedFrames = inlineFrames(sources, elementsById, expansion.expandedElementIds).map(
+      (frame) => ({
+        ...frame,
+        selected: selection.type === "element" && selection.id === frame.id,
+      }),
+    );
+    const transformed = new Set(expandedFrames.map((frame) => frame.id));
+    return applyNodeColors(
+      [...frames, ...expandedFrames, ...nodes.filter((node) => !transformed.has(node.id))].map(
+        (node) => ({
+          ...node,
+          className:
+            scenarioStep?.elementId === node.id ? "ring-2 ring-primary rounded-lg" : undefined,
+        }),
+      ),
+      view.settings.nodeColors,
+    );
   }, [
     nodes,
     elementsById,
     boundaries,
     view.settings.showBoundaries,
     view.settings.boundaryLayer,
+    view.elements,
+    sectionFrames,
+    applyOperations.mutate,
+    t,
+    view.id,
+    view.settings.sectionFrames,
+    view.settings.nodeColors,
+    view.settings.showFullTitles,
+    view.settings.showDescriptions,
     selection,
+    expansion.expandedElementIds,
+    scenarioStep,
   ]);
 
+  const changeRelationshipPresentation = useCallback(
+    (patches: ViewRelationshipPatch[]) => {
+      return applyOperations
+        .mutateAsync({
+          label: t("relationshipPresentation.updated"),
+          operations: [
+            {
+              op: "setViewRelationships",
+              viewId: view.id,
+              relationships: patches,
+            },
+          ],
+        })
+        .then(() =>
+          queryClient.refetchQueries(
+            { queryKey: queryKeys.view(view.id) },
+            { cancelRefetch: false },
+          ),
+        )
+        .then(() => undefined);
+    },
+    [applyOperations, t, view.id],
+  );
+
+  const editableEdges = useMemo(
+    () =>
+      edges.map((edge) => ({
+        ...edge,
+        style: {
+          ...edge.style,
+          opacity: scenarioStep
+            ? edge.data?.relationshipIds?.includes(scenarioStep.relationshipId ?? "")
+              ? 1
+              : 0.25
+            : edge.style?.opacity,
+        },
+        data: edge.data
+          ? {
+              ...edge.data,
+              onControlPointsChange: (controlPoints: { x: number; y: number }[]) =>
+                changeRelationshipPresentation(
+                  (edge.data?.relationshipIds ?? [edge.data?.relationship.id as string]).map(
+                    (relationshipId) => ({ relationshipId, controlPoints }),
+                  ),
+                ),
+              onLabelOffsetChange: (
+                _relationshipId: string,
+                labelOffset: { x: number; y: number },
+              ) =>
+                changeRelationshipPresentation(
+                  (edge.data?.relationshipIds ?? []).map((relationshipId) => ({
+                    relationshipId,
+                    presentation: { labelOffset },
+                  })),
+                ),
+            }
+          : undefined,
+      })),
+    [edges, changeRelationshipPresentation, scenarioStep],
+  );
+
+  const expansionFit = useRef(expandedIds);
+  useEffect(() => {
+    if (expansionFit.current === expandedIds || !nodesInitialized) return;
+    expansionFit.current = expandedIds;
+    void flow.fitView({ padding: CANVAS_FIT_PADDING, duration: 250, maxZoom: 1 });
+  }, [expandedIds, nodesInitialized, flow]);
+
   return (
-    <div
-      className="relative h-full w-full"
-      onDrop={onDrop}
-      onDragOver={(event) => {
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "copy";
+    <InlineExpansionContext.Provider
+      value={{
+        elements,
+        expandedElementIds: expansion.expandedElementIds,
+        depths: expansion.depths,
+        enabled: !connectFrom,
+        toggle: (elementId) =>
+          setExpandedIds((current) => {
+            const next = new Set(current);
+            if (next.has(elementId)) next.delete(elementId);
+            else next.add(elementId);
+            return next;
+          }),
       }}
     >
-      <ReactFlow
-        nodes={allNodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onNodesChange={onNodesChange}
-        onNodeDragStart={onNodeDragStart}
-        onNodeDragStop={onNodeDragStop}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onSelectionChange={onSelectionChange}
-        onNodeClick={onNodeClick}
-        onNodeDoubleClick={(event, node) => {
-          if (
-            connectFrom ||
-            Date.now() < ignoreDetailsUntil.current ||
-            event.ctrlKey ||
-            event.metaKey ||
-            event.altKey ||
-            event.shiftKey ||
-            (event.target as HTMLElement).closest("button, input, textarea, a, .react-flow__handle")
-          )
-            return;
-          const elementId = node.type === "boundary" ? node.data.elementId : node.id;
-          if (elementId) onOpenDetails(String(elementId));
+      <div
+        ref={canvasRef}
+        className="relative h-full w-full"
+        onDrop={onDrop}
+        onDragOver={(event) => {
+          event.preventDefault();
+          event.dataTransfer.dropEffect = "copy";
         }}
-        zoomOnDoubleClick={false}
-        onNodeContextMenu={onNodeContextMenu}
-        onEdgeContextMenu={onEdgeContextMenu}
-        onPaneClick={() => {
-          setMenu(null);
-          clearSelection();
-          setNodes((current) =>
-            current.map((node) => (node.selected ? { ...node, selected: false } : node)),
-          );
-          setEdges((current) =>
-            current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
-          );
-        }}
-        onDelete={deleteSelection}
-        selectionMode={SelectionMode.Partial}
-        panOnDrag
-        selectionKeyCode={primaryModifierKeyCode()}
-        multiSelectionKeyCode={primaryModifierKeyCode()}
-        // A selected boundary covers a large area. Keep the explicit graph
-        // layering (boundaries < edges < elements) so cards remain clickable.
-        elevateNodesOnSelect={false}
-        snapToGrid={view.settings.snapToGrid}
-        snapGrid={[16, 16]}
-        minZoom={0.15}
-        maxZoom={2.5}
-        defaultViewport={initialViewport.current}
-        fitView={!initialViewport.current}
-        fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
-        proOptions={{ hideAttribution: false }}
-        deleteKeyCode={["Delete", "Backspace"]}
       >
-        <Background variant={BackgroundVariant.Dots} gap={18} size={1} color="var(--canvas-dot)" />
-        <Controls showInteractive={false} position="bottom-left" />
-        <MiniMap
-          pannable
-          zoomable
-          position="bottom-right"
-          nodeStrokeWidth={2}
-          maskColor="transparent"
+        <ReactFlow
+          nodes={allNodes}
+          edges={editableEdges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onNodesChange={onNodesChange}
+          onNodeDragStart={onNodeDragStart}
+          onNodeDrag={onNodeDrag}
+          onNodeDragStop={onNodeDragStop}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onReconnect={(edge, connection) => {
+            if (connection.source !== edge.source || connection.target !== edge.target) return;
+            const relationshipId = relationshipIdOf(edge);
+            void changeRelationshipPresentation([
+              {
+                relationshipId,
+                presentation: {
+                  sourceSide: sideFromHandle(connection.sourceHandle, "source"),
+                  targetSide: sideFromHandle(connection.targetHandle, "target"),
+                  sourceSlot: slotFromHandle(connection.sourceHandle),
+                  targetSlot: slotFromHandle(connection.targetHandle),
+                },
+              },
+            ]).catch(() => undefined);
+          }}
+          onSelectionChange={onSelectionChange}
+          onNodeClick={onNodeClick}
+          onNodeDoubleClick={(event, node) => {
+            if (
+              connectFrom ||
+              Date.now() < ignoreDetailsUntil.current ||
+              event.ctrlKey ||
+              event.metaKey ||
+              event.altKey ||
+              event.shiftKey ||
+              (event.target as HTMLElement).closest(
+                "button, input, textarea, a, .react-flow__handle",
+              )
+            )
+              return;
+            const elementId = node.type === "boundary" ? node.data.elementId : node.id;
+            if (elementId) onOpenDetails(String(elementId));
+          }}
+          zoomOnDoubleClick={false}
+          onNodeContextMenu={onNodeContextMenu}
+          onEdgeContextMenu={onEdgeContextMenu}
+          onPaneClick={() => {
+            setMenu(null);
+            clearSelection();
+            setNodes((current) =>
+              current.map((node) => (node.selected ? { ...node, selected: false } : node)),
+            );
+            setEdges((current) =>
+              current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+            );
+          }}
+          onDelete={deleteSelection}
+          selectionMode={SelectionMode.Partial}
+          panOnDrag
+          selectionKeyCode={primaryModifierKeyCode()}
+          multiSelectionKeyCode={primaryModifierKeyCode()}
+          // A selected boundary covers a large area. Keep the explicit graph
+          // layering (boundaries < edges < elements) so cards remain clickable.
+          elevateNodesOnSelect={false}
+          snapToGrid={view.settings.snapToGrid}
+          snapGrid={[16, 16]}
+          minZoom={0.15}
+          maxZoom={2.5}
+          defaultViewport={initialViewport.current}
+          fitView={!initialViewport.current}
+          panOnScroll
+          zoomOnScroll={false}
+          zoomActivationKeyCode={["Meta", "Control"]}
+          fitViewOptions={{ padding: CANVAS_FIT_PADDING, maxZoom: 1 }}
+          proOptions={{ hideAttribution: false }}
+          deleteKeyCode={["Delete", "Backspace"]}
+        >
+          <Panel position="top-left" className="z-40">
+            <ScenarioPanel
+              key={view.id}
+              workspaceId={workspaceId}
+              view={view}
+              elements={elements}
+              relationships={relationships}
+              onStep={onScenarioStep}
+            />
+          </Panel>
+          <CanvasComments
+            key={view.id}
+            workspaceId={workspaceId}
+            view={view}
+            canvasRef={canvasRef}
+          />
+          <Background
+            variant={BackgroundVariant.Dots}
+            gap={18}
+            size={1}
+            color="var(--canvas-dot)"
+          />
+          <Controls
+            showInteractive={false}
+            position="bottom-left"
+            fitViewOptions={{ padding: CANVAS_FIT_PADDING }}
+          />
+          <MiniMap
+            pannable
+            zoomable
+            position="bottom-right"
+            style={{ bottom: 96 }}
+            nodeStrokeWidth={2}
+            maskColor="transparent"
+          />
+        </ReactFlow>
+
+        <SelectionColorToolbar
+          workspaceId={workspaceId}
+          view={view}
+          nodes={allNodes}
+          edges={editableEdges}
+        >
+          {typeElement && (
+            <ElementTypePicker
+              element={typeElement}
+              elements={elements}
+              disabled={applyOperations.isPending}
+              onChange={(data) =>
+                applyOperations.mutate({
+                  label: t("elementTypes.changed"),
+                  operations: [{ op: "updateElement", elementId: typeElement.id, data }],
+                })
+              }
+            />
+          )}
+        </SelectionColorToolbar>
+        <CreationToolbar
+          workspaceId={workspaceId}
+          view={view}
+          onCreateSection={() => {
+            const bounds = canvasRef.current?.getBoundingClientRect();
+            const point = bounds
+              ? flow.screenToFlowPosition({
+                  x: bounds.left + bounds.width / 2 - 180,
+                  y: bounds.top + bounds.height / 2 - 120,
+                })
+              : { x: 0, y: 0 };
+            const id = `section-${crypto.randomUUID().slice(0, 12)}`;
+            const selectedIds =
+              selection.type === "elements"
+                ? selection.ids
+                : selection.type === "element"
+                  ? [selection.id]
+                  : [];
+            const selectedNodes = nodes.filter((node) => selectedIds.includes(node.id));
+            const x = selectedNodes.length
+              ? Math.min(...selectedNodes.map((node) => node.position.x)) - 28
+              : point.x;
+            const y = selectedNodes.length
+              ? Math.min(...selectedNodes.map((node) => node.position.y)) - 64
+              : point.y;
+            const width = selectedNodes.length
+              ? Math.max(
+                  ...selectedNodes.map(
+                    (node) => node.position.x + (node.measured?.width ?? NODE_WIDTH),
+                  ),
+                ) -
+                x +
+                28
+              : 420;
+            const height = selectedNodes.length
+              ? Math.max(
+                  ...selectedNodes.map(
+                    (node) => node.position.y + (node.measured?.height ?? NODE_HEIGHT),
+                  ),
+                ) -
+                y +
+                28
+              : 280;
+            applyOperations.mutate(
+              {
+                label: t("sections.add"),
+                operations: [
+                  {
+                    op: "createBoundary",
+                    data: {
+                      id,
+                      viewId: view.id,
+                      kind: "custom",
+                      layer: view.settings.boundaryLayer,
+                      name: t("sections.newName"),
+                      elementIds: selectedIds.filter((elementId) =>
+                        view.elements.some((entry) => entry.elementId === elementId),
+                      ),
+                    },
+                  },
+                  {
+                    op: "updateView",
+                    viewId: view.id,
+                    data: {
+                      settings: {
+                        showBoundaries: true,
+                        sectionFrames: {
+                          ...sectionFrames,
+                          [`boundary:${id}`]: { x, y, width, height },
+                        },
+                      },
+                    },
+                  },
+                ],
+              },
+              { onSuccess: () => select({ type: "boundary", id }) },
+            );
+          }}
+          getCreationPoint={() => {
+            const bounds = canvasRef.current?.getBoundingClientRect();
+            return bounds
+              ? flow.screenToFlowPosition({
+                  x: bounds.left + bounds.width / 2,
+                  y: bounds.top + bounds.height / 2,
+                })
+              : { x: 0, y: 0 };
+          }}
         />
-      </ReactFlow>
+        {graph.nodes.length === 0 && (
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
+            <p className="text-sm font-medium">{t("canvas.empty")}</p>
+            <p className="max-w-xs text-xs text-muted-foreground">
+              {t(
+                tagFocus
+                  ? "tagFocus.empty"
+                  : statusOverlay === "liveOnly"
+                    ? "statusOverlay.emptyHint"
+                    : "canvas.emptyHint",
+              )}
+            </p>
+          </div>
+        )}
 
-      {graph.nodes.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
-          <p className="text-sm font-medium">{t("canvas.empty")}</p>
-          <p className="max-w-xs text-xs text-muted-foreground">{t("canvas.emptyHint")}</p>
-        </div>
-      )}
+        {graph.hiddenCount > 0 && (
+          <div className="pointer-events-none absolute right-3 top-16 rounded border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground">
+            {t("canvas.hiddenElements", { count: graph.hiddenCount })}
+          </div>
+        )}
 
-      {graph.hiddenCount > 0 && (
-        <div className="pointer-events-none absolute right-3 top-3 rounded border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground">
-          {t("canvas.hiddenElements", { count: graph.hiddenCount })}
-        </div>
-      )}
+        {connectFrom && (
+          <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
+            {t("contextMenu.connect")}: {elementsById.get(connectFrom)?.name}
+          </div>
+        )}
 
-      {graph.nodes.length > 0 && (
-        <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-md border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider shadow-sm backdrop-blur-sm">
-          <span className="text-muted-foreground">{t("canvas.legend")}</span>
-          <span className="flex items-center gap-1 text-ownership-internal">
-            <span className="h-2 w-2 rounded-sm bg-ownership-internal" />
-            {t("inspector.internal")}
-          </span>
-          <span className="flex items-center gap-1 text-ownership-external">
-            <span className="h-2 w-2 rounded-sm border border-dashed border-ownership-external bg-ownership-external/15" />
-            {t("inspector.external")}
-          </span>
-        </div>
-      )}
-
-      {connectFrom && (
-        <div className="pointer-events-none absolute left-1/2 top-3 -translate-x-1/2 rounded border border-primary/40 bg-primary/10 px-2.5 py-1 text-[11px] text-primary">
-          {t("contextMenu.connect")}: {elementsById.get(connectFrom)?.name}
-        </div>
-      )}
-
-      {menu && <NodeContextMenu {...menu} onClose={() => setMenu(null)} />}
-    </div>
+        {menu && <NodeContextMenu {...menu} onClose={() => setMenu(null)} />}
+      </div>
+    </InlineExpansionContext.Provider>
   );
 }

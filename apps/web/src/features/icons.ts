@@ -2,16 +2,19 @@ import type { ElementKind, ElementRole } from "@structsmith/contracts";
 import {
   Box,
   Boxes,
+  CircleCheck,
   Cloud,
   Cog,
   Component,
   Database,
+  Diamond,
   Globe,
   HardDrive,
   KeyRound,
   Layers,
   type LucideIcon,
   Network,
+  Play,
   Server,
   Shapes,
   Smartphone,
@@ -48,10 +51,15 @@ const KIND_ICONS: Record<ElementKind, LucideIcon> = {
   component: Component,
   deploymentNode: Layers,
   infrastructureNode: Server,
+  workflowGroup: Workflow,
+  action: Play,
+  decision: Diamond,
+  outcome: CircleCheck,
   custom: Shapes,
 };
 
 export function iconFor(kind: ElementKind, role: ElementRole | null): LucideIcon {
+  if (["workflowGroup", "action", "decision", "outcome"].includes(kind)) return KIND_ICONS[kind];
   return (role ? ROLE_ICONS[role] : undefined) ?? KIND_ICONS[kind];
 }
 

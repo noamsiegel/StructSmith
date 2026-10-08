@@ -188,7 +188,102 @@ export type UpdateRelationshipInput = z.infer<typeof UpdateRelationshipSchema>;
 /* Views                                                               */
 /* ------------------------------------------------------------------ */
 
+export const ViewCommentReplySchema = z.object({
+  id: IdSchema,
+  text: z.string().trim().min(1).max(4000),
+  createdAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime().optional(),
+});
+export type ViewCommentReply = z.infer<typeof ViewCommentReplySchema>;
+export const AddViewCommentReplySchema = ViewCommentReplySchema.pick({ text: true });
+export type AddViewCommentReplyInput = z.infer<typeof AddViewCommentReplySchema>;
+
+export const ViewCommentSchema = z.object({
+  id: IdSchema,
+  x: z.number().finite(),
+  y: z.number().finite(),
+  text: ViewCommentReplySchema.shape.text,
+  elementId: IdSchema.nullable().optional(),
+  createdAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime().optional(),
+  resolved: z.boolean().default(false),
+  replies: z
+    .array(ViewCommentReplySchema)
+    .refine(
+      (replies) => new Set(replies.map((reply) => reply.id)).size === replies.length,
+      "Reply IDs must be unique within a comment.",
+    )
+    .default([]),
+});
+export type ViewComment = z.infer<typeof ViewCommentSchema>;
+export const AddViewCommentSchema = ViewCommentSchema.pick({
+  x: true,
+  y: true,
+  text: true,
+  elementId: true,
+});
+export type AddViewCommentInput = z.infer<typeof AddViewCommentSchema>;
+export const UpdateViewCommentSchema = z.object({
+  x: ViewCommentSchema.shape.x.optional(),
+  y: ViewCommentSchema.shape.y.optional(),
+  text: ViewCommentSchema.shape.text.optional(),
+  resolved: z.boolean().optional(),
+  elementId: IdSchema.nullable().optional(),
+});
+export type UpdateViewCommentInput = z.infer<typeof UpdateViewCommentSchema>;
+
+export const ViewScenarioStepSchema = z.object({
+  elementId: IdSchema,
+  relationshipId: IdSchema.optional(),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(2000).optional(),
+});
+export type ViewScenarioStep = z.infer<typeof ViewScenarioStepSchema>;
+export const ViewScenarioSchema = z.object({
+  id: IdSchema,
+  name: z.string().trim().min(1).max(200),
+  steps: z.array(ViewScenarioStepSchema).min(1).max(200),
+});
+export type ViewScenario = z.infer<typeof ViewScenarioSchema>;
+
+export const SectionFrameSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  width: z.number().finite().min(120),
+  height: z.number().finite().min(80),
+});
+export type SectionFrame = z.infer<typeof SectionFrameSchema>;
+
 export const ViewSettingsSchema = z.object({
+  nodeColors: z
+    .record(z.string().min(1).max(80), z.string().regex(/^#[0-9a-fA-F]{6}$/))
+    .describe("Per-view colors keyed by element ID or boundary:<ID> for a section/frame.")
+    .default({}),
+  sectionFrames: z
+    .record(
+      z
+        .string()
+        .regex(/^boundary:/)
+        .max(80),
+      SectionFrameSchema,
+    )
+    .default({}),
+  preferredDetailViews: z.record(IdSchema, IdSchema).default({}),
+  scenarios: z
+    .array(ViewScenarioSchema)
+    .max(100)
+    .refine(
+      (scenarios) => new Set(scenarios.map((scenario) => scenario.id)).size === scenarios.length,
+      "Scenario IDs must be unique.",
+    )
+    .default([]),
+  commentPins: z
+    .array(ViewCommentSchema)
+    .refine(
+      (pins) => new Set(pins.map((pin) => pin.id)).size === pins.length,
+      "Comment IDs must be unique.",
+    )
+    .default([]),
   showBoundaries: z
     .boolean()
     .describe("Render boundaries from the active boundaryLayer without changing membership.")
@@ -229,6 +324,11 @@ export type ViewSettings = z.infer<typeof ViewSettingsSchema>;
 // Zod 4 applies defaults even inside optional fields. A patch must only carry
 // explicitly supplied settings, otherwise it resets the other stored values.
 const ViewSettingsPatchSchema = z.object({
+  nodeColors: ViewSettingsSchema.shape.nodeColors.unwrap().optional(),
+  sectionFrames: ViewSettingsSchema.shape.sectionFrames.unwrap().optional(),
+  preferredDetailViews: ViewSettingsSchema.shape.preferredDetailViews.unwrap().optional(),
+  scenarios: ViewSettingsSchema.shape.scenarios.unwrap().optional(),
+  commentPins: ViewSettingsSchema.shape.commentPins.unwrap().optional(),
   showBoundaries: ViewSettingsSchema.shape.showBoundaries.unwrap().optional(),
   snapToGrid: ViewSettingsSchema.shape.snapToGrid.unwrap().optional(),
   autoLayoutDirection: ViewSettingsSchema.shape.autoLayoutDirection.unwrap().optional(),
@@ -254,17 +354,39 @@ export const ViewElementSchema = z.object({
 export type ViewElement = z.infer<typeof ViewElementSchema>;
 
 export const ControlPointSchema = z.object({
-  x: z.number().describe("Canvas x coordinate."),
-  y: z.number().describe("Canvas y coordinate."),
+  x: z.number().finite().describe("Canvas x coordinate."),
+  y: z.number().finite().describe("Canvas y coordinate."),
 });
 export type ControlPoint = z.infer<typeof ControlPointSchema>;
+
+/** Presentation belongs to a view; omitted fields inherit the view/relationship defaults. */
+export const RelationshipPresentationSchema = z
+  .object({
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .nullable()
+      .optional(),
+    strokeWidth: z.number().finite().min(0.5).max(12).optional(),
+    strokeStyle: z.enum(["solid", "dashed", "dotted"]).optional(),
+    sourceArrow: z.enum(["none", "arrow", "arrowclosed"]).optional(),
+    targetArrow: z.enum(["none", "arrow", "arrowclosed"]).optional(),
+    sourceSide: z.enum(["left", "right", "top", "bottom"]).nullable().optional(),
+    targetSide: z.enum(["left", "right", "top", "bottom"]).nullable().optional(),
+    sourceSlot: z.number().int().min(0).max(2).optional(),
+    targetSlot: z.number().int().min(0).max(2).optional(),
+    labelOffset: ControlPointSchema.optional(),
+  })
+  .strict();
+export type RelationshipPresentation = z.infer<typeof RelationshipPresentationSchema>;
 
 export const ViewRelationshipSchema = z.object({
   viewId: IdSchema,
   relationshipId: IdSchema,
   hidden: z.boolean(),
-  labelPosition: z.number().nullable(),
+  labelPosition: z.number().finite().min(0).max(1).nullable(),
   controlPoints: z.array(ControlPointSchema),
+  presentation: RelationshipPresentationSchema.nullable().optional(),
 });
 export type ViewRelationship = z.infer<typeof ViewRelationshipSchema>;
 
@@ -340,6 +462,9 @@ export const ViewRelationshipPatchSchema = z.object({
   hidden: z.boolean().optional().describe("Hide this relationship only on this view."),
   labelPosition: z
     .number()
+    .finite()
+    .min(0)
+    .max(1)
     .nullable()
     .optional()
     .describe("Optional normalized label position along the relationship path."),
@@ -347,6 +472,11 @@ export const ViewRelationshipPatchSchema = z.object({
     .array(ControlPointSchema)
     .optional()
     .describe("Saved manual bend points for this relationship on the view."),
+  presentation: RelationshipPresentationSchema.nullable()
+    .optional()
+    .describe(
+      "Merge supplied visual overrides on this view; null resets all presentation overrides.",
+    ),
 });
 export type ViewRelationshipPatch = z.infer<typeof ViewRelationshipPatchSchema>;
 

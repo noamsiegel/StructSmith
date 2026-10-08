@@ -1,5 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
+  AddViewCommentOpSchema,
+  AddViewCommentReplyOpSchema,
   ApplyOperationsRequestSchema,
   CreateBoundarySchema,
   CreateElementSchema,
@@ -7,6 +9,8 @@ import {
   CreateRelationshipSchema,
   CreateViewSchema,
   CreateWorkspaceSchema,
+  DeleteViewCommentOpSchema,
+  DeleteViewCommentReplyOpSchema,
   ImportMermaidRequestSchema,
   LayoutAlgorithmSchema,
   LayoutDirectionSchema,
@@ -16,11 +20,13 @@ import {
   UpdateElementSchema,
   UpdateRecordSchema,
   UpdateRelationshipSchema,
+  UpdateViewCommentOpSchema,
+  UpdateViewCommentReplyOpSchema,
   UpdateViewSchema,
   UpdateWorkspaceSchema,
   ViewRelationshipPatchSchema,
 } from "@structsmith/contracts";
-import type { Services } from "@structsmith/domain";
+import { badRequest, type Services } from "@structsmith/domain";
 import { z } from "zod";
 import { MCP_TOOLS } from "./catalog";
 import { modelingGuide } from "./guide";
@@ -477,6 +483,67 @@ export function registerTools(
     },
     ({ viewId }) => json(services.views.get(viewId)),
   );
+
+  server.registerTool(
+    "comment_list",
+    {
+      description: describe("comment_list"),
+      inputSchema: { viewId },
+      annotations: readOnlyAnnotations,
+    },
+    ({ viewId }) => json(services.views.get(viewId).settings.commentPins),
+  );
+
+  server.registerTool(
+    "comment_get",
+    {
+      description: describe("comment_get"),
+      inputSchema: { viewId, commentId: z.string().min(1) },
+      annotations: readOnlyAnnotations,
+    },
+    ({ viewId, commentId }) => {
+      const comment = services.views
+        .get(viewId)
+        .settings.commentPins.find((pin) => pin.id === commentId);
+      if (!comment) throw badRequest(`Comment "${commentId}" does not exist on this view.`);
+      return json(comment);
+    },
+  );
+
+  for (const [name, operationSchema, destructive] of [
+    ["comment_create", AddViewCommentOpSchema, false],
+    ["comment_update", UpdateViewCommentOpSchema, false],
+    ["comment_delete", DeleteViewCommentOpSchema, true],
+    ["comment_reply_create", AddViewCommentReplyOpSchema, false],
+    ["comment_reply_update", UpdateViewCommentReplyOpSchema, false],
+    ["comment_reply_delete", DeleteViewCommentReplyOpSchema, true],
+  ] as const) {
+    const { op, ...fields } = operationSchema.shape;
+    const inputSchema = z.object({
+      ...fields,
+      workspaceId,
+      expectedRevision,
+    });
+    registerWrite(
+      name,
+      inputSchema.shape,
+      (args: unknown) => {
+        const input = inputSchema.parse(args);
+        const operation = operationSchema.parse({ ...input, op: op.value });
+        const result = services.model.applyOperations(
+          input.workspaceId,
+          {
+            expectedRevision: input.expectedRevision,
+            label: `MCP ${name}`,
+            operations: [operation],
+          },
+          "mcp",
+        );
+        return json({ ...result, comments: services.views.get(input.viewId).settings.commentPins });
+      },
+      destructive,
+    );
+  }
 
   registerWrite(
     "view_create",

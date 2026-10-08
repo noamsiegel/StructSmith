@@ -62,5 +62,15 @@ export const presets: readonly ElementPreset[] = [
     icon: "Cloud",
   },
   { id: "component", label: "Component", kind: "component", role: null, icon: "Component" },
+  {
+    id: "workflowGroup",
+    label: "Workflow group",
+    kind: "workflowGroup",
+    role: null,
+    icon: "Workflow",
+  },
+  { id: "action", label: "Action", kind: "action", role: null, icon: "Play" },
+  { id: "decision", label: "Decision", kind: "decision", role: null, icon: "Diamond" },
+  { id: "outcome", label: "Outcome", kind: "outcome", role: null, icon: "CircleCheck" },
   { id: "custom", label: "Custom", kind: "custom", role: "custom", icon: "Shapes" },
 ];

@@ -1,4 +1,5 @@
 import type { ArchitectureElement, ArchitectureView, ViewKind } from "@structsmith/contracts";
+import { detailViewKind } from "@structsmith/domain";
 import { Layers, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -33,6 +34,7 @@ const VIEW_KINDS: ViewKind[] = [
   "component",
   "landscape",
   "deployment",
+  "workflow",
   "custom",
 ];
 
@@ -201,10 +203,7 @@ export function ViewsPanel({
                 <SelectContent>
                   <SelectItem value="none">{t("common.none")}</SelectItem>
                   {elements
-                    .filter(
-                      (element) =>
-                        element.kind === "softwareSystem" || element.kind === "container",
-                    )
+                    .filter((element) => detailViewKind(element))
                     .map((element) => (
                       <SelectItem key={element.id} value={element.id}>
                         {element.name}

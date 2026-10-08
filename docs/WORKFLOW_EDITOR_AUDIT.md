@@ -1,0 +1,234 @@
+# Workflow editor audit
+
+Audit date: 2026-10-08. Scope: interactive HOA workflow editing in this fork;
+exports are excluded at the user's request. Behavior is documented in
+[FORK.md](FORK.md). The user confirmed the hardware canvas gestures.
+
+## Current source and acceptance status
+
+The current source implements preferred detail destinations, dependency/where-used
+lists, tag focus, scenario CRUD/playback, selective inline expansion, three connector
+attachment slots per side, resource links, attached comment pins with reply search,
+and the creation toolbar with searchable Cmd/Ctrl+/ help. Sidebars now start hidden;
+the legend opens from top navigation, separately from bottom-center creation.
+Source implementation is not browser acceptance.
+
+The October 8 source also implements Section fit-to-contents, selection colors,
+type switching and shape silhouettes. The fork guide owns the behavior contract;
+this audit distinguishes actual browser observations from source-only support.
+
+## October 8 acceptance evidence
+
+Workers exercised disposable QA workspaces against the local fork. Exploration
+and the reply-save conflict were independently observed by this audit worker;
+Section, color and type observations were supplied by their focused workers.
+No canonical portal model was changed for these acceptance checks. AXI failed at
+startup because its cached package lacked `@toon-format/toon`; verification used
+supported browser fallbacks without installing or repairing the harness.
+
+| Area | Actual interaction or command | Observed result |
+| --- | --- | --- |
+| Inline expansion | `qaTab.playwright.getByRole('button', {name:'Expand in place', exact:true}).click()`; fresh node DOM | Expand showed only direct children. Nested expansion showed four levels; level four's Expand was disabled with the maximum-level message and level five was absent. Collapse removed descendants. |
+| Detail navigation | Open details, Remember checkbox, choose A, Back, Open details | A/B chooser appeared; remembered A landed directly after Back. Earlier producer reload evidence remains recorded below. |
+| Attachment slots | Source First quarter, Target Third quarter, Undo, reload; GET workspace document | DOM contained three source and target slots on each side. Saved `sourceSlot:0,targetSlot:2`; Undo restored target center. Reload retained source first quarter and target center at revision 39. |
+| Reply save failure | Edit reply at revision 39; guarded REST command advances to 40; Save changes | Conflict toast appeared and exact draft text remained. GET document retained original reply and comment at revision 40. Cancel restored the saved reply. Evidence: `/tmp/structsmith-comment-conflict-preserved.png`. |
+| Sections | Native title edit, frame drag, corner resize, drag-out/in membership, double-click and Fit section to contents in disposable Section QA | Rename persisted; frame and member moved by the same 35/17 pixels. Resize changed 276x152 to 326x192; fit restored 276x152. Drag-out emptied old membership; drag-in added Alpha to the new Section. Fit shrank 420x280 to 276x152. Locked members disabled Fit; hidden members remained included. REST readbacks covered revisions 23-33; console warning/error logs were empty. |
+| Fit clearance | Final-image Chrome at measured 900x700: top Fit, F, bottom Fit, reload, Auto layout | Cards ended at y=580 while toolbar began at y=600. With both panels open, toolbar started at x=217.71 after controls ended at x=210.72. Earlier toolbar obstruction was corrected and rechecked. |
+| Colors | Section/card and ordinary/merged connector color, persist/reset/undo; copy/paste/duplicate | Saved colors retained/reset through the UI. Final duplicate carried `#12AB34`; GET document stored that color for source, paste and duplicate. Native OS picker interaction was not exercised. |
+| Type and shapes | Action to Decision, Undo, Redo, reload; Auto layout on three cloned portal views | Original ID/comment survived. Views with 5/9/5 nodes showed zero measured overlaps. A cylinder with saved height 200 rendered `offsetHeight:200` and `viewBox:220x200`. |
+| Console | `qaTab.dev.logs({levels:['error','warn'],limit:10})` plus focused workers' final log checks | No warning/error entries on the exercised exploration, conflict and final fit paths. This is scoped console evidence, not a full request trace. |
+
+Final integration commands supplied by the main task: `bun run check`,
+`bun run typecheck`, `bun run build`, `bun run build:site` and `bun run build:local`
+exited 0. `bun test` reported **269 passed, 0 failed, 1,531 assertions across
+53 files**. Check reported the existing Biome schema 2.5.12/CLI 2.5.14 informational
+mismatch; build retained its existing large-bundle warning.
+`dist/local-helper/structsmith-local-darwin-arm64 --help` and `--version` returned
+successfully (version 1.13.0). `bun scripts/smoke-local-helper.ts
+structsmith-fork:editor-final` exercised HTML, authenticated Docker REST,
+host CLI, scoped MCP, streaming and Stop successfully. These gates do not imply
+mobile, native color-picker, export or identity acceptance.
+Historical suite counts below describe their stated earlier builds.
+
+## Historical verification evidence
+
+The earlier exploration build `e7ff50c` recorded `bun run typecheck` exit 0 and
+`bun run test`: **248 passed, 1,383 assertions**. The subsequent `sections-zoom2`
+producer recorded `bun run check` and `bun run typecheck` exit 0, **258 tests and
+1,449 assertions**, and a successful Docker build. Its integrated browser run
+found React error 185 from an unstable mutation object dependency; changing the
+dependency to the stable `mutate` function corrected that earlier report.
+`bun test apps/web/src/features/canvas/commandWheel.test.ts` recorded one test,
+ten assertions and seven caught deliberate mutations. It protects wheel math;
+hardware Cmd+scroll/pinch were separately confirmed by the user.
+
+| Earlier exploration area | Producer interaction | Observed result |
+| --- | --- | --- |
+| Hidden-default sidebars | Reload, buttons, `super+b` / `super+alt+b` | Both panels began at width zero with `aria-hidden=true`, reopened at 242.828/281.156 pixels, then collapsed through shortcuts. |
+| Toolbar and legend | Top legend click and rendered control inspection | Separate legend; bottom controls measured 48 pixels tall and at least 64 pixels wide. |
+| Dependencies/resources | Scenario worker inspected navigation and resource anchors | Dependency and validated resource links had anchors; external navigation remained unaccepted. |
+| Tag focus | Scenario worker selected Important | Matching merged relationship remained visible. |
+| Scenarios | Edit/reload/playback; repair one stale scenario and delete another | Arrival path/label opacity 1; other paths 0.25. Independent stale repair retained the other stale scenario. |
+| MCP Sections | Refreshed catalog and existing connection `workspace_inspect` | 48 tools listed; schema included `sectionFrames`; inspection succeeded. |
+
+The earlier main task recorded these end-to-end interactions against the rebuilt local
+service on `http://127.0.0.1:8090`. This documentation worker inspected their source
+and recorded the producer's results; it did not independently repeat the browser run.
+
+| Area | Actual producer evidence | Observed result |
+| --- | --- | --- |
+| Sidebar controls | `qaTab.click(...)` and `qaTab.pressKey(...)` using buttons, Cmd+B and Cmd+Alt+B | Model/Inspector widths collapsed from 243/281 pixels to zero and reopened at the same widths. This earlier build opened both on reload. Buttons were at the canvas navigation edges with stateful Show/Hide labels. |
+| Desktop comments and panel buttons | Main task inspected the default 1280-pixel viewport | Pin popover bounds were 320x224 inside the canvas, without background dimming. With panels collapsed, 32-pixel toggle buttons remained at x=9 and x=1239. |
+| Final image comment recheck | Browser queried Edit reply text and Reply text, edited/saved a reply and inspected a long thread | Each accessible label resolved to exactly one control. A 320x520 popover contained a scrolling body (984-pixel scroll height, 348-pixel client height); the reply composer ended at y=659 and popover at y=708 inside a 720-pixel viewport. |
+| Final image sidebar/console recheck | Buttons, native `super+b`/`super+alt+b`, then `qaTab.dev.logs({levels:["error","warn"],limit:10})` | Model/Inspector reopened at 242.828/281.156 pixels with Hide labels. The warning/error query returned `[]`. |
+| Canvas gestures | `qaTab.scroll(...)` on two diagrams | Both axes panned without zoom. Shift+wheel, Cmd+wheel and pinch are separately user-confirmed hardware gestures. |
+| Comment creation and CRUD | `qaTab.pressKey(null, "c")`, `qaTab.click([425, 545])`, text fill/Post, then comment and reply message menus | Created a pin; edited its original text; posted, edited and deleted a reply. Resolve hid the pin; Show resolved and Reopen restored it. Reload preserved the thread. |
+| Escape and conflict protection | Browser opened thread deletion confirmation; an actual Executor `comment_reply_create` added a reply at revision 52 before confirmation | Menu Escape and confirmation Escape retained the thread. Stale confirmation produced `REVISION_CONFLICT`, canceled the dialog and retained both replies. Fresh confirmation changed pins from 3 to 2; Undo restored the parent and both replies; Redo returned to 2 pins. |
+| Native connector and label drag | `qaTab.drag([329, 346], [329, 401])`, then `qaTab.drag([352, 401], [392, 461])` | Connector endpoints stayed at (672.5, 192) and (915.5, 192), while the horizontal leg moved to y=340.7003. Label moved 40 screen pixels horizontally while screen y stayed 397.320861. Reload retained the route and label offset (108.1457, 0); four labels remained visible without selection. |
+| Three auto-layout pages | Actual Auto layout button clicks on Home, Prepare replay and Charge approval | Home showed 13 nodes/8 labels; Prepare replay 4/3; Charge approval 7/6. Diagram bounds fit after animation. Home fit at zoom 0.226 with both sidebars, so its details need zooming; this is not a readability certification of the whole graph. |
+| MCP comments | Actual Bun MCP Client against `http://localhost:8090/mcp`; existing Executor connection refreshed and used | Eight dedicated comment tools were listed and all CRUD exercised over HTTP. Executor exposed the same eight tools; `comment_list` and `comment_reply_create` used the existing real connection. |
+
+Recorded automated commands:
+
+```sh
+bun run check
+bun run typecheck
+bun run test
+bun run build
+bun run build:local
+bun run build:site
+docker build -t structsmith-fork:editor-threads . > /tmp/structsmith-editor-threads-docker.log 2>&1
+bun scripts/smoke-local-helper.ts structsmith-fork:editor-threads > /tmp/structsmith-editor-threads-smoke.log 2>&1
+dist/local-helper/structsmith-local-darwin-arm64 --help
+dist/local-helper/structsmith-local-darwin-arm64 --version
+```
+
+The main task reported exit 0 for lint/typecheck and all builds, with `bun run test`
+reporting **216 passed, 0 failed, 1,106 assertions**. Docker built
+`structsmith-fork:editor-threads`; the helper smoke command exercised that image
+successfully. Launcher help/version also returned successfully. Focused source
+coverage includes
+`tests/auto-layout-regression.test.ts`, `tests/boundary-movement.test.ts`,
+`tests/view-comments.test.ts`, `packages/mcp/src/comments.test.ts`,
+`apps/web/src/features/canvas/relationship-drag.test.ts` and
+`apps/web/src/routes/sidebarShortcut.test.ts`. Current exploration contracts also
+have `tests/editor-exploration-integration.test.ts`, `tests/exploration.test.ts`,
+`tests/dependencies.test.ts`, `tests/scenarios.test.ts` and
+`apps/web/src/features/command/shortcuts.test.ts`. Automated checks protect contracts
+and geometry; they do not replace rendered visual inspection. To repeat the
+focused comment contract checks:
+
+```sh
+bun test packages/mcp/src/comments.test.ts packages/mcp/src/server.test.ts tests/view-comments.test.ts
+```
+
+The real MCP CRUD probe was a throwaway `bun -e` Client/StreamableHTTPClientTransport
+invocation from `packages/mcp`, not a retained script. It created a temporary Home
+pin and asserted tool results across comment/reply CRUD and resolution. Existing
+Executor `comment_list`/`comment_reply_create` exercised the temporary workspace
+copy through the configured connection, rather than replacing that connection.
+
+## Product limits and coverage gaps
+
+- Sidebars start hidden on reload; width restoration is session-only. The status
+  overlay resets on reload. Hidden defaults and the separated legend have current
+  producer browser evidence above.
+- Status uses exact `status:live` and `status:planned` tags. It does not audit
+  deployment or enabled flags; Live only can hide neutral/mixed navigation groups.
+- Drill-down opens saved scoped views; the chooser can remember a preferred landing
+  view for a placement. Inline expansion is temporary and limited to four visible
+  levels. Preferred destinations have producer reload evidence; selective nested expansion
+  and its four-level cap have October 8 browser acceptance above.
+- Merged connectors share presentation from the first represented relationship.
+  Route and label edits update every represented relationship in that view.
+  Reconnecting is available only when the connection is unambiguous.
+- Labels snap to any connector segment and remain horizontal, including on
+  vertical legs. Auto-layout clears manual geometry and may still need
+  deliberate lanes, offsets or membership changes for a complex graph.
+- Canvas comments can attach to saved cards and follow their position; free pins
+  remain at canvas coordinates. The thread list searches original text and replies.
+  Source includes thread/reply CRUD, resolve/reopen and Show resolved, dedicated
+  MCP tools and batch operations. CRUD, reload, resolve and guarded deletion
+  have actual browser evidence above. Thread popovers are nonmodal and anchored
+  beside the pin, with a reply composer and per-message menus.
+  Author identity/ownership, mentions, notifications, reactions and pin clustering
+  are absent. Timestamps and edited labels are present for new messages; unread
+  markers are local browser state, not cross-client delivery. Legacy notes default to
+  unresolved threads with no replies.
+- Snapshot undo/redo and revision guards are present. They are not proposal
+  branches, semantic merge or a visual before/after comparison.
+- A measured 900x700 Chrome viewport has October 8 fit/toolbar acceptance above.
+  Mobile/touch behavior and narrower screens remain **unverified**. An earlier
+  fallback viewport override did not alter its 1280-pixel rendered width.
+- A complete browser network trace is **unverified**: the timing API was unavailable
+  (`performance` was undefined in the browser's read-only scope). Actual HTTP MCP,
+  health and local-helper smoke checks supplied server/network evidence; they are
+  not a substitute for a full browser request trace.
+- Section title edit, native movement/resize, membership, fit and locked-member
+  refusal have October 8 browser evidence above. Section hide/show controls and
+  exhaustive keyboard resizing are outside the selected scope. Existing locking
+  behavior is retained.
+- Every nested chooser path and network/permission save failures need separate
+  end-to-end coverage. Stale thread deletion and reply-edit conflicts preserve
+  saved data in the exercised cases; that does not cover every failure path.
+  Native OS color-picker interaction, identity/ownership and exports were not
+  accepted by this audit.
+  Unit coverage of a path is not browser acceptance of it.
+
+Earlier React, settings and group-movement reports are historical bugs. Do not
+call them current defects without a new failing browser reproduction.
+
+## Core IcePanel comparison
+
+Read-only comparison against official docs fetched live on 2026-10-07 with
+`search_service_web_run`, plus the fork's current source. **Priorities are
+[INFERENCE] for these portal diagrams**, not promises of full IcePanel parity.
+Implementation state below describes current source, not browser acceptance.
+The priority numbering records the earlier review and is not a new work queue.
+
+`gh issue list -R noamsiegel/StructSmith --state all --limit 100` reports that the
+fork has issues disabled. The upstream queue has open [#102](https://github.com/dziksu/StructSmith/issues/102)
+(presentation), [#103](https://github.com/dziksu/StructSmith/issues/103) (endpoint
+sides), [#104](https://github.com/dziksu/StructSmith/issues/104) (labels),
+[#105](https://github.com/dziksu/StructSmith/issues/105) (workflow semantics), and
+[#106](https://github.com/dziksu/StructSmith/issues/106) (milestone timelines).
+Closed [#54](https://github.com/dziksu/StructSmith/issues/54) and
+[#66](https://github.com/dziksu/StructSmith/issues/66) cover multi-select/copy and
+Mermaid import. This audit creates no issues and does not duplicate that work.
+Open upstream status does not mean a capability is missing from this fork.
+
+Already present: reusable semantic objects, scoped drill-down with Back and
+breadcrumbs, titled auto-sizing groups, saved connector presentation, snapshots,
+revision guards, global search, live/planned status overlays and native workflow
+kinds. Thread/reply CRUD, resolve/reopen and dedicated comment MCP tools also
+have recorded browser/HTTP acceptance above.
+
+| Priority | Useful capability | Fork state and smallest next step | Official and local evidence |
+| --- | --- | --- | --- |
+| 1 | Preferred detail landing view | **Implemented in source:** chooser can remember a destination for the active view's placement; stale preferences fall back to normal discovery. Producer remembered/reload evidence above. | [Custom zooming](https://docs.icepanel.io/core-features/diagramming); [DetailViewDialog.tsx](../apps/web/src/features/navigation/DetailViewDialog.tsx), [detail-views.ts](../packages/domain/src/detail-views.ts). |
+| 2 | Dependencies and where used | **Implemented in source:** inspector derives incoming/outgoing relationships, descendant context and containing-view links. Producer inspected navigation anchors. | [Dependencies](https://docs.icepanel.io/core-features/dependencies-view); [DependencyPanel.tsx](../apps/web/src/features/inspector/DependencyPanel.tsx). |
+| 3 | Tag focus with connected context | **Implemented in source:** matching objects/connections keep muted immediate neighbors and parent context. Producer exercised Important tag with a merged relationship. | [Tag focus](https://docs.icepanel.io/visual-storytelling/perspective-tags); [tagFocus.ts](../apps/web/src/features/canvas/tagFocus.ts). |
+| 4 | Ordered scenario walkthrough | **Implemented in source:** named sequences reference existing elements/connections in the view, optional arrival connections and Next/Back/Stop playback. Producer CRUD/reload/playback/stale-repair evidence above. | [Flows](https://docs.icepanel.io/visual-storytelling/flows); [ScenarioPanel.tsx](../apps/web/src/features/scenarios/ScenarioPanel.tsx), [scenarios.test.ts](../tests/scenarios.test.ts). |
+| 5 | Selective expansion in place | **Implemented in source:** temporary expansion of existing children, limited to four visible levels; saved view membership is retained. Nested four-level browser acceptance above. | [External-scope expansion](https://docs.icepanel.io/core-features/diagramming); [InlineExpansion.tsx](../apps/web/src/features/navigation/InlineExpansion.tsx), [exploration.test.ts](../tests/exploration.test.ts). |
+| 6 | Multiple attachment slots | **Implemented in source:** three source/target attachment slots per side, defaulting to center. Browser save/Undo/reload acceptance above. | [Connection points](https://docs.icepanel.io/core-features/diagramming); [ConnectionHandles.tsx](../apps/web/src/features/canvas/ConnectionHandles.tsx), [RelationshipPresentationEditor.tsx](../apps/web/src/features/inspector/RelationshipPresentationEditor.tsx). |
+| 7 | Implementation and runbook links | **Implemented in source:** element/relationship property fields with validated HTTP(S) Open actions. Producer inspected resource anchors; external navigation acceptance remains pending. | [Object details](https://docs.icepanel.io/core-features/diagramming); [ResourceLinks.tsx](../apps/web/src/features/inspector/ResourceLinks.tsx). |
+
+Use the existing command palette for search, boundaries for groups and snapshots
+for rollback. [Drafts](https://docs.icepanel.io/future-state-design/drafts) and
+[version comparison](https://docs.icepanel.io/future-state-design/versioning) are
+separate capabilities, but have lower value here until simultaneous proposals
+need isolated changes and review. Tags continue to describe status in one
+functional hierarchy. Milestone timeline work is already tracked in #106.
+
+## Reference documentation
+
+These links underpin the optional ideas, not claims that the fork implements them:
+
+- [IcePanel diagramming](https://docs.icepanel.io/core-features/diagramming),
+  [flows](https://docs.icepanel.io/visual-storytelling/flows), and
+  [groups](https://docs.icepanel.io/core-features/modelling/groups).
+- [Tags](https://docs.icepanel.io/visual-storytelling/perspective-tags) and
+  [dependencies](https://docs.icepanel.io/core-features/dependencies-view).
+- [Drafts](https://docs.icepanel.io/future-state-design/drafts) and
+  [versioning](https://docs.icepanel.io/future-state-design/versioning).
+- [FigJam canvas gestures](https://help.figma.com/hc/en-us/articles/1500004414582-Pan-and-zoom-in-FigJam).

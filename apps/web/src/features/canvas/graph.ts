@@ -3,7 +3,11 @@ import type {
   ArchitectureElement,
   ArchitectureRecord,
   ArchitectureRelationship,
+  ControlPoint,
+  SectionFrame,
   ViewDetail,
+  ViewElement,
+  ViewRelationship,
 } from "@structsmith/contracts";
 import {
   DEFAULT_NODE_HEIGHT,
@@ -13,28 +17,43 @@ import {
   resolveRelationshipsForView,
 } from "@structsmith/domain";
 import type { Edge, Node } from "@xyflow/react";
+import {
+  type ImplementationStatus,
+  relationshipStatus,
+  type StatusOverlay,
+  statusFromTags,
+} from "./statusOverlay";
 
+export const CANVAS_FIT_PADDING = { top: "48px", bottom: "96px", x: 0.2 } as const;
 export const NODE_WIDTH = DEFAULT_NODE_WIDTH;
 export const NODE_HEIGHT = DEFAULT_NODE_HEIGHT;
 export const BOUNDARY_PADDING = 28;
 export const BOUNDARY_HEADER = 36;
 
 export interface ElementNodeData extends Record<string, unknown> {
+  color?: string;
   element: ArchitectureElement;
   severity: "high" | "critical" | null;
   locked: boolean;
   showFullTitles: boolean;
   showDescriptions: boolean;
   minimumHeight: number;
+  status: ImplementationStatus | null;
 }
 
 export interface BoundaryNodeData extends Record<string, unknown> {
+  color?: string;
   name: string;
   layer?: ArchitectureBoundary["layer"];
   kind?: ArchitectureElement["kind"];
   classification: "public" | "restricted" | "private" | null;
   boundaryId?: string;
   elementId?: string;
+  section?: boolean;
+  onRename?: (name: string) => void;
+  onFit?: () => void;
+  onResize?: (frame: SectionFrame) => void;
+  onResizePreview?: (frame: SectionFrame) => void;
 }
 
 export interface RelationshipEdgeData extends Record<string, unknown> {
@@ -46,6 +65,12 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
   count: number;
   routing: ViewDetail["settings"]["relationshipRouting"];
   showLabel: boolean;
+  placement?: ViewRelationship;
+  status: ImplementationStatus | null;
+  relationshipIds?: string[];
+  tags: string[];
+  onControlPointsChange?: (points: ControlPoint[]) => Promise<void>;
+  onLabelOffsetChange?: (relationshipId: string, offset: ControlPoint) => Promise<void>;
 }
 
 export type FlowNode = Node<ElementNodeData, "element"> | Node<BoundaryNodeData, "boundary">;
@@ -56,6 +81,7 @@ interface BuildInput {
   elements: readonly ArchitectureElement[];
   relationships: readonly ArchitectureRelationship[];
   records: readonly ArchitectureRecord[];
+  statusOverlay?: StatusOverlay;
 }
 
 /** Risk indicators stay subtle — the canvas must not turn into a christmas tree. */
@@ -79,14 +105,25 @@ function riskSeverities(records: readonly ArchitectureRecord[]): Map<string, "hi
  * never owns data — it renders what a view declares visible, where the view
  * says it is.
  */
-export function buildGraph({ view, elements, relationships, records }: BuildInput): {
+export function buildGraph({
+  view,
+  elements,
+  relationships,
+  records,
+  statusOverlay = "off",
+}: BuildInput): {
   nodes: FlowNode[];
   edges: FlowEdge[];
   hiddenCount: number;
 } {
   const byId = new Map(elements.map((element) => [element.id, element]));
   const placements = view.elements.filter((entry) => byId.has(entry.elementId));
-  const visible = placements.filter((entry) => !entry.hidden);
+  const visible = placements.filter(
+    (entry) =>
+      !entry.hidden &&
+      (statusOverlay !== "liveOnly" ||
+        statusFromTags(byId.get(entry.elementId)?.tags ?? []) === "live"),
+  );
   const visibleIds = new Set(visible.map((entry) => entry.elementId));
   const severities = riskSeverities(records);
 
@@ -108,6 +145,7 @@ export function buildGraph({ view, elements, relationships, records }: BuildInpu
         showFullTitles: view.settings.showFullTitles,
         showDescriptions: view.settings.showDescriptions,
         minimumHeight: size.height,
+        status: statusOverlay === "off" ? null : statusFromTags(element.tags),
       },
       // Keep semantic boundaries above the canvas background, relationship
       // paths above their fills, and cards above both.
@@ -118,43 +156,92 @@ export function buildGraph({ view, elements, relationships, records }: BuildInpu
     });
   }
 
+  const relationshipPlacements = new Map(
+    view.relationships.map((entry) => [entry.relationshipId, entry]),
+  );
   const hiddenRelationships = new Set(
     view.relationships.filter((entry) => entry.hidden).map((entry) => entry.relationshipId),
   );
 
   const edges: FlowEdge[] = resolveRelationshipsForView(
     elements,
-    relationships.filter((relationship) => !hiddenRelationships.has(relationship.id)),
+    relationships.filter((relationship) => {
+      if (hiddenRelationships.has(relationship.id)) return false;
+      if (statusOverlay !== "liveOnly") return true;
+      // Filter real endpoints before lifting, so a planned child cannot create a live shortcut.
+      return (
+        relationshipStatus(relationship, byId) === "live" &&
+        statusFromTags(byId.get(relationship.sourceElementId)?.tags ?? []) === "live" &&
+        statusFromTags(byId.get(relationship.targetElementId)?.tags ?? []) === "live"
+      );
+    }),
     visibleIds,
   ).map((edge) => {
     const first = edge.relationships[0] as ArchitectureRelationship;
     const label = edgeLabel(edge);
-    // An implied edge that stands for exactly one relationship is still
-    // unambiguous, so it stays selectable and editable; only a merged edge
-    // (several relationships behind one line) is not.
+    // Merged lines share visual routes; endpoint and semantic edits require one relationship.
     const unambiguous = edge.relationships.length === 1;
+    const firstPlacement = relationshipPlacements.get(first.id);
+    const commonRoute = edge.relationships.every(
+      (item) =>
+        JSON.stringify(relationshipPlacements.get(item.id)?.controlPoints ?? []) ===
+        JSON.stringify(firstPlacement?.controlPoints ?? []),
+    );
+    const placement = unambiguous
+      ? firstPlacement
+      : firstPlacement
+        ? { ...firstPlacement, controlPoints: commonRoute ? firstPlacement.controlPoints : [] }
+        : undefined;
+    const statuses = new Set(edge.relationships.map((item) => relationshipStatus(item, byId)));
+    const status =
+      statusOverlay === "off" ? null : statuses.size > 1 ? "conflict" : ([...statuses][0] ?? null);
     return {
       id: edge.id,
       type: "relationship",
       source: edge.sourceElementId,
       target: edge.targetElementId,
-      sourceHandle: view.settings.autoLayoutDirection === "TB" ? "b" : undefined,
-      targetHandle: view.settings.autoLayoutDirection === "TB" ? "t" : undefined,
-      selectable: unambiguous,
+      sourceHandle: sourceHandleFor(
+        relationshipPlacements.get(first.id)?.presentation?.sourceSide,
+        view.settings.autoLayoutDirection,
+        relationshipPlacements.get(first.id)?.presentation?.sourceSlot,
+      ),
+      targetHandle: targetHandleFor(
+        relationshipPlacements.get(first.id)?.presentation?.targetSide,
+        view.settings.autoLayoutDirection,
+        relationshipPlacements.get(first.id)?.presentation?.targetSlot,
+      ),
+      selectable: true,
       deletable: unambiguous,
+      reconnectable: unambiguous,
       zIndex: 10,
       data: {
         relationship: first,
+        placement,
+        relationshipIds: edge.relationships.map((item) => item.id),
+        tags: [...new Set(edge.relationships.flatMap((item) => item.tags))],
         implied: edge.implied,
         label,
         count: edge.relationships.length,
         routing: view.settings.relationshipRouting,
         showLabel: view.settings.showRelationshipLabels,
+        status,
       },
     };
   });
 
   return { nodes, edges, hiddenCount: placements.length - visible.length };
+}
+
+export function sourceHandleFor(side: string | null | undefined, direction: "LR" | "TB", slot = 1) {
+  const resolved = side ?? (direction === "TB" ? "bottom" : "right");
+  const base = { left: "source-l", top: "source-t", bottom: "b", right: undefined }[resolved];
+  return slot === 1 ? base : `${base ?? "source-r"}-${slot}`;
+}
+
+export function targetHandleFor(side: string | null | undefined, direction: "LR" | "TB", slot = 1) {
+  const resolved = side ?? (direction === "TB" ? "top" : "left");
+  const base = { right: "target-r", bottom: "target-b", top: "t", left: undefined }[resolved];
+  return slot === 1 ? base : `${base ?? "target-l"}-${slot}`;
 }
 
 export interface BoundarySource {
@@ -199,6 +286,7 @@ export function computeBoundaries(
   elementsById: ReadonlyMap<string, ArchitectureElement>,
   enabled: boolean,
   nestedBoundaries: readonly NestedBoundarySource[] = [],
+  sectionFrames: Readonly<Record<string, SectionFrame>> = {},
 ): FlowNode[] {
   if (!enabled) return [];
 
@@ -235,25 +323,43 @@ export function computeBoundaries(
     }
   }
 
+  for (const frameId of Object.keys(sectionFrames)) {
+    const parentId = frameId.slice("boundary:".length);
+    if (
+      elementsById.get(parentId)?.kind === "custom" &&
+      !present.has(parentId) &&
+      !groups.has(parentId)
+    )
+      groups.set(parentId, []);
+  }
   const nodes: FlowNode[] = [];
   for (const [parentId, children] of groups) {
     const parent = elementsById.get(parentId);
-    if (!parent || children.length === 0) continue;
+    if (!parent || (children.length === 0 && !sectionFrames[`boundary:${parentId}`])) continue;
 
     const minX = Math.min(...children.map((child) => child.x));
     const minY = Math.min(...children.map((child) => child.y));
     const maxX = Math.max(...children.map((child) => child.x + child.width));
     const maxY = Math.max(...children.map((child) => child.y + child.height));
 
+    const saved = parent.kind === "custom" ? sectionFrames[`boundary:${parentId}`] : undefined;
+    const frame = saved ?? {
+      x: minX - BOUNDARY_PADDING,
+      y: minY - BOUNDARY_PADDING - BOUNDARY_HEADER,
+      width: maxX - minX + BOUNDARY_PADDING * 2,
+      height: maxY - minY + BOUNDARY_PADDING * 2 + BOUNDARY_HEADER,
+    };
     nodes.push({
       id: `boundary:${parentId}`,
       type: "boundary",
-      position: { x: minX - BOUNDARY_PADDING, y: minY - BOUNDARY_PADDING - BOUNDARY_HEADER },
-      width: maxX - minX + BOUNDARY_PADDING * 2,
-      height: maxY - minY + BOUNDARY_PADDING * 2 + BOUNDARY_HEADER,
+      position: { x: frame.x, y: frame.y },
+      width: frame.width,
+      height: frame.height,
+      measured: { width: frame.width, height: frame.height },
       data: {
         name: parent.name,
         kind: parent.kind,
+        section: parent.kind === "custom",
         classification: parent.external ? "public" : null,
         elementId: parent.id,
       },
@@ -264,11 +370,7 @@ export function computeBoundaries(
       connectable: false,
       deletable: false,
       zIndex: 0,
-      style: boundaryStyle(
-        parent.external ? "public" : null,
-        maxX - minX + BOUNDARY_PADDING * 2,
-        maxY - minY + BOUNDARY_PADDING * 2 + BOUNDARY_HEADER,
-      ),
+      style: boundaryStyle(parent.external ? "public" : null, frame.width, frame.height),
     });
   }
   return nodes;
@@ -280,6 +382,7 @@ export function computeSemanticBoundaries(
   boundaries: readonly ArchitectureBoundary[],
   layer: ArchitectureBoundary["layer"],
   enabled: boolean,
+  sectionFrames: Readonly<Record<string, SectionFrame>> = {},
 ): FlowNode[] {
   if (!enabled) return [];
   const active = boundaries.filter((boundary) => boundary.layer === layer);
@@ -295,6 +398,13 @@ export function computeSemanticBoundaries(
     if (cached) return cached;
     if (visiting.has(boundary.id)) return null;
     visiting.add(boundary.id);
+    const saved = boundary.kind === "custom" ? sectionFrames[`boundary:${boundary.id}`] : undefined;
+    if (saved) {
+      const box = { id: boundary.id, ...saved };
+      boxes.set(boundary.id, box);
+      visiting.delete(boundary.id);
+      return box;
+    }
     const contents: BoundarySource[] = boundary.elementIds
       .map((id) => sourceById.get(id))
       .filter((source): source is BoundarySource => Boolean(source));
@@ -341,11 +451,13 @@ export function computeSemanticBoundaries(
         position: { x: box.x, y: box.y },
         width: box.width,
         height: box.height,
+        measured: { width: box.width, height: box.height },
         data: {
           name: boundary.name,
           layer: boundary.layer,
           classification: boundary.classification,
           boundaryId: boundary.id,
+          section: boundary.kind === "custom",
         },
         draggable: false,
         // Boundary boxes are view-owned containers, not blocks in a group
@@ -369,34 +481,16 @@ export function computeCanvasBoundaries(
   boundaries: readonly ArchitectureBoundary[],
   layer: ArchitectureBoundary["layer"],
   enabled: boolean,
+  sectionFrames: Readonly<Record<string, SectionFrame>> = {},
 ): { parentBoundaries: FlowNode[]; semanticBoundaries: FlowNode[] } {
-  const semanticBoundaries = computeSemanticBoundaries(sources, boundaries, layer, enabled);
+  const semanticBoundaries = computeSemanticBoundaries(
+    sources,
+    boundaries,
+    layer,
+    enabled,
+    sectionFrames,
+  );
   if (!enabled) return { parentBoundaries: [], semanticBoundaries };
-
-  const active = boundaries.filter((boundary) => boundary.layer === layer);
-  const children = new Map<string, ArchitectureBoundary[]>();
-  for (const boundary of active) {
-    if (!boundary.parentBoundaryId) continue;
-    const bucket = children.get(boundary.parentBoundaryId);
-    if (bucket) bucket.push(boundary);
-    else children.set(boundary.parentBoundaryId, [boundary]);
-  }
-
-  const members = new Map<string, Set<string>>();
-  const memberIds = (boundaryId: string, visiting = new Set<string>()): Set<string> => {
-    const cached = members.get(boundaryId);
-    if (cached) return cached;
-    if (visiting.has(boundaryId)) return new Set();
-    visiting.add(boundaryId);
-    const boundary = active.find((candidate) => candidate.id === boundaryId);
-    const result = new Set(boundary?.elementIds ?? []);
-    for (const child of children.get(boundaryId) ?? []) {
-      for (const elementId of memberIds(child.id, visiting)) result.add(elementId);
-    }
-    visiting.delete(boundaryId);
-    members.set(boundaryId, result);
-    return result;
-  };
 
   const nestedBoundaries = semanticBoundaries.flatMap((node): NestedBoundarySource[] => {
     const boundaryId = node.data.boundaryId;
@@ -408,16 +502,76 @@ export function computeCanvasBoundaries(
         y: node.position.y,
         width: node.width,
         height: node.height,
-        elementIds: [...memberIds(String(boundaryId))],
+        elementIds: [
+          ...boundaryMemberIds({ boundaryId: String(boundaryId) }, elementsById, boundaries, layer),
+        ],
       },
     ];
   });
 
   return {
-    parentBoundaries: computeBoundaries(sources, elementsById, enabled, nestedBoundaries),
+    parentBoundaries: computeBoundaries(
+      sources,
+      elementsById,
+      enabled,
+      nestedBoundaries,
+      sectionFrames,
+    ),
     semanticBoundaries,
   };
 }
 
 export const isBoundaryId = (id: string): boolean => id.startsWith("boundary:");
 export const boundaryElementId = (id: string): string => id.slice("boundary:".length);
+
+/** Resolve membership, never the unrelated cards that happen to share a rectangle. */
+export function boundaryMemberIds(
+  data: Pick<BoundaryNodeData, "elementId" | "boundaryId">,
+  elementsById: ReadonlyMap<string, ArchitectureElement>,
+  boundaries: readonly ArchitectureBoundary[],
+  layer: ArchitectureBoundary["layer"],
+): Set<string> {
+  const members = new Set<string>();
+  if (data.boundaryId) {
+    const visited = new Set<string>();
+    const collect = (id: string): void => {
+      if (visited.has(id)) return;
+      visited.add(id);
+      const boundary = boundaries.find((item) => item.id === id && item.layer === layer);
+      if (!boundary) return;
+      for (const elementId of boundary.elementIds) members.add(elementId);
+      for (const child of boundaries) {
+        if (child.parentBoundaryId === id && child.layer === layer) collect(child.id);
+      }
+    };
+    collect(data.boundaryId);
+  } else if (data.elementId) {
+    for (const element of elementsById.values()) {
+      let parentId = element.parentId;
+      const visited = new Set<string>();
+      while (parentId && !visited.has(parentId)) {
+        if (parentId === data.elementId) {
+          members.add(element.id);
+          break;
+        }
+        visited.add(parentId);
+        parentId = elementsById.get(parentId)?.parentId ?? null;
+      }
+    }
+  }
+  return members;
+}
+
+/** A locked member holds the entire group in place, including hidden members. */
+export function boundaryMoveEntries(
+  placements: readonly Pick<ViewElement, "elementId" | "x" | "y" | "locked">[],
+  memberIds: ReadonlySet<string>,
+  delta: { x: number; y: number },
+): { elementId: string; x: number; y: number }[] {
+  if (!Number.isFinite(delta.x) || !Number.isFinite(delta.y)) return [];
+  const members = placements.filter((entry) => memberIds.has(entry.elementId));
+  if (members.some((entry) => entry.locked)) return [];
+  const x = Math.round(delta.x);
+  const y = Math.round(delta.y);
+  return members.map((entry) => ({ elementId: entry.elementId, x: entry.x + x, y: entry.y + y }));
+}

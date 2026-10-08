@@ -1,5 +1,10 @@
 import { expect, test } from "bun:test";
-import { detailViewElementIds, detailViewKind, detailViewsFor } from "@structsmith/domain";
+import {
+  canOpenElementDetails,
+  detailViewElementIds,
+  detailViewKind,
+  detailViewsFor,
+} from "@structsmith/domain";
 import {
   emptyNavigation,
   returnToView,
@@ -29,6 +34,9 @@ test("detail navigation matches both scope and level, excludes the current view,
     const create = (name: string) =>
       services.views.create(workspace.id, { kind: "container", scopeElementId: system.id, name })
         .result;
+    expect(
+      canOpenElementDetails(system, services.elements.list(workspace.id), [overview], overview.id),
+    ).toBe(true);
     const second = create("Z view");
     const first = create("A view");
     const components = services.views.create(workspace.id, {
