@@ -88,7 +88,7 @@ test("sections keep manual bounds after objects move out and empty sections stay
   }
 });
 
-test("dragging adds, removes and transfers section membership, including legacy custom parents", () => {
+test("dragging transfers visual Section membership without changing semantic parents", () => {
   const { services, close } = createTestContext();
   try {
     const workspace = createWorkspace(services);
@@ -169,9 +169,9 @@ test("dragging adds, removes and transfers section membership, including legacy 
     expect(
       services.boundaries.list(view.id).find((item) => item.id === first.id)?.elementIds,
     ).toEqual([card.id]);
-    expect(
-      services.elements.list(workspace.id).find((item) => item.id === card.id)?.parentId,
-    ).toBeNull();
+    expect(services.elements.list(workspace.id).find((item) => item.id === card.id)?.parentId).toBe(
+      legacy.id,
+    );
     apply(800);
     expect(
       services.boundaries.list(view.id).find((item) => item.id === first.id)?.elementIds,

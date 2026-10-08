@@ -287,6 +287,7 @@ export function computeBoundaries(
   enabled: boolean,
   nestedBoundaries: readonly NestedBoundarySource[] = [],
   sectionFrames: Readonly<Record<string, SectionFrame>> = {},
+  scopeElementId?: string | null,
 ): FlowNode[] {
   if (!enabled) return [];
 
@@ -295,7 +296,7 @@ export function computeBoundaries(
 
   for (const source of sources) {
     const parentId = elementsById.get(source.id)?.parentId;
-    if (!parentId || present.has(parentId)) continue;
+    if (!parentId || parentId === scopeElementId || present.has(parentId)) continue;
     const bucket = groups.get(parentId);
     if (bucket) bucket.push(source);
     else groups.set(parentId, [source]);
@@ -310,7 +311,10 @@ export function computeBoundaries(
         .map((elementId) => elementsById.get(elementId)?.parentId)
         .filter(
           (parentId): parentId is string =>
-            parentId !== null && parentId !== undefined && !present.has(parentId),
+            parentId !== null &&
+            parentId !== undefined &&
+            parentId !== scopeElementId &&
+            !present.has(parentId),
         ),
     );
     for (const parentId of parentIds) {
@@ -359,7 +363,7 @@ export function computeBoundaries(
       data: {
         name: parent.name,
         kind: parent.kind,
-        section: parent.kind === "custom",
+        section: false,
         classification: parent.external ? "public" : null,
         elementId: parent.id,
       },
@@ -383,6 +387,7 @@ export function computeSemanticBoundaries(
   layer: ArchitectureBoundary["layer"],
   enabled: boolean,
   sectionFrames: Readonly<Record<string, SectionFrame>> = {},
+  subprocessFrames: readonly NestedBoundarySource[] = [],
 ): FlowNode[] {
   if (!enabled) return [];
   const active = boundaries.filter((boundary) => boundary.layer === layer);
@@ -398,9 +403,38 @@ export function computeSemanticBoundaries(
     if (cached) return cached;
     if (visiting.has(boundary.id)) return null;
     visiting.add(boundary.id);
+    const members = new Set(boundary.elementIds);
+    const collectMembers = (id: string, seen = new Set<string>()): void => {
+      if (seen.has(id)) return;
+      seen.add(id);
+      for (const child of active.filter((item) => item.parentBoundaryId === id)) {
+        for (const member of child.elementIds) members.add(member);
+        collectMembers(child.id, seen);
+      }
+    };
+    collectMembers(boundary.id);
     const saved = boundary.kind === "custom" ? sectionFrames[`boundary:${boundary.id}`] : undefined;
     if (saved) {
-      const box = { id: boundary.id, ...saved };
+      const enclosing = subprocessFrames.filter((frame) =>
+        frame.elementIds.some((id) => members.has(id)),
+      );
+      const x = Math.min(saved.x, ...enclosing.map((frame) => frame.x - BOUNDARY_PADDING));
+      const y = Math.min(saved.y, ...enclosing.map((frame) => frame.y - BOUNDARY_PADDING));
+      const box = {
+        id: boundary.id,
+        x,
+        y,
+        width:
+          Math.max(
+            saved.x + saved.width,
+            ...enclosing.map((frame) => frame.x + frame.width + BOUNDARY_PADDING),
+          ) - x,
+        height:
+          Math.max(
+            saved.y + saved.height,
+            ...enclosing.map((frame) => frame.y + frame.height + BOUNDARY_PADDING),
+          ) - y,
+      };
       boxes.set(boundary.id, box);
       visiting.delete(boundary.id);
       return box;
@@ -408,6 +442,10 @@ export function computeSemanticBoundaries(
     const contents: BoundarySource[] = boundary.elementIds
       .map((id) => sourceById.get(id))
       .filter((source): source is BoundarySource => Boolean(source));
+    if (boundary.kind === "custom")
+      contents.push(
+        ...subprocessFrames.filter((frame) => frame.elementIds.some((id) => members.has(id))),
+      );
     for (const child of active.filter((item) => item.parentBoundaryId === boundary.id)) {
       const childBox = boxFor(child, visiting);
       if (childBox) contents.push(childBox);
@@ -467,7 +505,7 @@ export function computeSemanticBoundaries(
         deletable: false,
         // Parent-element frames use zero. Semantic boundaries sit above them,
         // and each nested semantic level sits above its parent.
-        zIndex: depth + 1,
+        zIndex: boundary.kind === "custom" ? depth - 10 : depth + 1,
         style: boundaryStyle(boundary.classification, box.width, box.height),
       },
     ];
@@ -482,6 +520,8 @@ export function computeCanvasBoundaries(
   layer: ArchitectureBoundary["layer"],
   enabled: boolean,
   sectionFrames: Readonly<Record<string, SectionFrame>> = {},
+  scopeElementId?: string | null,
+  expandedFrames: readonly NestedBoundarySource[] = [],
 ): { parentBoundaries: FlowNode[]; semanticBoundaries: FlowNode[] } {
   const semanticBoundaries = computeSemanticBoundaries(
     sources,
@@ -492,32 +532,62 @@ export function computeCanvasBoundaries(
   );
   if (!enabled) return { parentBoundaries: [], semanticBoundaries };
 
-  const nestedBoundaries = semanticBoundaries.flatMap((node): NestedBoundarySource[] => {
-    const boundaryId = node.data.boundaryId;
-    if (!boundaryId || node.width === undefined || node.height === undefined) return [];
-    return [
-      {
-        id: node.id,
-        x: node.position.x,
-        y: node.position.y,
-        width: node.width,
-        height: node.height,
-        elementIds: [
-          ...boundaryMemberIds({ boundaryId: String(boundaryId) }, elementsById, boundaries, layer),
-        ],
-      },
-    ];
-  });
+  // Sections own the visual grouping of their members; do not invent hidden
+  // model-parent frames around those same members.
+  const sectionMembers = new Set(
+    boundaries
+      .filter((boundary) => boundary.kind === "custom" && boundary.layer === layer)
+      .flatMap((boundary) => [
+        ...boundaryMemberIds({ boundaryId: boundary.id }, elementsById, boundaries, layer),
+      ]),
+  );
 
+  const nestedBoundaries = semanticBoundaries
+    .filter((node) => !node.data.section)
+    .flatMap((node): NestedBoundarySource[] => {
+      const boundaryId = node.data.boundaryId;
+      if (!boundaryId || node.width === undefined || node.height === undefined) return [];
+      const members = [
+        ...boundaryMemberIds({ boundaryId: String(boundaryId) }, elementsById, boundaries, layer),
+      ];
+      if (members.some((id) => sectionMembers.has(id))) return [];
+      return [
+        {
+          id: node.id,
+          x: node.position.x,
+          y: node.position.y,
+          width: node.width,
+          height: node.height,
+          elementIds: [
+            ...boundaryMemberIds(
+              { boundaryId: String(boundaryId) },
+              elementsById,
+              boundaries,
+              layer,
+            ),
+          ],
+        },
+      ];
+    });
+
+  const parentBoundaries = computeBoundaries(
+    sources.filter((source) => !sectionMembers.has(source.id)),
+    elementsById,
+    enabled,
+    nestedBoundaries,
+    sectionFrames,
+    scopeElementId,
+  ).filter((node) => !expandedFrames.some((frame) => frame.id === node.data.elementId));
   return {
-    parentBoundaries: computeBoundaries(
+    parentBoundaries,
+    semanticBoundaries: computeSemanticBoundaries(
       sources,
-      elementsById,
+      boundaries,
+      layer,
       enabled,
-      nestedBoundaries,
       sectionFrames,
+      expandedFrames,
     ),
-    semanticBoundaries,
   };
 }
 

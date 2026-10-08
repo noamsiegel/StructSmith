@@ -43,7 +43,7 @@ describe("semantic boundaries", () => {
     }
   });
 
-  test("nests semantic boundary headers inside a derived parent frame", () => {
+  test("Sections organize visible children independently of hidden model frames", () => {
     const { services, close } = createTestContext();
     try {
       const workspace = createWorkspace(services);
@@ -102,13 +102,14 @@ describe("semantic boundaries", () => {
       );
       if (!parent || !clientFrame || !mobileFrame) throw new Error("Missing nested boundaries");
 
-      expect(clientFrame.position.x - parent.position.x).toBe(BOUNDARY_PADDING);
-      expect(clientFrame.position.y - parent.position.y).toBe(BOUNDARY_PADDING + BOUNDARY_HEADER);
       expect(mobileFrame.position.x - clientFrame.position.x).toBe(BOUNDARY_PADDING);
       expect(mobileFrame.position.y - clientFrame.position.y).toBe(
         BOUNDARY_PADDING + BOUNDARY_HEADER,
       );
-      expect([parent.zIndex, clientFrame.zIndex, mobileFrame.zIndex]).toEqual([0, 1, 2]);
+      expect(parent.position.x).toBeGreaterThanOrEqual(
+        clientFrame.position.x + (clientFrame.width ?? 0),
+      );
+      expect([clientFrame.zIndex, parent.zIndex, mobileFrame.zIndex]).toEqual([-10, 0, 2]);
     } finally {
       close();
     }

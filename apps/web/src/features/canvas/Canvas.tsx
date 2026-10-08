@@ -485,20 +485,7 @@ export function Canvas({
           nestedFrameIds: new Set(
             dragSectionNodes.current
               .filter((candidate) => {
-                const candidateMembers = boundaryMemberIds(
-                  {
-                    boundaryId: candidate.data.boundaryId as string | undefined,
-                    elementId: candidate.data.elementId as string | undefined,
-                  },
-                  elementsById,
-                  boundaries,
-                  view.settings.boundaryLayer,
-                );
-                if (
-                  candidateMembers.size > 0 &&
-                  [...candidateMembers].every((elementId) => members.has(elementId))
-                )
-                  return true;
+                if (!node.data.section) return false;
                 let parent = candidate.data.boundaryId
                   ? boundaries.find((item) => item.id === candidate.data.boundaryId)
                   : undefined;
@@ -1272,6 +1259,27 @@ export function Canvas({
           ? (node.height ?? (node.data.minimumHeight as number | undefined) ?? NODE_HEIGHT)
           : (node.measured?.height ?? node.height ?? NODE_HEIGHT),
       }));
+    const expandedFrames = inlineFrames(sources, elementsById, expansion.expandedElementIds).map(
+      (frame) => ({
+        ...frame,
+        selected: selection.type === "element" && selection.id === frame.id,
+      }),
+    );
+    const expandedSources = expandedFrames.map((frame) => ({
+      id: frame.id,
+      ...frame.position,
+      width: frame.width ?? 0,
+      height: frame.height ?? 0,
+      elementIds: [
+        frame.id,
+        ...boundaryMemberIds(
+          { elementId: frame.id },
+          elementsById,
+          boundaries,
+          view.settings.boundaryLayer,
+        ),
+      ],
+    }));
     const computedBoundaries = computeCanvasBoundaries(
       sources,
       elementsById,
@@ -1279,6 +1287,8 @@ export function Canvas({
       view.settings.boundaryLayer,
       view.settings.showBoundaries,
       sectionFrames,
+      view.scopeElementId,
+      expandedSources,
     );
     // A parent shown as a boundary has no entry in `nodes`, so mirror the
     // selection onto it here.
@@ -1302,7 +1312,9 @@ export function Canvas({
       );
       const placements = view.elements.filter((entry) => members.has(entry.elementId));
       const fitSources = [
-        ...sources,
+        ...sources.map(
+          (source) => expandedSources.find((frame) => frame.id === source.id) ?? source,
+        ),
         ...placements
           .filter((entry) => !sources.some((source) => source.id === entry.elementId))
           .map((entry) => ({
@@ -1393,12 +1405,6 @@ export function Canvas({
         },
       };
     });
-    const expandedFrames = inlineFrames(sources, elementsById, expansion.expandedElementIds).map(
-      (frame) => ({
-        ...frame,
-        selected: selection.type === "element" && selection.id === frame.id,
-      }),
-    );
     const transformed = new Set(expandedFrames.map((frame) => frame.id));
     return applyNodeColors(
       [...frames, ...expandedFrames, ...nodes.filter((node) => !transformed.has(node.id))].map(
@@ -1421,6 +1427,7 @@ export function Canvas({
     applyOperations.mutate,
     t,
     view.id,
+    view.scopeElementId,
     view.settings.sectionFrames,
     view.settings.nodeColors,
     view.settings.showFullTitles,
@@ -1711,6 +1718,13 @@ export function Canvas({
                       id,
                       viewId: view.id,
                       kind: "custom",
+                      parentBoundaryId:
+                        selection.type === "boundary" &&
+                        boundaries.some(
+                          (boundary) => boundary.id === selection.id && boundary.kind === "custom",
+                        )
+                          ? selection.id
+                          : null,
                       layer: view.settings.boundaryLayer,
                       name: t("sections.newName"),
                       elementIds: selectedIds.filter((elementId) =>

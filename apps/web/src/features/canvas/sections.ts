@@ -67,6 +67,7 @@ export function sectionMembershipOperations(
         (frame) =>
           frame.type === "boundary" &&
           frame.data.section &&
+          frame.data.boundaryId &&
           frame.data.elementId !== node.id &&
           contains(
             { ...frame.position, width: frame.width ?? 120, height: frame.height ?? 80 },
@@ -100,15 +101,6 @@ export function sectionMembershipOperations(
         elementIds: [node.id],
         mode: "add",
       });
-    const currentParent = element.parentId ? elements.get(element.parentId) : undefined;
-    if (target?.elementId && target.elementId !== element.parentId)
-      operations.push({
-        op: "updateElement",
-        elementId: node.id,
-        data: { parentId: target.elementId },
-      });
-    else if (!target?.elementId && currentParent?.kind === "custom")
-      operations.push({ op: "updateElement", elementId: node.id, data: { parentId: null } });
   }
   return operations;
 }
