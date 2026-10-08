@@ -2,6 +2,10 @@
 
 Read `CONTRIBUTING.md` for architecture, code style and validation requirements.
 
+For frontend acceptance, use the shared [UI demo workspace](docs/UI_DEMO.md).
+Run `bun run ui:demo` to create it; `--reset` snapshots edits and restores the
+baseline. Add regression cases to its fixture instead of making new QA workspaces.
+
 ## UI library first
 
 - Before creating or changing a UI control, inspect the existing shadcn/Radix

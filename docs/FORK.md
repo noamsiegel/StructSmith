@@ -210,3 +210,4 @@ an untouched original volume to return to upstream.
 
 See [the editor audit](WORKFLOW_EDITOR_AUDIT.md) for verification evidence and
 remaining coverage limits. Exports are outside this editor acceptance scope.
+Use the [shared UI demo](UI_DEMO.md) for repeatable frontend regression checks.

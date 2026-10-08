@@ -38,6 +38,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run scripts/migrate.ts",
     "db:seed": "bun run scripts/seed.ts",
+    "ui:demo": "bun run scripts/seed-ui-demo.ts",
     "mcp:stdio": "bun apps/server/src/mcp-stdio.ts",
     "release": "node scripts/release.ts",
     "docker:local": "bun run apps/server/src/local/index.ts",
