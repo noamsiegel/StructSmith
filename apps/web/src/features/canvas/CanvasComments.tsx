@@ -1,6 +1,11 @@
-import type { ArchitectureOperationInput, ViewDetail } from "@structsmith/contracts";
-import { Panel, useReactFlow, useViewport, ViewportPortal } from "@xyflow/react";
-import { Check, Ellipsis, MessageSquare, Pencil, RotateCcw, Trash2, X } from "lucide-react";
+import type {
+  ArchitectureOperationInput,
+  ViewComment,
+  ViewCommentReply,
+  ViewDetail,
+} from "@structsmith/contracts";
+import { Panel, useNodes, useReactFlow, useViewport, ViewportPortal } from "@xyflow/react";
+import { Check, Ellipsis, MessageSquare, Pencil, RotateCcw, Search, Trash2, X } from "lucide-react";
 import { type RefObject, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -19,12 +24,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip } from "@/components/ui/tooltip";
 import { useApplyOperations, useWorkspace } from "@/hooks/useApi";
+import {
+  commentCanvasPosition,
+  commentContentState,
+  commentMatchesSearch,
+  parseCommentSeen,
+} from "./comment-state";
 
 export function isCommentShortcut(
   event: Pick<KeyboardEvent, "key" | "ctrlKey" | "metaKey" | "altKey" | "shiftKey" | "repeat">,
@@ -50,9 +62,10 @@ export function CanvasComments({
   view: ViewDetail;
   canvasRef: RefObject<HTMLDivElement | null>;
 }) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const flow = useReactFlow();
   const { zoom } = useViewport();
+  const nodes = useNodes();
   const workspace = useWorkspace(workspaceId);
   const command = useApplyOperations(workspaceId);
   const [mode, setMode] = useState(false);
@@ -61,10 +74,63 @@ export function CanvasComments({
     y: number;
     revision: number;
     text: string;
+    elementId?: string;
   } | null>(null);
   const [openedId, setOpenedId] = useState<string | null>(null);
   const opened = view.settings.commentPins.find((pin) => pin.id === openedId);
   const [showResolved, setShowResolved] = useState(false);
+  const [threadsOpen, setThreadsOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const seenKey = `structsmith:comments:seen:${encodeURIComponent(workspaceId)}:${encodeURIComponent(view.id)}`;
+  const [seen, setSeen] = useState<{ key: string; values: Record<string, string> }>({
+    key: seenKey,
+    values: {},
+  });
+  const seenValues = seen.key === seenKey ? seen.values : {};
+  const isUnread = (pin: ViewComment) => seenValues[pin.id] !== commentContentState(pin);
+  const unreadCount = view.settings.commentPins.filter(
+    (pin) => !pin.resolved && isUnread(pin),
+  ).length;
+  const filteredThreads = view.settings.commentPins.filter(
+    (pin) => (!pin.resolved || showResolved) && commentMatchesSearch(pin, query),
+  );
+  const positions = new Map(
+    view.elements.map((entry) => [entry.elementId, { x: entry.x, y: entry.y }]),
+  );
+  for (const node of nodes) {
+    const elementId = typeof node.data?.elementId === "string" ? node.data.elementId : node.id;
+    if (positions.has(elementId))
+      positions.set(
+        elementId,
+        flow.getInternalNode(node.id)?.internals.positionAbsolute ?? node.position,
+      );
+  }
+
+  useEffect(() => {
+    let values = {};
+    try {
+      values = parseCommentSeen(window.localStorage.getItem(seenKey));
+    } catch {
+      /* Local storage may be unavailable in private browsing. */
+    }
+    setSeen({ key: seenKey, values });
+    setOpenedId(null);
+    setThreadsOpen(false);
+    setQuery("");
+  }, [seenKey]);
+
+  useEffect(() => {
+    if (!opened || seen.key !== seenKey) return;
+    const content = commentContentState(opened);
+    if (seen.values[opened.id] === content) return;
+    const values = { ...seen.values, [opened.id]: content };
+    setSeen({ key: seenKey, values });
+    try {
+      window.localStorage.setItem(seenKey, JSON.stringify(values));
+    } catch {
+      /* Keep unread tracking in memory when browser storage is full. */
+    }
+  }, [opened, seen, seenKey]);
   const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
   const [messageDraft, setMessageDraft] = useState<{
     kind: "comment" | "reply" | "newReply";
@@ -76,7 +142,13 @@ export function CanvasComments({
   const draftInput = useRef<HTMLTextAreaElement>(null);
   const threadTitleId = useId();
   const threadDescriptionId = useId();
-  const anchor = flow.flowToScreenPosition(draft ?? opened ?? { x: 0, y: 0 });
+  const anchor = flow.flowToScreenPosition(
+    draft
+      ? commentCanvasPosition(draft, positions)
+      : opened
+        ? commentCanvasPosition(opened, positions)
+        : { x: 0, y: 0 },
+  );
   const dirty = Boolean(draft?.text.trim() || messageDraft?.text.trim());
 
   useEffect(() => {
@@ -145,7 +217,24 @@ export function CanvasComments({
       event.stopPropagation();
       if (event.type !== "click") return;
       const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-      setDraft({ ...point, revision, text: "" });
+      const nodeId = target?.closest(".react-flow__node")?.getAttribute("data-id");
+      const node = nodeId ? flow.getNode(nodeId) : undefined;
+      const elementId = typeof node?.data.elementId === "string" ? node.data.elementId : node?.id;
+      const placement = view.elements.find((entry) => entry.elementId === elementId);
+      const position = node
+        ? (flow.getInternalNode(node.id)?.internals.positionAbsolute ?? node.position)
+        : undefined;
+      setDraft(
+        placement && position
+          ? {
+              x: point.x - position.x,
+              y: point.y - position.y,
+              elementId: placement.elementId,
+              revision,
+              text: "",
+            }
+          : { ...point, revision, text: "" },
+      );
       setMode(false);
       setOpenedId(null);
       setMessageDraft(null);
@@ -158,7 +247,7 @@ export function CanvasComments({
       canvas?.removeEventListener("pointerdown", capture, true);
       canvas?.removeEventListener("click", capture, true);
     };
-  }, [mode, workspace.data, canvasRef, flow]);
+  }, [mode, workspace.data, canvasRef, flow, view.elements]);
 
   const close = () => {
     if (command.isPending) return;
@@ -191,7 +280,7 @@ export function CanvasComments({
         {
           op: "addViewComment",
           viewId: view.id,
-          data: { x: draft.x, y: draft.y, text: draft.text.trim() },
+          data: { x: draft.x, y: draft.y, text: draft.text.trim(), elementId: draft.elementId },
         },
         draft.revision,
         t("comments.added"),
@@ -248,6 +337,39 @@ export function CanvasComments({
       )
     )
       close();
+  };
+
+  const openThread = (pin: ViewComment, focus = false) => {
+    if (dirty || command.isPending) return;
+    setMode(false);
+    setDraft(null);
+    setOpenedId(pin.id);
+    setMessageDraft(null);
+    setConfirmDelete(null);
+    if (focus) {
+      const point = commentCanvasPosition(pin, positions);
+      void flow.setCenter(point.x, point.y, { zoom: Math.max(zoom, 0.75), duration: 250 });
+      setThreadsOpen(false);
+    }
+  };
+  const timestamp = (message: Pick<ViewCommentReply, "createdAt" | "updatedAt">) => {
+    if (!message.createdAt) return null;
+    const edited = Boolean(message.updatedAt && message.updatedAt !== message.createdAt);
+    const value = edited ? message.updatedAt : message.createdAt;
+    if (!value) return null;
+    return (
+      <span className="mt-1 block text-xs text-muted-foreground">
+        <time dateTime={value} title={new Date(value).toLocaleString(i18n.language)}>
+          {new Date(value).toLocaleString(i18n.language, {
+            month: "short",
+            day: "numeric",
+            hour: "numeric",
+            minute: "2-digit",
+          })}
+        </time>
+        {edited && <> · {t("comments.updatedLabel")}</>}
+      </span>
+    );
   };
 
   const messageEditor = () =>
@@ -333,25 +455,115 @@ export function CanvasComments({
 
   return (
     <>
-      <Panel position="bottom-center" data-comment-control className="flex items-center gap-3">
-        <Button
-          ref={postButton}
-          variant={mode ? "default" : "outline"}
-          onClick={() => setMode((value) => !value)}
-          aria-pressed={mode}
-          disabled={!workspace.data || dirty || command.isPending}
-        >
-          <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
-          {t(mode ? "comments.placeHint" : "comments.add")}
-        </Button>
-        <Label className="flex items-center gap-2 rounded bg-background/90 p-2 text-xs">
-          <Switch
-            checked={showResolved}
-            onCheckedChange={setShowResolved}
-            aria-label={t("comments.showResolved")}
-          />
-          {t("comments.showResolved")}
-        </Label>
+      <Panel position="top-right" data-comment-control className="flex items-center gap-2">
+        {mode && (
+          <p role="status" className="rounded-md bg-background px-3 py-2 text-xs">
+            {t("comments.placeHint")}
+          </p>
+        )}
+        <Popover open={threadsOpen} onOpenChange={setThreadsOpen}>
+          <PopoverAnchor asChild>
+            <Button
+              ref={postButton}
+              variant="outline"
+              disabled={dirty || command.isPending}
+              aria-expanded={threadsOpen}
+              onClick={() => setThreadsOpen((value) => !value)}
+            >
+              <MessageSquare className="h-4 w-4" aria-hidden="true" />
+              {t("comments.threads")}
+              {unreadCount > 0 && (
+                <span className="rounded-sm bg-primary px-1.5 text-xs text-primary-foreground">
+                  {unreadCount}
+                  <span className="sr-only"> {t("comments.unread")}</span>
+                </span>
+              )}
+            </Button>
+          </PopoverAnchor>
+          <PopoverContent
+            data-comment-control
+            align="end"
+            side="bottom"
+            collisionPadding={12}
+            className="flex max-h-[min(560px,var(--radix-popover-content-available-height))] w-80 max-w-[calc(100vw-24px)] flex-col overflow-hidden"
+            aria-label={t("comments.threads")}
+          >
+            <div className="space-y-3 border-b border-border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <h2 className="text-sm font-semibold">{t("comments.threads")}</h2>
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  aria-label={t("common.close")}
+                  onClick={() => setThreadsOpen(false)}
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
+              <div className="relative">
+                <Search
+                  className="pointer-events-none absolute left-2.5 top-2 h-4 w-4 text-muted-foreground"
+                  aria-hidden="true"
+                />
+                <Input
+                  autoFocus
+                  className="pl-8"
+                  value={query}
+                  onChange={(event) => setQuery(event.target.value)}
+                  aria-label={t("comments.search")}
+                  placeholder={t("comments.search")}
+                />
+              </div>
+              <Label className="flex items-center gap-2 text-xs">
+                <Switch
+                  checked={showResolved}
+                  onCheckedChange={setShowResolved}
+                  aria-label={t("comments.showResolved")}
+                />
+                {t("comments.showResolved")}
+              </Label>
+            </div>
+            <ol className="min-h-0 overflow-y-auto" aria-label={t("comments.threads")}>
+              {filteredThreads.map((pin) => (
+                <li key={pin.id} className="border-b border-border last:border-b-0">
+                  <Button
+                    variant="ghost"
+                    className="h-auto w-full items-start justify-start gap-2 rounded-none p-3 text-left"
+                    onClick={() => openThread(pin, true)}
+                  >
+                    <span className="mt-0.5 w-5 shrink-0 text-xs text-muted-foreground">
+                      {view.settings.commentPins.indexOf(pin) + 1}
+                    </span>
+                    <span className="min-w-0 flex-1">
+                      <span className="line-clamp-2 whitespace-pre-wrap break-words text-sm font-normal">
+                        {pin.text}
+                      </span>
+                      <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                        {t("comments.replyCount", { count: pin.replies.length })}
+                        {pin.resolved && <> · {t("comments.resolved")}</>}
+                        {pin.elementId && <> · {t("comments.attached")}</>}
+                      </span>
+                      {timestamp(pin)}
+                    </span>
+                    {isUnread(pin) && (
+                      <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary">
+                        <span className="sr-only">{t("comments.unread")}</span>
+                      </span>
+                    )}
+                  </Button>
+                </li>
+              ))}
+            </ol>
+            {filteredThreads.length === 0 && (
+              <p className="p-4 text-sm text-muted-foreground">
+                {t(query ? "comments.noMatches" : "comments.noThreads")}
+              </p>
+            )}
+            <p className="border-t border-border p-3 text-xs text-muted-foreground">
+              {t("comments.localUnreadHint")}
+            </p>
+          </PopoverContent>
+        </Popover>
       </Panel>
       <ViewportPortal>
         {view.settings.commentPins.map((pin, index) =>
@@ -364,22 +576,22 @@ export function CanvasComments({
               disabled={command.isPending || dirty}
               className="nodrag nopan pointer-events-auto absolute z-50 rounded-full shadow-md"
               style={{
-                left: pin.x,
-                top: pin.y,
+                left: commentCanvasPosition(pin, positions).x,
+                top: commentCanvasPosition(pin, positions).y,
                 transform: `translate(-50%, -50%) scale(${1 / zoom})`,
               }}
               aria-label={t(pin.resolved ? "comments.openResolvedPin" : "comments.openPin", {
                 number: index + 1,
               })}
               aria-pressed={openedId === pin.id}
-              onClick={() => {
-                setMode(false);
-                setOpenedId(pin.id);
-                setMessageDraft(null);
-                setConfirmDelete(null);
-              }}
+              onClick={() => openThread(pin)}
             >
               {index + 1}
+              {isUnread(pin) && (
+                <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary ring-2 ring-background">
+                  <span className="sr-only">{t("comments.unread")}</span>
+                </span>
+              )}
             </Button>
           ) : null,
         )}
@@ -518,9 +730,12 @@ export function CanvasComments({
                     messageEditor()
                   ) : (
                     <div className="flex items-start gap-2">
-                      <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
-                        {opened.text}
-                      </p>
+                      <div className="min-w-0 flex-1">
+                        <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                          {opened.text}
+                        </p>
+                        {timestamp(opened)}
+                      </div>
                       {messageMenu()}
                     </div>
                   )}
@@ -536,9 +751,12 @@ export function CanvasComments({
                           messageEditor()
                         ) : (
                           <div className="flex items-start gap-2">
-                            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
-                              {reply.text}
-                            </p>
+                            <div className="min-w-0 flex-1">
+                              <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+                                {reply.text}
+                              </p>
+                              {timestamp(reply)}
+                            </div>
                             {messageMenu(reply, index + 1)}
                           </div>
                         )}
