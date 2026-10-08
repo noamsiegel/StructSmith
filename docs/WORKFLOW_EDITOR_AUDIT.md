@@ -28,7 +28,7 @@ types and preserve explicit kind metadata; generic unconnected subgraphs become
 Sections, while connected subgraphs become Subprocesses.
 
 - `bun run check`, `bun run typecheck` and `bun run test` returned no errors;
-  the suite collected 328 tests across 62 files with 2,245 assertions. Targeted
+  the suite collected 328 tests across 62 files with 2,269 assertions. Targeted
   mutations caught annotation, import, layout, selection and reversed-layout
   regressions. Biome's schema-version notice is informational.
 - Browser creation/edit/save/reload covered text, notes and quoted multiline
@@ -56,6 +56,10 @@ Sections, while connected subgraphs become Subprocesses.
   after it. A growing cylinder's measured height now keeps its cap above the title.
   RL/BT connections use inward-facing source/target ports instead of routing
   through the cards. Browser inspection and persisted presentation checks cover both.
+- The connected native demo's document/merge label collision was reproduced.
+  After widening that fixture's corridor, DOM rectangle checks on all seven
+  `Move label` buttons returned no card intersections; warning/error logs were
+  empty. Its clearance test catches restoring the original spacing.
 
 The existing service kept its volume and URL. `bun scripts/verify-service-migration.ts
 http://127.0.0.1:8092 http://127.0.0.1:8090` compared all five existing workspaces,
@@ -69,8 +73,9 @@ workspace lists, documents, snapshot lists and activity after the last image upd
 
 ### Shared demo and QA cleanup
 
-The reusable [UI demo](UI_DEMO.md) now replaces disposable editor fixtures:
-one workspace, 79 elements, 17 relationships and 14 focused views. New cases
+The reusable [UI demo](UI_DEMO.md) replaces disposable editor fixtures. Its initial
+baseline had 79 elements, 17 relationships and 14 focused views; the native and
+annotation cases above extend it. New cases
 belong in `scripts/ui-demo-fixture.ts`; repository AGENTS.md points future agents
 to its seed/reset command and browser checklist.
 
