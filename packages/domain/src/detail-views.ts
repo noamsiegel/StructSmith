@@ -8,6 +8,8 @@ import type {
 export function detailViewKind(element: Pick<ArchitectureElement, "kind">): ViewKind | null {
   if (element.kind === "softwareSystem") return "container";
   if (element.kind === "container") return "component";
+  if (element.kind === "workflowGroup" || element.kind === "action") return "workflow";
+  if (element.kind === "custom") return "custom";
   return null;
 }
 
@@ -24,9 +26,32 @@ export function detailViewsFor<
   return views
     .filter(
       (view) =>
-        view.id !== currentViewId && view.scopeElementId === element.id && view.kind === kind,
+        view.id !== currentViewId &&
+        view.scopeElementId === element.id &&
+        (view.kind === kind ||
+          ((kind === "custom" || kind === "workflow") &&
+            (view.kind === "custom" || view.kind === "workflow"))),
     )
     .sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
+/** Custom leaves only expose navigation when a scoped view already exists. */
+export function canOpenElementDetails(
+  element: ArchitectureElement,
+  elements: readonly ArchitectureElement[],
+  views: readonly ArchitectureView[],
+  currentViewId: string | null,
+): boolean {
+  if (!detailViewKind(element)) return false;
+  if (detailViewsFor(element, views, currentViewId).length > 0) return true;
+  if (views.some((view) => view.id === currentViewId && view.scopeElementId === element.id))
+    return false;
+  return (
+    element.kind === "softwareSystem" ||
+    element.kind === "container" ||
+    element.kind === "workflowGroup" ||
+    elements.some((child) => child.parentId === element.id)
+  );
 }
 
 /** One level of children and their connected context, using existing model IDs. */
@@ -56,8 +81,7 @@ export function detailViewElementIds(
     let element = byId.get(id);
     while (element && !seen.has(element.id)) {
       seen.add(element.id);
-      if (!element.parentId || (scope.kind === "container" && element.parentId === scope.parentId))
-        return element.id;
+      if (!element.parentId || element.parentId === scope.parentId) return element.id;
       element = byId.get(element.parentId);
     }
     return null;

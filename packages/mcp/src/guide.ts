@@ -56,6 +56,7 @@ export function modelingGuide() {
       "Model each relationship once at the most specific meaningful C4 level.",
       "When a view hides descendants, StructSmith lifts and groups their relationships onto visible ancestors automatically. Do not add duplicate system-level relationships for a context view.",
       "Containers belong to software systems; components belong to containers.",
+      "Use workflowGroup, action, decision and outcome for process semantics, not fake C4 containers. Workflow steps can connect to existing runtime elements without changing their kinds.",
       "Use external=true for systems outside the modeled ownership boundary.",
       "Records capture assumptions, risks, unknowns, requirements, decisions and notes; they are not diagram nodes.",
       "Boundaries belong to a view. They group that view's elements by deployment, security, compliance or ownership semantics; they are not model elements or relationship endpoints.",
@@ -99,6 +100,7 @@ export function modelingGuide() {
       recommended: [
         "Create a systemContext view for actors (`kind: person`), the focal software system and external systems.",
         "Create a container view scoped to the focal software system for runtime building blocks.",
+        "Create a workflow view for decisions, actions and outcomes, optionally scoped to a workflowGroup or action. A custom group can open existing scoped custom/workflow views; scopeElementId connects the overview to its internals.",
         "Seed elementIds when creating the view and include autoLayoutView in the same batch.",
       ],
       relationshipBehavior:

@@ -90,7 +90,12 @@ export function toMermaid(
       for (const child of children) renderElement(child, `${indent}  `);
       lines.push(`${indent}end`);
     } else {
-      const shape = element.kind === "person" ? ["([", "])"] : ["[", "]"];
+      const shape =
+        element.kind === "decision"
+          ? ["{", "}"]
+          : element.kind === "person" || element.kind === "outcome"
+            ? ["([", "])"]
+            : ["[", "]"];
       lines.push(`${indent}${nodeId(element.id)}${shape[0]}"${elementLabel(element)}"${shape[1]}`);
     }
   };

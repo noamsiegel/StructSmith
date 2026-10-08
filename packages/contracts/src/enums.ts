@@ -7,6 +7,10 @@ export const elementKinds = [
   "component",
   "deploymentNode",
   "infrastructureNode",
+  "workflowGroup",
+  "action",
+  "decision",
+  "outcome",
   "custom",
 ] as const;
 export const ElementKindSchema = z.enum(elementKinds);
@@ -51,6 +55,7 @@ export const viewKinds = [
   "container",
   "component",
   "deployment",
+  "workflow",
   "custom",
 ] as const;
 export const ViewKindSchema = z.enum(viewKinds);

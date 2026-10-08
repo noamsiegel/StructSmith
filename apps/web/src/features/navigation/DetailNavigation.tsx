@@ -1,5 +1,5 @@
 import type { ArchitectureElement, ArchitectureView } from "@structsmith/contracts";
-import { detailViewKind, detailViewsFor } from "@structsmith/domain";
+import { canOpenElementDetails, detailViewsFor } from "@structsmith/domain";
 import { ArrowDownRight } from "lucide-react";
 import { createContext, useContext } from "react";
 import { useTranslation } from "react-i18next";
@@ -18,15 +18,14 @@ export const DetailNavigationContext = createContext<DetailNavigation | null>(nu
 export function useDetailNavigation(elementId?: string) {
   const context = useContext(DetailNavigationContext);
   const element = context?.elements.find((item) => item.id === elementId);
-  const kind = element ? detailViewKind(element) : null;
   const candidates =
     element && context ? detailViewsFor(element, context.views, context.currentViewId) : [];
-  const alreadyInside = context?.views.some(
-    (view) =>
-      view.id === context.currentViewId && view.scopeElementId === elementId && view.kind === kind,
-  );
   return {
-    available: Boolean(element && kind && (!alreadyInside || candidates.length > 0)),
+    available: Boolean(
+      element &&
+        context &&
+        canOpenElementDetails(element, context.elements, context.views, context.currentViewId),
+    ),
     count: candidates.length,
     enabled: context?.enabled ?? false,
     open: () => elementId && context?.openDetails(elementId),

@@ -1,4 +1,4 @@
-import { detailViewKind, detailViewsFor } from "@structsmith/domain";
+import { canOpenElementDetails, detailViewsFor } from "@structsmith/domain";
 import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -182,26 +182,15 @@ function StudioContent({
   const openDetails = (elementId: string): void => {
     if (connectFrom) return;
     const element = elements.find((item) => item.id === elementId);
-    if (!element || !detailViewKind(element)) return;
+    if (!element || !canOpenElementDetails(element, elements, viewList, activeViewId)) return;
     select({ type: "element", id: element.id });
     const candidates = detailViewsFor(element, viewList, activeViewId);
     if (candidates.length === 1 && candidates[0]) selectView(candidates[0].id);
-    else if (
-      candidates.length > 0 ||
-      activeView?.scopeElementId !== element.id ||
-      activeView.kind !== detailViewKind(element)
-    )
-      setDetailElementId(elementId);
+    else setDetailElementId(elementId);
   };
   const canOpenDetails = (elementId: string): boolean => {
     const element = elements.find((item) => item.id === elementId);
-    return Boolean(
-      element &&
-        detailViewKind(element) &&
-        (activeView?.scopeElementId !== element.id ||
-          activeView.kind !== detailViewKind(element) ||
-          detailViewsFor(element, viewList, activeViewId).length > 0),
-    );
+    return Boolean(element && canOpenElementDetails(element, elements, viewList, activeViewId));
   };
   const detailElement = elements.find((element) => element.id === detailElementId);
 

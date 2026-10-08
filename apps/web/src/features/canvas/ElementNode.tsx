@@ -12,6 +12,7 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
   const { t } = useTranslation();
   const { element, severity, locked, showFullTitles, showDescriptions, minimumHeight } = data;
   const Icon = iconFor(element.kind, element.role);
+  const workflow = ["workflowGroup", "action", "decision", "outcome"].includes(element.kind);
 
   const badge = [t(`kinds.${element.kind}`), element.role ? t(`roles.${element.role}`) : null]
     .filter(Boolean)
@@ -22,6 +23,9 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
       style={{ minHeight: minimumHeight }}
       className={cn(
         "as-node group relative flex h-full w-full overflow-visible rounded-md border shadow-sm transition-[border-color,background-color,box-shadow]",
+        element.kind === "workflowGroup" && "border-double border-4",
+        element.kind === "decision" && "rounded-none border-2",
+        element.kind === "outcome" && "rounded-3xl border-2",
         element.external
           ? "border-dashed border-node-external-border bg-node-external shadow-ownership-external/5"
           : "border-node-internal-border bg-node-internal shadow-ownership-internal/5",
@@ -37,6 +41,8 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
       />
       <Handle type="target" position={Position.Left} />
       <Handle type="target" position={Position.Top} id="t" />
+      <Handle type="target" position={Position.Right} id="target-r" />
+      <Handle type="target" position={Position.Bottom} id="target-b" />
 
       <div className="flex min-w-0 flex-1 flex-col justify-between px-3 py-2.5">
         <div className="flex items-start gap-2">
@@ -85,16 +91,18 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
         )}
 
         <div className="mt-2 flex min-w-0 items-center gap-1.5">
-          <span
-            className={cn(
-              "shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
-              element.external
-                ? "border-ownership-external/45 bg-ownership-external/10 text-ownership-external"
-                : "border-ownership-internal/45 bg-ownership-internal/10 text-ownership-internal",
-            )}
-          >
-            {element.external ? t("inspector.external") : t("inspector.internal")}
-          </span>
+          {!workflow && (
+            <span
+              className={cn(
+                "shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                element.external
+                  ? "border-ownership-external/45 bg-ownership-external/10 text-ownership-external"
+                  : "border-ownership-internal/45 bg-ownership-internal/10 text-ownership-internal",
+              )}
+            >
+              {element.external ? t("inspector.external") : t("inspector.internal")}
+            </span>
+          )}
           <span className="truncate text-[9.5px] font-medium uppercase tracking-wider text-muted-foreground">
             {badge}
           </span>
@@ -103,6 +111,8 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
 
       <Handle type="source" position={Position.Right} />
       <Handle type="source" position={Position.Bottom} id="b" />
+      <Handle type="source" position={Position.Left} id="source-l" />
+      <Handle type="source" position={Position.Top} id="source-t" />
     </div>
   );
 }

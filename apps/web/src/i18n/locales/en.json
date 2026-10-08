@@ -442,7 +442,11 @@
     "component": "Component",
     "deploymentNode": "Deployment node",
     "infrastructureNode": "Infrastructure node",
-    "custom": "Custom"
+    "custom": "Custom",
+    "workflowGroup": "Workflow group",
+    "action": "Action",
+    "decision": "Decision",
+    "outcome": "Outcome"
   },
   "roles": {
     "frontend": "Frontend",
@@ -477,7 +481,8 @@
     "container": "Container",
     "component": "Component",
     "deployment": "Deployment",
-    "custom": "Custom"
+    "custom": "Custom",
+    "workflow": "Workflow"
   },
   "presets": {
     "person": "Person",
@@ -494,7 +499,11 @@
     "identityProvider": "Identity provider",
     "externalApi": "External API",
     "component": "Component",
-    "custom": "Custom"
+    "custom": "Custom",
+    "workflowGroup": "Workflow group",
+    "action": "Action",
+    "decision": "Decision",
+    "outcome": "Outcome"
   },
   "views": {
     "create": "New view",

@@ -450,7 +450,11 @@
     "component": "Komponent",
     "deploymentNode": "Węzeł wdrożeniowy",
     "infrastructureNode": "Węzeł infrastruktury",
-    "custom": "Własny"
+    "custom": "Własny",
+    "workflowGroup": "Grupa procesu",
+    "action": "Działanie",
+    "decision": "Decyzja",
+    "outcome": "Wynik"
   },
   "roles": {
     "frontend": "Frontend",
@@ -485,7 +489,8 @@
     "container": "Kontenery",
     "component": "Komponenty",
     "deployment": "Wdrożenie",
-    "custom": "Własny"
+    "custom": "Własny",
+    "workflow": "Proces"
   },
   "presets": {
     "person": "Osoba",
@@ -502,7 +507,11 @@
     "identityProvider": "Dostawca tożsamości",
     "externalApi": "Zewnętrzne API",
     "component": "Komponent",
-    "custom": "Własny"
+    "custom": "Własny",
+    "workflowGroup": "Grupa procesu",
+    "action": "Działanie",
+    "decision": "Decyzja",
+    "outcome": "Wynik"
   },
   "views": {
     "create": "Nowy widok",
