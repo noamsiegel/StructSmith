@@ -698,6 +698,10 @@ export function autoLayoutView(
   const allElements = repos.elements.listByWorkspace(workspace.id);
   const elements = new Map(allElements.map((element) => [element.id, element] as const));
   const visible = new Set(entries.map((entry) => entry.elementId));
+  const relationshipPlacements = repos.views.listRelationships(viewId);
+  const hiddenRelationships = new Set(
+    relationshipPlacements.filter((entry) => entry.hidden).map((entry) => entry.relationshipId),
+  );
   const activeBoundaries = repos.boundaries
     .listByView(viewId)
     .filter((boundary) => boundary.layer === view.settings.boundaryLayer);
@@ -722,12 +726,14 @@ export function autoLayoutView(
     }),
     resolveRelationshipsForView(
       allElements,
-      repos.relationships.listByWorkspace(workspace.id),
+      repos.relationships
+        .listByWorkspace(workspace.id)
+        .filter((relationship) => !hiddenRelationships.has(relationship.id)),
       visible,
     ).map((edge) => ({
       source: edge.sourceElementId,
       target: edge.targetElementId,
-      label: edgeLabel(edge),
+      label: view.settings.showRelationshipLabels ? edgeLabel(edge) : undefined,
     })),
     direction,
     algorithm,
@@ -743,6 +749,22 @@ export function autoLayoutView(
     const entry = byId.get(position.id);
     if (!entry || entry.locked) continue;
     repos.views.upsertElement({ ...entry, x: position.x, y: position.y });
+  }
+
+  for (const placement of relationshipPlacements) {
+    repos.views.upsertRelationship({
+      ...placement,
+      controlPoints: [],
+      labelPosition: null,
+      presentation: placement.presentation
+        ? {
+            ...placement.presentation,
+            labelOffset: { x: 0, y: 0 },
+            sourceSide: null,
+            targetSide: null,
+          }
+        : placement.presentation,
+    });
   }
 
   return repos.views.listElements(viewId);

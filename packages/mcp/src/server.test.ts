@@ -256,8 +256,8 @@ test("MCP exposes and validates Zod 4 tools and prompt arguments", async () => {
     expect(fullView?.relationships).toContainEqual(
       expect.objectContaining({
         relationshipId: relationship.id,
-        labelPosition: 0.35,
-        controlPoints: [{ x: 240, y: 140 }],
+        labelPosition: null,
+        controlPoints: [],
       }),
     );
 
