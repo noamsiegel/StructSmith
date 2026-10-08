@@ -159,3 +159,56 @@ test("inline group frames reuse endpoint IDs and contain nested frames below sep
     close();
   }
 });
+
+test("tag focus includes every contributor of a merged implied connection", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const group = services.elements.create(workspace.id, {
+      kind: "workflowGroup",
+      name: "Group",
+    }).result;
+    const first = services.elements.create(workspace.id, {
+      kind: "action",
+      parentId: group.id,
+      name: "First",
+    }).result;
+    const second = services.elements.create(workspace.id, {
+      kind: "action",
+      parentId: group.id,
+      name: "Second",
+    }).result;
+    const target = services.elements.create(workspace.id, {
+      kind: "action",
+      name: "Target",
+    }).result;
+    const ordinary = services.relationships.create(workspace.id, {
+      sourceElementId: first.id,
+      targetElementId: target.id,
+    }).result;
+    const tagged = services.relationships.create(workspace.id, {
+      sourceElementId: second.id,
+      targetElementId: target.id,
+      tags: ["important"],
+    }).result;
+    const view = services.views.create(workspace.id, {
+      kind: "workflow",
+      name: "Overview",
+      elementIds: [group.id, target.id],
+    }).result;
+    const graph = buildGraph({
+      view: services.views.get(view.id),
+      elements: services.elements.list(workspace.id),
+      relationships: [ordinary, tagged],
+      records: [],
+    });
+    expect(graph.edges[0]?.data?.count).toBe(2);
+    expect(graph.edges[0]?.data?.relationship.tags).toEqual([]);
+    const focused = focusGraphByTag(graph.nodes, graph.edges, "important");
+    expect(new Set(focused.nodes.map((node) => node.id))).toEqual(new Set([group.id, target.id]));
+    expect(focused.edges).toHaveLength(1);
+    expect(focused.edges[0]?.style?.opacity).toBe(1);
+  } finally {
+    close();
+  }
+});

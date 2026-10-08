@@ -200,3 +200,132 @@ test("cloning remaps attached comments, detail preferences and scenario steps to
     close();
   }
 });
+
+test("removing detail destinations or source objects clears only their remembered links", () => {
+  for (const mode of ["view", "element", "remove", "replace"] as const) {
+    const { services, close } = createTestContext();
+    try {
+      const workspace = createWorkspace(services);
+      const first = services.elements.create(workspace.id, {
+        kind: "workflowGroup",
+        name: "First",
+      }).result;
+      const second = services.elements.create(workspace.id, {
+        kind: "workflowGroup",
+        name: "Second",
+      }).result;
+      const home = services.views.create(workspace.id, {
+        kind: "workflow",
+        name: "Home",
+        elementIds: [first.id, second.id],
+      }).result;
+      const detail1 = services.views.create(workspace.id, {
+        kind: "workflow",
+        name: "First details",
+        scopeElementId: first.id,
+      }).result;
+      const detail2 = services.views.create(workspace.id, {
+        kind: "workflow",
+        name: "Second details",
+        scopeElementId: second.id,
+      }).result;
+      services.views.update(workspace.id, home.id, {
+        settings: { preferredDetailViews: { [first.id]: detail1.id, [second.id]: detail2.id } },
+      });
+      const snapshot = services.snapshots.create(workspace.id, "Before removing preference");
+      if (mode === "view") services.views.delete(workspace.id, detail1.id);
+      else if (mode === "element") services.elements.delete(workspace.id, first.id);
+      else
+        services.views.setElements(
+          workspace.id,
+          home.id,
+          mode === "remove" ? [first.id] : [second.id],
+          mode,
+        );
+      const saved = services.views.get(home.id).settings.preferredDetailViews;
+      expect(saved).toEqual({ [second.id]: detail2.id });
+      expect(() =>
+        services.views.update(workspace.id, home.id, {
+          settings: { preferredDetailViews: { ...saved, [second.id]: detail2.id } },
+        }),
+      ).not.toThrow();
+      services.snapshots.restore(snapshot.id);
+      expect(services.views.get(home.id).settings.preferredDetailViews).toEqual({
+        [first.id]: detail1.id,
+        [second.id]: detail2.id,
+      });
+    } finally {
+      close();
+    }
+  }
+});
+
+test("unchanged stale scenarios remain repairable and individually deletable", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const removed = services.elements.create(workspace.id, {
+      kind: "action",
+      name: "Removed",
+    }).result;
+    const valid = services.elements.create(workspace.id, { kind: "action", name: "Valid" }).result;
+    const view = services.views.create(workspace.id, {
+      kind: "workflow",
+      name: "Home",
+      elementIds: [removed.id, valid.id],
+    }).result;
+    const scenarios = ["first", "second"].map((id) => ({
+      id,
+      name: id,
+      steps: [{ elementId: removed.id, title: "Start" }],
+    }));
+    const second = scenarios[1];
+    if (!second) throw new Error("Missing second scenario");
+    services.views.update(workspace.id, view.id, { settings: { scenarios } });
+    services.elements.delete(workspace.id, removed.id);
+    const repaired = {
+      id: "first",
+      name: "Repaired",
+      steps: [{ elementId: valid.id, title: "Start" }],
+    };
+    services.views.update(workspace.id, view.id, {
+      settings: { scenarios: [repaired, second] },
+    });
+    expect(services.views.get(view.id).settings.scenarios[0]?.name).toBe("Repaired");
+    services.views.update(workspace.id, view.id, {
+      settings: { scenarios: [second] },
+    });
+    expect(services.views.get(view.id).settings.scenarios).toHaveLength(1);
+    expect(() =>
+      services.views.update(workspace.id, view.id, {
+        settings: {
+          scenarios: [
+            {
+              id: "third",
+              name: "New invalid",
+              steps: [{ elementId: removed.id, title: "Start" }],
+            },
+          ],
+        },
+      }),
+    ).toThrow("must exist");
+    expect(() =>
+      services.views.update(workspace.id, view.id, {
+        settings: {
+          scenarios: [
+            {
+              ...scenarios[1],
+              id: "second",
+              name: "Changed but still invalid",
+              steps: [{ elementId: removed.id, title: "Start" }],
+            },
+          ],
+        },
+      }),
+    ).toThrow("must exist");
+    services.views.update(workspace.id, view.id, { settings: { scenarios: [] } });
+    expect(services.views.get(view.id).settings.scenarios).toEqual([]);
+  } finally {
+    close();
+  }
+});

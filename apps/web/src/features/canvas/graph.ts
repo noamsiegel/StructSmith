@@ -59,6 +59,7 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
   placement?: ViewRelationship;
   status: ImplementationStatus | null;
   relationshipIds?: string[];
+  tags: string[];
   onControlPointsChange?: (points: ControlPoint[]) => Promise<void>;
   onLabelOffsetChange?: (relationshipId: string, offset: ControlPoint) => Promise<void>;
 }
@@ -208,6 +209,7 @@ export function buildGraph({
         relationship: first,
         placement,
         relationshipIds: edge.relationships.map((item) => item.id),
+        tags: [...new Set(edge.relationships.flatMap((item) => item.tags))],
         implied: edge.implied,
         label,
         count: edge.relationships.length,

@@ -43,6 +43,7 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
             data: {
               status,
               relationship,
+              tags: relationship.tags,
               implied: false,
               label: "",
               count: 1,

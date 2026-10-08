@@ -13,7 +13,7 @@ export function focusGraphByTag(
       .map((node) => node.id),
   );
   const taggedEdges = new Set(
-    edges.filter((edge) => edge.data?.relationship.tags.includes(tag)).map((edge) => edge.id),
+    edges.filter((edge) => edge.data?.tags.includes(tag)).map((edge) => edge.id),
   );
   for (const edge of edges)
     if (taggedEdges.has(edge.id)) {

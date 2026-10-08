@@ -228,6 +228,7 @@ export function deleteElement(
     repos.elements.delete(target.id);
   }
 
+  prunePreferredDetailViews(repos, workspace);
   return targets.map((target) => target.id);
 }
 
@@ -493,6 +494,32 @@ export function deleteRelationship(
 /* Views                                                               */
 /* ------------------------------------------------------------------ */
 
+function prunePreferredDetailViews(repos: Repositories, workspace: Workspace): void {
+  const views = repos.views.listByWorkspace(workspace.id);
+  const elements = new Map(
+    repos.elements.listByWorkspace(workspace.id).map((element) => [element.id, element]),
+  );
+  for (const view of views) {
+    const entries = Object.entries(view.settings.preferredDetailViews);
+    if (!entries.length) continue;
+    const present = new Set(repos.views.listElements(view.id).map((entry) => entry.elementId));
+    const valid = entries.filter(([elementId, detailId]) => {
+      const element = elements.get(elementId);
+      return (
+        element &&
+        present.has(elementId) &&
+        detailViewsFor(element, views, view.id).some((candidate) => candidate.id === detailId)
+      );
+    });
+    if (valid.length !== entries.length)
+      repos.views.update({
+        ...view,
+        updatedAt: nowIso(),
+        settings: { ...view.settings, preferredDetailViews: Object.fromEntries(valid) },
+      });
+  }
+}
+
 function validateExplorationSettings(
   repos: Repositories,
   workspace: Workspace,
@@ -514,13 +541,19 @@ function validateExplorationSettings(
       }
     }
   }
-  if (settings?.scenarios)
+  if (settings?.scenarios) {
+    const previous = repos.views.findById(view.id)?.settings.scenarios ?? [];
+    // Unchanged stale scenarios remain available for repair or deletion after model edits.
+    const changed = settings.scenarios.filter(
+      (scenario) => !previous.some((saved) => JSON.stringify(saved) === JSON.stringify(scenario)),
+    );
     validateViewScenarios(
-      settings.scenarios,
+      changed,
       elementIds,
       repos.elements.listByWorkspace(workspace.id),
       repos.relationships.listByWorkspace(workspace.id),
     );
+  }
 }
 
 function detachViewComments(
@@ -779,6 +812,7 @@ export function deleteViewCommentReply(
 export function deleteView(repos: Repositories, workspace: Workspace, viewId: string): void {
   requireView(repos, viewId, workspace.id);
   repos.views.delete(viewId);
+  prunePreferredDetailViews(repos, workspace);
 }
 
 export function setViewElements(
@@ -799,6 +833,7 @@ export function setViewElements(
       repos.boundaries.removeViewElementMembership(viewId, elementId);
       repos.views.removeElement(viewId, elementId);
     }
+    prunePreferredDetailViews(repos, workspace);
     return repos.views.listElements(viewId);
   }
 
@@ -838,6 +873,7 @@ export function setViewElements(
     placed = [...placed, entry];
   }
 
+  if (mode === "replace") prunePreferredDetailViews(repos, workspace);
   return repos.views.listElements(viewId);
 }
 
