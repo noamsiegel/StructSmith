@@ -4,8 +4,8 @@
 
 <h1 align="center">StructSmith</h1>
 
-This fork adds native workflow steps, Subprocess drill-down, view-owned Sections,
-and editable connector presentation. See [the fork guide](docs/FORK.md). Build this checkout
+This fork adds native workflow and data/document elements, Subprocess drill-down,
+view-owned Sections, text, notes and tables, and editable connector presentation. See [the fork guide](docs/FORK.md). Build this checkout
 with Docker to run these changes; upstream release images and installers contain
 upstream's features. For host agents, pass your built image to `bun run docker:local --image IMAGE`.
 
@@ -349,11 +349,13 @@ diagram updates on its own — no refresh needed.
 ```
 Workspace
  ├── Elements          person · softwareSystem · container · component ·
- │                     deploymentNode · infrastructureNode · custom
+ │                     deploymentNode · infrastructureNode · workflowGroup · action ·
+ │                     decision · outcome · data · document · start · end · fork · join · merge · custom
  ├── Relationships     sync · async · event · data · dependency · custom
  ├── Views             landscape · systemContext · container · component ·
- │  │                  deployment · custom
- │  └── Boundaries     deployment · security · compliance · ownership · custom
+ │  │                  deployment · workflow · custom
+ │  ├── Boundaries     deployment · security · compliance · ownership · custom
+ │  └── Annotations    text · note · table (view-owned)
  ├── Records           assumption · risk · unknown · requirement · decision · note
  └── Snapshots
 ```
@@ -438,9 +440,12 @@ Errors always use the same envelope:
 
 ## Editor
 
-- Desktop-first three-pane layout: explorer, canvas, inspector — all resizable
+- Desktop-first canvas with resizable, toggleable Model and Inspector panels
 - Custom React Flow nodes with icon, name, technology and a kind/role badge; external
   elements are visually distinct
+- View-owned text, sticky notes and editable tables; spreadsheet paste, resizing,
+  colors, Section membership and snapshot Undo/Redo. MCP annotation CRUD uses the
+  same domain operations. See [the annotation contract](docs/FORK.md#text-notes-and-tables).
 - Import existing Mermaid diagrams in `flowchart`/`graph` syntax from `.mmd` / `.mermaid`
   files as a semantic workspace baseline
 - Semantic, nested boundaries owned by a view, so the same model element can be grouped
@@ -552,10 +557,16 @@ and YAML frontmatter with a scalar `title` are accepted. Configuration, styles,
 classes, click actions, accessibility directives, and invisible layout links are
 ignored; callbacks and external image/icon resources are never executed or loaded.
 
-Nodes and subgraphs become reusable semantic elements of kind `custom`; subgraph
-membership becomes parent/child containment. This is an import convention, not an
-inference of C4 meaning from visual shapes. Kind, role, and technology explicitly
-embedded in StructSmith export labels are recovered. Edge labels become descriptions;
+Supported shapes infer native types: ordinary rectangles become actions, diamonds
+decisions, double rectangles Subprocesses, rounded terminals/circles outcomes,
+cylinders database containers, parallelograms data and document shapes documents.
+Explicit fork/join shapes preserve those types. Ambiguous circles remain outcomes;
+start/end/merge require explicit StructSmith kind labels. Kind, role and technology
+embedded in StructSmith export labels take precedence over shape inference.
+Unconnected subgraphs without explicit kind labels become view-owned Sections;
+connected subgraphs become Subprocesses. Compatible semantic containment is retained;
+visual grouping does not force incompatible C4 elements under a workflow parent.
+Edge labels become descriptions;
 a trailing `[technology]` is recognized. Dotted links map to `async`, directed links
 to `sync`, and undirected links to `custom`; bidirectional links create two directed
 relationships. Mermaid IDs are retained as provenance in `properties["mermaid.id"]`.
@@ -564,8 +575,8 @@ RL/BT imports are mirrored initially; later automatic layout uses the saved LR/T
 
 This is a semantic starting point, not a pixel-perfect or lossless round trip.
 Per-subgraph directions, styling, animation, exact shapes, and Markdown formatting
-are not reproduced. Exported view boundaries cannot reliably be distinguished from
-semantic subgraphs. Mermaid does not carry all StructSmith model metadata, and
+are not reproduced. Subgraph connection/kind inference is a grouping convention,
+not a lossless recovery of original view boundaries or semantic hierarchy. Mermaid does not carry all StructSmith model metadata, and
 older exports may use parent endpoint IDs distinct from their subgraph IDs.
 Sequence, class, ER, state, C4, and other diagram families require separate semantic
 adapters and are rejected with a clear error. Unrecognized structural syntax also

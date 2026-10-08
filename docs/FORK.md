@@ -6,8 +6,8 @@ Build this checkout to run the fork; upstream images do not include these change
 
 ## Workflow navigation and status
 
-Use **Subprocess** (`kind: workflowGroup`), `action`, `decision` and `outcome`
-for workflow behavior and `workflow` views for their diagrams. A Subprocess is a
+Use **Subprocess** (`kind: workflowGroup`), `action`, `decision`, `outcome`,
+`data`, `document`, `start`, `end`, `fork`, `join` and `merge` for workflow behavior and `workflow` views for their diagrams. A Subprocess is a
 shared model element with a stable ID, incoming/outgoing connections and child
 steps. It uses a compact block with double side lines; inline expansion and saved
 detail views reveal its contents. Connect a detail view to its overview object
@@ -27,7 +27,7 @@ Sections sit at the canvas root or inside another Section. They may contain
 Subprocesses and ordinary elements. Subprocesses contain steps and nested
 Subprocesses, never Sections. A scoped detail view can have top-level Sections
 around its visible steps; this does not change those steps' semantic parentage.
-Actions can also contain steps; decisions and outcomes are leaves. Runtime C4
+Actions can also contain steps; data, documents and control nodes are leaves. Runtime C4
 elements can appear alongside workflow steps. Prefer a readable overview and at
 most four navigation levels.
 
@@ -120,7 +120,10 @@ and resets to Status on reload, without editing the model or coordinates.
   views; incompatible parent/child types are disabled. Actions use rectangles,
   decisions diamonds, outcomes rounded terminals, databases cylinders and
   Subprocesses double side lines. Content stays upright inside each shape.
-  Decisions reserve more room, so existing manual layouts may need auto-layout.
+  Data uses a parallelogram, documents a wavy lower edge, start/end small
+  circle markers, fork/join a bar and merge a diamond. Marker labels sit outside
+  the glyph and remain readable. Decisions reserve more room, so existing manual
+  layouts may need auto-layout.
 - Drag a Section or expanded Subprocess frame to move its members together.
   Both use saved view layout; the Section owns boundary membership and the
   Subprocess retains semantic parentage. A frame with a locked saved member cannot
@@ -169,6 +172,40 @@ to read its details.
 The settings button beside the view title opens the editable settings dialog;
 settings save immediately, and view names save on blur or Enter.
 
+## Text, notes and tables
+
+Use **Text**, **Note** or **Table** in the creation toolbar for context that belongs
+only to the active view. These annotations are stored in `settings.annotations`,
+not the reusable model: they have no connections, semantic parents or drill-down.
+Use connected `data` and `document` elements for reusable evidence or artifacts.
+Notes are sticky-style blocks, separate from comment threads and presales records.
+
+Double-click an annotation or use its selected Edit button to edit. Text and notes
+support plain multiline text and text size; tables support editable cells and row
+and column addition/removal. Paste spreadsheet cells into a table cell to fill a
+rectangle, including quoted multiline cells. Limits are 100 rows, 20 columns,
+5,000 characters per cell and 100,000 table characters. Tables have no formulas.
+Save commits the edit; failed saves retain the draft for retry.
+
+Select annotations to drag, resize, change Color, duplicate, copy/paste or delete.
+Content wraps and dimensions grow to keep text readable. An annotation fully
+inside a Section joins it; dragging it out removes membership. Section movement
+and Fit include its annotations. Undo/Redo and reload preserve saved annotations;
+exploration previews show them read-only. Auto layout arranges model objects and
+leaves annotation coordinates unchanged.
+
+MCP tools are `annotation_list`, `annotation_get`, `annotation_create`,
+`annotation_update` and `annotation_delete`. Writes use the existing revision guard
+and snapshots. Atomic batches use `createViewAnnotation`, `updateViewAnnotation`
+and `deleteViewAnnotation`; read-only MCP exposes only reads. Native JSON retains
+annotations. Mermaid export describes the semantic model and omits annotations;
+visual exports remain outside this editor's acceptance scope.
+
+Mermaid flowchart import infers native workflow types from supported shapes and
+recovers explicit StructSmith kind/role labels. Unconnected ordinary subgraphs
+become view-owned Sections; connected subgraphs become Subprocesses. See the
+[import contract](../README.md#mermaid-import) for mapping and round-trip limits.
+
 ## Navigation and sidebars
 
 Canvas gestures follow [FigJam's guide](https://help.figma.com/hc/en-us/articles/1500004414582-Pan-and-zoom-in-FigJam):
@@ -183,8 +220,8 @@ Model; Cmd/Ctrl+Alt+B toggles Inspector. Both start hidden on reload; reopening
 restores their width during the session. Explicit inspection actions can reveal
 Inspector. The diagram legend opens separately from the top navigation.
 
-The bottom-center creation toolbar adds Sections, Subprocesses, actions, decisions
-and outcomes at the visible canvas center; **More** opens the existing element palette.
+The bottom-center creation toolbar adds Sections, text, notes, tables, Subprocesses,
+actions, decisions and outcomes at the visible canvas center; **More** opens the existing element palette.
 Comments stay in the top controls and **C** starts placement. Cmd/Ctrl+/ opens
 searchable shortcut help, including gestures and platform-specific modifier names.
 The toolbar also exposes shortcut help and supports arrow-key focus navigation.
