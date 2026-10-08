@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { WorkspaceDocumentSchema } from "@structsmith/contracts";
+import { buildGraph } from "../apps/web/src/features/canvas/graph";
 import { parseWorkspaceImport } from "../apps/web/src/lib/workspaceImport";
 import { toMermaid } from "../packages/domain/src/export";
 import { parseMermaidToWorkspaceDocument as parse } from "../packages/domain/src/mermaid-import";
@@ -297,7 +298,10 @@ describe("Mermaid import domain persistence", () => {
         const workspace = services.imports.importMermaid(
           `graph ${direction}; A[Receive]-->B{Compare account identity and complete ledger evidence before publishing charges or allowing downstream obligations to be created from this capture}`,
         );
-        const cards = services.model.getDocument(workspace.id).views[0]?.elements ?? [];
+        const document = services.model.getDocument(workspace.id);
+        const view = document.views[0];
+        if (!view) throw new Error("Missing imported view");
+        const cards = view.elements;
         const [action, decision] = cards;
         if (
           !action ||
@@ -312,6 +316,20 @@ describe("Mermaid import domain persistence", () => {
         expect(decision.height).toBeGreaterThan(action.height);
         if (direction === "RL") expect(action.x).toBeGreaterThan(decision.x + decision.width);
         else expect(action.y).toBeGreaterThan(decision.y + decision.height);
+        expect(view.relationships[0]?.presentation).toEqual(
+          direction === "RL"
+            ? { sourceSide: "left", targetSide: "right" }
+            : { sourceSide: "top", targetSide: "bottom" },
+        );
+        const edge = buildGraph({
+          view,
+          elements: document.elements,
+          relationships: document.relationships,
+          boundaries: document.boundaries,
+          records: [],
+        }).edges[0];
+        expect(edge?.sourceHandle).toBe(direction === "RL" ? "source-l" : "source-t");
+        expect(edge?.targetHandle).toBe(direction === "RL" ? "target-r" : "target-b");
       } finally {
         close();
       }

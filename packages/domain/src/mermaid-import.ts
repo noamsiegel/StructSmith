@@ -682,6 +682,11 @@ export function parseMermaidToWorkspaceDocument(
           hidden: false,
           labelPosition: null,
           controlPoints: [],
+          ...(originalDirection === "RL"
+            ? { presentation: { sourceSide: "left", targetSide: "right" } }
+            : originalDirection === "BT"
+              ? { presentation: { sourceSide: "top", targetSide: "bottom" } }
+              : {}),
         })),
         createdAt: timestamp,
         updatedAt: timestamp,
