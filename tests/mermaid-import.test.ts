@@ -325,7 +325,6 @@ describe("Mermaid import domain persistence", () => {
           view,
           elements: document.elements,
           relationships: document.relationships,
-          boundaries: document.boundaries,
           records: [],
         }).edges[0];
         expect(edge?.sourceHandle).toBe(direction === "RL" ? "source-l" : "source-t");
