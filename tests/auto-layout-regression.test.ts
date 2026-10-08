@@ -50,7 +50,7 @@ const longLabel =
     5,
   );
 
-test("the saved view's label visibility controls grouped auto-layout spacing", () => {
+test("legacy hidden-label settings still reserve space for always-visible labels", () => {
   const { services, close } = createTestContext();
   try {
     const workspace = createWorkspace(services);
@@ -80,12 +80,12 @@ test("the saved view's label visibility controls grouped auto-layout spacing", (
       name: "Both steps",
       elementIds: [source.id, target.id],
     });
-    const hidden = services.views.autoLayout(workspace.id, view.id, "TB").result;
+    const legacy = services.views.autoLayout(workspace.id, view.id, "TB").result;
     services.views.update(workspace.id, view.id, { settings: { showRelationshipLabels: true } });
     const shown = services.views.autoLayout(workspace.id, view.id, "TB").result;
     const span = (entries: typeof shown.elements) =>
       Math.max(...entries.map((entry) => entry.y)) - Math.min(...entries.map((entry) => entry.y));
-    expect(span(shown.elements)).toBeGreaterThan(span(hidden.elements));
+    expect(span(legacy.elements)).toBe(span(shown.elements));
   } finally {
     close();
   }

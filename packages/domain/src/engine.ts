@@ -865,7 +865,7 @@ export function autoLayoutView(
     ).map((edge) => ({
       source: edge.sourceElementId,
       target: edge.targetElementId,
-      label: view.settings.showRelationshipLabels ? edgeLabel(edge) : undefined,
+      label: edgeLabel(edge),
     })),
     direction,
     algorithm,
