@@ -661,13 +661,15 @@ view with one level of children and their connected context, or start empty.
 within the current workspace session. Browsing existing views does not change
 the model. Ctrl/Cmd-click remains multi-selection.
 
-Use **View settings** beside the current view's name to edit its name in the
-inspector. Enter or leaving the field saves; Escape cancels. Renaming preserves
+Use **View settings** beside the current view's name to open its settings dialog. Enter or leaving the field saves; Escape cancels. Renaming preserves
 the view's ID, links, scope, and layout, and supports undo/redo.
 
-The next improvements focus on dependency exploration, inline expansion, and visual
-overlays. Later milestones add message flows, offline presentations, visual change
-review, and saved proposals.
+This fork also implements temporary inline expansion, dependency and where-used
+navigation, status/tag focus, scenario playback, comment threads, editable Sections,
+view-owned colors, type switching and recognizable node shapes. See the
+[fork guide](docs/FORK.md) for behavior and the
+[editor audit](docs/WORKFLOW_EDITOR_AUDIT.md) for measured acceptance and remaining
+coverage. Visual change review and saved proposals remain future work.
 
 See [the product roadmap](ROADMAP.md) for priorities, scope, completion criteria,
 and follow-up work including documentation, interoperability, and collaboration.
