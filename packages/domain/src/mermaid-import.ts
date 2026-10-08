@@ -626,8 +626,14 @@ export function parseMermaidToWorkspaceDocument(
     boundaries.map((boundary) => ({ id: boundary.id, parentId: boundary.parentBoundaryId })),
   );
   const placements = new Map(positions.map((position) => [position.id, position]));
-  const maxX = Math.max(0, ...positions.map((position) => position.x));
-  const maxY = Math.max(0, ...positions.map((position) => position.y));
+  const maxX = Math.max(
+    0,
+    ...positions.map((position) => position.x + (sizes.get(position.id)?.width ?? 0)),
+  );
+  const maxY = Math.max(
+    0,
+    ...positions.map((position) => position.y + (sizes.get(position.id)?.height ?? 0)),
+  );
   return WorkspaceDocumentSchema.parse({
     formatVersion: 1,
     workspace: {
@@ -658,12 +664,13 @@ export function parseMermaidToWorkspaceDocument(
           const position = placements.get(node.id);
           const x = position?.x ?? 0;
           const y = position?.y ?? 0;
+          const size = sizes.get(node.id);
           return {
             viewId,
             elementId: node.id,
-            x: originalDirection === "RL" ? maxX - x : x,
-            y: originalDirection === "BT" ? maxY - y : y,
-            ...sizes.get(node.id),
+            x: originalDirection === "RL" ? maxX - x - (size?.width ?? 0) : x,
+            y: originalDirection === "BT" ? maxY - y - (size?.height ?? 0) : y,
+            ...size,
             hidden: false,
             locked: false,
             zIndex,

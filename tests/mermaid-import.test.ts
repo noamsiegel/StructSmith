@@ -289,6 +289,35 @@ describe("Mermaid flowchart syntax", () => {
 });
 
 describe("Mermaid import domain persistence", () => {
+  test.each(["RL", "BT"])(
+    "reversed %s imports keep differently sized native shapes apart",
+    (direction) => {
+      const { services, close } = createTestContext();
+      try {
+        const workspace = services.imports.importMermaid(
+          `graph ${direction}; A[Receive]-->B{Compare account identity and complete ledger evidence before publishing charges or allowing downstream obligations to be created from this capture}`,
+        );
+        const cards = services.model.getDocument(workspace.id).views[0]?.elements ?? [];
+        const [action, decision] = cards;
+        if (
+          !action ||
+          !decision ||
+          !action.width ||
+          !action.height ||
+          !decision.width ||
+          !decision.height
+        )
+          throw new Error("Missing native layout dimensions");
+        expect(decision.width).toBeGreaterThan(action.width);
+        expect(decision.height).toBeGreaterThan(action.height);
+        if (direction === "RL") expect(action.x).toBeGreaterThan(decision.x + decision.width);
+        else expect(action.y).toBeGreaterThan(decision.y + decision.height);
+      } finally {
+        close();
+      }
+    },
+  );
+
   test("ordinary flowchart shapes persist native semantic types", () => {
     const { services, close } = createTestContext();
     try {
