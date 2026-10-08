@@ -203,13 +203,13 @@ export function buildUiDemoDocument(): WorkspaceDocument {
             },
           ],
           sectionFrames: {
-            "boundary:demo-native-section": { x: -40, y: -60, width: 2100, height: 920 },
+            "boundary:demo-native-section": { x: -40, y: -60, width: 2500, height: 920 },
           },
         },
       },
       nativeFlow.map((elementId, index) => ({
         elementId,
-        x: (index < 4 ? index : 7 - index) * 460,
+        x: (index < 4 ? index : 7 - index) * 700,
         y: index < 4 ? 0 : 350,
       })),
     );

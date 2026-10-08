@@ -8,7 +8,9 @@ import {
 } from "@structsmith/contracts";
 import {
   detailViewsFor,
+  edgeLabel,
   estimateElementSize,
+  estimateLabelSize,
   resolveRelationshipsForView,
   validateDocument,
 } from "@structsmith/domain";
@@ -26,7 +28,7 @@ const byKey = new Map(document.views.map((view) => [view.key, view]));
 
 describe("UI demo fixture", () => {
   test("places orthogonal and straight connector labels clear of every card", () => {
-    for (const key of ["demo-connectors", "demo-connectors-straight"]) {
+    for (const key of ["demo-connectors", "demo-connectors-straight", "demo-native-flow"]) {
       const view = byKey.get(key);
       if (!view) throw new Error(`Missing connector view ${key}`);
       const bounds = new Map(
@@ -57,7 +59,7 @@ describe("UI demo fixture", () => {
         const source = handle(sourceBounds, sourceSide, placement.presentation?.sourceSlot ?? 1);
         const target = handle(targetBounds, targetSide, placement.presentation?.targetSlot ?? 1);
         const bends =
-          key === "demo-connectors"
+          view.settings.relationshipRouting === "orthogonal"
             ? orthogonalRelationshipBends(
                 source,
                 target,
@@ -66,7 +68,7 @@ describe("UI demo fixture", () => {
                 placement.controlPoints,
               )
             : placement.controlPoints;
-        if (key === "demo-connectors") {
+        if (view.settings.relationshipRouting === "orthogonal") {
           const points = [source, ...bends, target];
           for (let i = 1; i < points.length; i++) {
             expect(points[i - 1]?.x === points[i]?.x || points[i - 1]?.y === points[i]?.y).toBe(
@@ -87,12 +89,18 @@ describe("UI demo fixture", () => {
           false,
           placement.presentation?.labelOffset?.y ?? 0,
         );
+        const label = estimateLabelSize(
+          edgeLabel({ ...edge, implied: false, relationships: [edge] }),
+        );
+        if (!label) continue;
+        const halfWidth = Math.min(170, label.width) / 2 + 8;
+        const halfHeight = label.height / 2 + 8;
         const obscuredBy = [...bounds.values()].filter(
           (rect) =>
-            point.x - 85 < rect.x + rect.width &&
-            point.x + 85 > rect.x &&
-            point.y - 32 < rect.y + rect.height &&
-            point.y + 32 > rect.y,
+            point.x - halfWidth < rect.x + rect.width &&
+            point.x + halfWidth > rect.x &&
+            point.y - halfHeight < rect.y + rect.height &&
+            point.y + halfHeight > rect.y,
         );
         expect(obscuredBy.map((rect) => `${key}:${edge.id}:${rect.elementId}`)).toEqual([]);
       }
