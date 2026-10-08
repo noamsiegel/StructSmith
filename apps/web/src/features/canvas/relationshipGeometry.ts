@@ -120,13 +120,32 @@ export function closestRelationshipSegment(
   return closest;
 }
 
-/** Labels slide along their horizontal leg, never away from the connector. */
+/** Defaults favor horizontal legs; dragged labels snap to the closest route segment. */
 export function slidingRelationshipLabel(
   points: readonly ControlPoint[],
   anchor: ControlPoint,
   offsetX: number,
   curved = false,
+  offsetY = 0,
 ): ControlPoint {
+  if (offsetY !== 0 && points.length > 1) {
+    const base = slidingRelationshipLabel(points, anchor, 0, curved);
+    const desired = { x: base.x + offsetX, y: base.y + offsetY };
+    const index = closestRelationshipSegment(points, desired);
+    const start = points[index] as ControlPoint;
+    const end = points[index + 1] as ControlPoint;
+    const dx = end.x - start.x;
+    const dy = end.y - start.y;
+    const length = dx * dx + dy * dy;
+    const ratio =
+      length === 0
+        ? 0
+        : Math.max(
+            0,
+            Math.min(1, ((desired.x - start.x) * dx + (desired.y - start.y) * dy) / length),
+          );
+    return { x: start.x + dx * ratio, y: start.y + dy * ratio };
+  }
   const legs = points.slice(1).map((end, index) => ({ start: points[index] as ControlPoint, end }));
   const horizontal = legs.filter(({ start, end }) => start.y === end.y && start.x !== end.x);
   const candidates = !curved && horizontal.length > 0 ? horizontal : legs;

@@ -23,7 +23,11 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
       sourceElementId: source.id,
       targetElementId: target.id,
     }).result;
-    const render = (status: ImplementationStatus | null, opacity?: number) =>
+    const render = (
+      status: ImplementationStatus | null,
+      opacity?: number,
+      color: string | null = "#123456",
+    ) =>
       renderToStaticMarkup(
         createElement(
           ReactFlowProvider,
@@ -57,7 +61,7 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
                 labelPosition: 0.25,
                 controlPoints: [{ x: 0, y: 100 }],
                 presentation: {
-                  color: "#123456",
+                  color: color ?? undefined,
                   strokeWidth: 4,
                   strokeStyle: "dotted",
                   sourceArrow: "arrow",
@@ -76,14 +80,15 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
     expect(html).toContain("stroke-dasharray:1 4");
     expect(html).toContain("stroke:#123456");
     expect(html).toContain('d="M 0,0 L 0,100 L 100,100"');
-    const live = render("live");
+    const live = render("live", undefined, null);
     expect(live).toContain("stroke:var(--status-live)");
     expect(live).not.toContain("stroke-dasharray");
     expect(live).toContain('fill="var(--status-live)"');
-    const planned = render("planned");
+    const planned = render("planned", undefined, null);
     expect(planned).toContain("stroke:var(--status-planned)");
     expect(planned).toContain("stroke-dasharray:5 4");
-    expect(render("conflict")).toContain("stroke:var(--muted-foreground)");
+    expect(render("conflict", undefined, null)).toContain("stroke:var(--muted-foreground)");
+    expect(render("live")).toContain("stroke:#123456");
     expect(render(null)).toBe(html);
     const dimmed = render(null, 0.25);
     expect(dimmed).toMatch(/<path[^>]*style="[^"]*opacity:0\.25/);

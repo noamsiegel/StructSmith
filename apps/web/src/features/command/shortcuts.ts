@@ -104,12 +104,17 @@ export const shortcuts: readonly Shortcut[] = [
     labelKey: "shortcuts.zoom",
     keys: ["primary", "$shortcuts.scroll"],
   },
-  { id: "label", group: "connectors", labelKey: "shortcuts.moveLabel", keys: ["← / →"] },
+  {
+    id: "label",
+    group: "connectors",
+    labelKey: "shortcuts.moveLabel",
+    keys: ["$shortcuts.arrowKeys"],
+  },
   {
     id: "label-fast",
     group: "connectors",
     labelKey: "shortcuts.moveLabelFast",
-    keys: ["Shift", "← / →"],
+    keys: ["Shift", "$shortcuts.arrowKeys"],
   },
   {
     id: "segment",

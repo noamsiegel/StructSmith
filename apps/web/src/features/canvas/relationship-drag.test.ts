@@ -69,6 +69,50 @@ test("labels slide horizontally on their leg and follow moved routes without ver
   ).toEqual({ x: 0, y: 50 });
 });
 
+test("dragged labels snap onto vertical and horizontal legs without leaving the route", () => {
+  const points = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 200 },
+    { x: 300, y: 200 },
+  ];
+  const anchor = { x: 100, y: 150 };
+  expect(slidingRelationshipLabel(points, anchor, -100, false, -80)).toEqual({ x: 100, y: 120 });
+  expect(slidingRelationshipLabel(points, anchor, -90, false, -80)).toEqual({ x: 100, y: 120 });
+  expect(slidingRelationshipLabel(points, anchor, -160, false, -190)).toEqual({ x: 40, y: 0 });
+  expect(slidingRelationshipLabel(points, anchor, 50, false, 0)).toEqual({ x: 250, y: 200 });
+  const moved = [
+    points[0] as ControlPoint,
+    ...moveRelationshipSegment(points, 1, { x: 30, y: 0 }),
+    points[3] as ControlPoint,
+  ];
+  expect(slidingRelationshipLabel(moved, anchor, -100, false, -80)).toEqual({ x: 130, y: 120 });
+  expect(
+    slidingRelationshipLabel(
+      [
+        { x: 0, y: 0 },
+        { x: 0, y: 100 },
+      ],
+      { x: 0, y: 50 },
+      40,
+      false,
+      20,
+    ),
+  ).toEqual({ x: 0, y: 70 });
+  expect(
+    slidingRelationshipLabel(
+      [
+        { x: 0, y: 0 },
+        { x: 100, y: 100 },
+      ],
+      { x: 50, y: 50 },
+      20,
+      true,
+      10,
+    ),
+  ).toEqual({ x: 65, y: 65 });
+});
+
 test("segment dragging keeps endpoints and right angles while moving the picked leg", () => {
   const points = [
     { x: 0, y: 0 },

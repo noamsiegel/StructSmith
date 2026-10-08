@@ -6,7 +6,8 @@ and label offset are stored on that view. Semantic endpoints and relationship ID
 stay unchanged. The default is a clear filled end arrow; old documents retain
 inherited colors, widths and interaction-style dashes.
 
-Drag a label independently of its line. A focused label supports arrow keys for
+Drag a label onto any segment of its line, including vertical segments. It snaps
+onto that route and keeps the text horizontal. A focused label supports arrow keys for
 one canvas unit or Shift + arrow keys for ten. Label movement is one undoable
 command per gesture. The inspector also offers numeric label coordinates and
 **Reset relationship presentation**, which removes appearance overrides, resets

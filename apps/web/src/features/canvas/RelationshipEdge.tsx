@@ -193,16 +193,21 @@ function RelationshipEdgeComponent({
     routePoints.slice(1, -1),
     labelPosition,
   );
-  const labelPoint = slidingRelationshipLabel(
-    curved ? curvePoints : routePoints,
-    curved ? (pathLabel ?? { x: defaultX, y: defaultY }) : { x: polylineX, y: polylineY },
-    offset.x,
-    curved,
-  );
+  const labelRoute = curved ? curvePoints : routePoints;
+  const labelAnchor = curved
+    ? (pathLabel ?? { x: defaultX, y: defaultY })
+    : { x: polylineX, y: polylineY };
+  const baseLabel = slidingRelationshipLabel(labelRoute, labelAnchor, 0, curved);
+  const labelPoint = slidingRelationshipLabel(labelRoute, labelAnchor, offset.x, curved, offset.y);
+  const snapOffset = (next: ControlPoint): ControlPoint => {
+    const point = slidingRelationshipLabel(labelRoute, labelAnchor, next.x, curved, next.y);
+    return { x: point.x - baseLabel.x, y: point.y - baseLabel.y };
+  };
   const labelX = labelPoint.x;
   const labelY = labelPoint.y;
   const stroke =
-    (data?.status ? statusColor(data.status) : presentation?.color) ??
+    presentation?.color ??
+    (data?.status ? statusColor(data.status) : undefined) ??
     (selected || focus === "connected" ? "var(--primary)" : "var(--edge)");
   const width =
     presentation?.strokeWidth ??
@@ -318,17 +323,17 @@ function RelationshipEdgeComponent({
               event.currentTarget.setPointerCapture(event.pointerId);
               drag.current = {
                 start: flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
-                offset,
-                current: offset,
+                offset: snapOffset(offset),
+                current: snapOffset(offset),
               };
             }}
             onPointerMove={(event) => {
               if (!drag.current) return;
               const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-              const next = {
+              const next = snapOffset({
                 x: drag.current.offset.x + point.x - drag.current.start.x,
-                y: 0,
-              };
+                y: drag.current.offset.y + point.y - drag.current.start.y,
+              });
               drag.current.current = next;
               setDragOffset(next);
             }}
@@ -354,24 +359,22 @@ function RelationshipEdgeComponent({
                 setDragOffset(null);
                 return;
               }
-              if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-                event.preventDefault();
-                event.stopPropagation();
-                return;
-              }
               const move = {
                 ArrowLeft: [-1, 0],
                 ArrowRight: [1, 0],
+                ArrowUp: [0, -1],
+                ArrowDown: [0, 1],
               }[event.key];
               if (!move || !editable) return;
               event.preventDefault();
               event.stopPropagation();
               const step = event.shiftKey ? 10 : 1;
               const current = pendingOffset.current ?? offset;
-              const next = {
+              const next = snapOffset({
                 x: current.x + (move[0] ?? 0) * step,
-                y: 0,
-              };
+                y: current.y + (move[1] ?? 0) * step,
+              });
+              if (next.x === current.x && next.y === current.y) return;
               setDragOffset(next);
               saveOffset(next);
             }}
