@@ -40,7 +40,6 @@ import { hasPrimaryModifier, primaryModifierKeyCode } from "@/lib/platform";
 import { invalidateWorkspace, queryClient, queryKeys } from "@/lib/query";
 import { useEditorStore } from "@/store/editor";
 import { useHistoryStore } from "@/store/history";
-import { iconFor } from "../icons";
 import type { ViewLocation } from "../navigation/history";
 import { InlineExpansionContext } from "../navigation/InlineExpansion";
 import { useCopyAgentReference } from "../reference/useCopyAgentReference";
@@ -1099,8 +1098,12 @@ export function Canvas({
         id: node.id,
         x: node.position.x,
         y: node.position.y,
-        width: node.measured?.width ?? node.width ?? NODE_WIDTH,
-        height: node.measured?.height ?? node.height ?? NODE_HEIGHT,
+        width: expansion.expandedElementIds.has(node.id)
+          ? (node.width ?? NODE_WIDTH)
+          : (node.measured?.width ?? node.width ?? NODE_WIDTH),
+        height: expansion.expandedElementIds.has(node.id)
+          ? (node.height ?? (node.data.minimumHeight as number | undefined) ?? NODE_HEIGHT)
+          : (node.measured?.height ?? node.height ?? NODE_HEIGHT),
       }));
     const computedBoundaries = computeCanvasBoundaries(
       sources,
@@ -1332,7 +1335,7 @@ export function Canvas({
           proOptions={{ hideAttribution: false }}
           deleteKeyCode={["Delete", "Backspace"]}
         >
-          <Panel position="top-left">
+          <Panel position="top-left" className="z-40">
             <ScenarioPanel
               key={view.id}
               workspaceId={workspaceId}
@@ -1393,17 +1396,7 @@ export function Canvas({
         )}
 
         {graph.nodes.length > 0 && (
-          <div className="pointer-events-none absolute left-3 bottom-20 max-w-[calc(100%-14rem)] flex flex-wrap items-center gap-2 rounded-md border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider shadow-sm backdrop-blur-sm">
-            {view.kind === "workflow" &&
-              (["workflowGroup", "action", "decision", "outcome"] as const).map((kind) => {
-                const Icon = iconFor(kind, null);
-                return (
-                  <span key={kind} className="flex items-center gap-1">
-                    <Icon className="h-3 w-3" aria-hidden="true" />
-                    {t(`kinds.${kind}`)}
-                  </span>
-                );
-              })}
+          <div className="pointer-events-none absolute left-14 bottom-20 max-w-[calc(100%-14rem)] flex flex-wrap items-center gap-2 rounded-md border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider shadow-sm backdrop-blur-sm">
             <span className="text-muted-foreground">{t("canvas.legend")}</span>
             {statusOverlay !== "off" && (
               <>

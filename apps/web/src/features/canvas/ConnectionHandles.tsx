@@ -4,9 +4,12 @@ import { sourceHandleFor, targetHandleFor } from "./graph";
 export function ConnectionHandles() {
   return (
     <>
-      {(["left", "right", "top", "bottom"] as const).flatMap((side) =>
-        (["source", "target"] as const).flatMap((type) =>
-          [0, 1, 2].map((slot) => {
+      {(["target", "source"] as const).flatMap((type) =>
+        (type === "source"
+          ? (["right", "left", "top", "bottom"] as const)
+          : (["left", "right", "top", "bottom"] as const)
+        ).flatMap((side) =>
+          [1, 0, 2].map((slot) => {
             const horizontal = side === "top" || side === "bottom";
             return (
               <Handle

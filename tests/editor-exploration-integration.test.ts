@@ -118,3 +118,85 @@ test("removing or deleting an attached card preserves its comment's canvas locat
     }
   }
 });
+
+test("cloning remaps attached comments, detail preferences and scenario steps to the new workspace", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const group = services.elements.create(workspace.id, {
+      name: "Group",
+      kind: "workflowGroup",
+    }).result;
+    const child = services.elements.create(workspace.id, {
+      name: "Child",
+      kind: "action",
+      parentId: group.id,
+    }).result;
+    const edge = services.relationships.create(workspace.id, {
+      sourceElementId: group.id,
+      targetElementId: child.id,
+    }).result;
+    const home = services.views.create(workspace.id, {
+      name: "Home",
+      kind: "workflow",
+      elementIds: [group.id, child.id],
+    }).result;
+    const detail = services.views.create(workspace.id, {
+      name: "Details",
+      kind: "workflow",
+      scopeElementId: group.id,
+      elementIds: [child.id],
+    }).result;
+    services.views.update(workspace.id, home.id, {
+      settings: {
+        preferredDetailViews: { [group.id]: detail.id },
+        scenarios: [
+          {
+            id: "flow",
+            name: "Flow",
+            steps: [
+              { elementId: group.id, title: "Start" },
+              { elementId: child.id, title: "Finish", relationshipId: edge.id },
+            ],
+          },
+        ],
+      },
+    });
+    services.model.applyOperations(
+      workspace.id,
+      {
+        operations: [
+          {
+            op: "addViewComment",
+            viewId: home.id,
+            data: { text: "Attached", x: 10, y: 20, elementId: group.id },
+          },
+        ],
+      },
+      "ui",
+    );
+    const copy = services.imports.importDocument(services.model.getDocument(workspace.id), {
+      mode: "new",
+      name: "Copy",
+    });
+    const copiedElements = services.model.get(copy.id).elements;
+    const copiedGroup = copiedElements.find((element) => element.name === "Group");
+    const copiedChild = copiedElements.find((element) => element.name === "Child");
+    const copiedView = services.views.listDetailed(copy.id).find((view) => view.name === "Home");
+    const copiedDetail = services.views.list(copy.id).find((view) => view.name === "Details");
+    if (!copiedGroup || !copiedChild || !copiedView || !copiedDetail)
+      throw new Error("Missing cloned objects");
+    expect(copiedView.settings.commentPins[0]?.elementId).toBe(copiedGroup?.id);
+    expect(copiedGroup?.id).not.toBe(group.id);
+    expect(copiedView?.settings.preferredDetailViews[copiedGroup?.id ?? ""]).toBe(copiedDetail?.id);
+    expect(copiedView?.settings.scenarios[0]?.steps.map((step) => step.elementId)).toEqual([
+      copiedGroup?.id,
+      copiedChild?.id,
+    ]);
+    expect(copiedView?.settings.scenarios[0]?.steps[1]?.relationshipId).toBe(
+      services.model.get(copy.id).relationships[0]?.id,
+    );
+  } finally {
+    close();
+  }
+});

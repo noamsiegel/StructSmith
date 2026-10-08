@@ -100,6 +100,27 @@ export class ImportService {
             id: viewId,
             workspaceId: newId,
             scopeElementId: view.scopeElementId ? mapId(view.scopeElementId) : null,
+            settings: {
+              ...view.settings,
+              preferredDetailViews: Object.fromEntries(
+                Object.entries(view.settings.preferredDetailViews).map(([elementId, detailId]) => [
+                  mapId(elementId),
+                  mapId(detailId),
+                ]),
+              ),
+              scenarios: view.settings.scenarios.map((scenario) => ({
+                ...scenario,
+                steps: scenario.steps.map((step) => ({
+                  ...step,
+                  elementId: mapId(step.elementId),
+                  relationshipId: step.relationshipId ? mapId(step.relationshipId) : undefined,
+                })),
+              })),
+              commentPins: view.settings.commentPins.map((pin) => ({
+                ...pin,
+                elementId: pin.elementId ? mapId(pin.elementId) : pin.elementId,
+              })),
+            },
             elements: view.elements.map((entry) => ({
               ...entry,
               viewId,
