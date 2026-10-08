@@ -3,6 +3,7 @@ import { WorkspaceDocumentSchema } from "@structsmith/contracts";
 import { parseWorkspaceImport } from "../apps/web/src/lib/workspaceImport";
 import { toMermaid } from "../packages/domain/src/export";
 import { parseMermaidToWorkspaceDocument as parse } from "../packages/domain/src/mermaid-import";
+import { validateDocument } from "../packages/domain/src/validation";
 import { createTestContext } from "./helpers";
 
 function names(source: string) {
@@ -38,7 +39,7 @@ describe("Mermaid flowchart syntax", () => {
   ])("traditional shape %s", (shape) => {
     const document = parse(`graph TB\nA${shape} --> B`);
     expect(document.elements[0]?.name).toContain("label");
-    expect(document.elements[0]?.kind).toBe("custom");
+    expect(document.elements[0]?.kind).not.toBe("custom");
   });
 
   test.each(["-->", "--->", "---->", "---", "===", "==>", "-.->", "-..->", "-.-", "--o", "--x"])(
@@ -103,6 +104,69 @@ describe("Mermaid flowchart syntax", () => {
     expect(doc.relationships[0]?.properties["mermaid.id"]).toBe("e1");
   });
 
+  test.each([
+    ["rect", "action", null],
+    ["diam", "decision", null],
+    ["cyl", "container", "database"],
+    ["subproc", "workflowGroup", null],
+    ["stadium", "outcome", null],
+    ["lean-r", "data", null],
+    ["doc", "document", null],
+    ["fork", "fork", null],
+    ["join", "join", null],
+  ])("modern %s preserves native meaning", (shape, kind, role) => {
+    expect(parse(`graph LR; A@{ shape: ${shape}, label: "Example" }`).elements[0]).toMatchObject({
+      name: "Example",
+      kind,
+      role,
+    });
+  });
+
+  test("explicit kinds and roles survive later geometry and terminals stay business outcomes", () => {
+    const doc = parse(
+      'graph LR; A@{shape: cyl, kind: document, label: "Evidence"}; A{Changed}; B["Store<br/>container · queue"]; B[(Queue)]; C@{shape: stadium, kind: start}; D@{shape: circle, kind: end}; E([Done]); F[("Generic<br/>custom")]; C-->D',
+    );
+    expect(doc.elements.map(({ kind, role }) => ({ kind, role }))).toEqual([
+      { kind: "document", role: null },
+      { kind: "container", role: "queue" },
+      { kind: "start", role: null },
+      { kind: "end", role: null },
+      { kind: "outcome", role: null },
+      { kind: "custom", role: null },
+    ]);
+  });
+
+  test("visual subgraphs preserve nested Section membership and valid mixed C4 objects", () => {
+    const doc = parse(
+      'graph LR; subgraph Outer[Capture]; A[Receive]; subgraph Inner[Evidence]; B[(Ledger)]; C@{shape: doc, label: "Statement"}; end; end; A-->B; B-->C',
+    );
+    const [outer, inner] = doc.views[0]?.boundaries ?? [];
+    if (!outer || !inner) throw new Error("Missing imported Sections");
+    expect(doc.elements).toHaveLength(3);
+    expect(doc.elements.every((node) => node.parentId === null)).toBe(true);
+    expect(outer.elementIds).toEqual([doc.elements[0]?.id ?? "missing"]);
+    expect(inner.parentBoundaryId).toBe(outer.id);
+    expect(inner.elementIds).toEqual(doc.elements.slice(1).map((node) => node.id));
+    expect(doc.views[0]?.settings.boundaryLayer).toBe("custom");
+    expect(validateDocument(doc).valid).toBe(true);
+  });
+
+  test("connected groups retain runtime visual context without changing C4 hierarchy", () => {
+    const doc = parse(
+      "graph LR; subgraph Overview[Pipeline]; subgraph Process[Publish]; A[Validate]; B[(Ledger)]; end; end; Process-->Outside; A-->B",
+    );
+    const group = doc.elements.find((node) => node.name === "Publish");
+    const store = doc.elements.find((node) => node.name === "Ledger");
+    expect(group?.kind).toBe("workflowGroup");
+    expect(store).toMatchObject({ kind: "container", role: "database", parentId: null });
+    const frame = doc.views[0]?.boundaries.find((boundary) => boundary.name === "Publish");
+    expect(frame?.elementIds).toContain(group?.id);
+    expect(frame?.elementIds).toContain(store?.id);
+    expect(frame?.parentBoundaryId).toBe(doc.views[0]?.boundaries[0]?.id);
+    expect(doc.relationships[0]?.sourceElementId).toBe(group?.id);
+    expect(validateDocument(doc).valid).toBe(true);
+  });
+
   test("quoted delimiters, entities, apostrophes, Unicode and Markdown strings", () => {
     expect(names('graph LR; A["A #quot; #9829; &amp; B; %% still text"]')[0]).toBe(
       'A " ♥ & B; %% still text',
@@ -134,21 +198,28 @@ describe("Mermaid flowchart syntax", () => {
     else expect(a.y).toBeLessThan(b.y);
   });
 
-  test("nested subgraphs and references keep one semantic element", () => {
+  test("nested visual subgraphs become Sections and connected subgraphs become subprocesses", () => {
     const doc = parse(
       'flowchart LR\nA-->B\nsubgraph System ["Outer"]\ndirection TB\nsubgraph Inner\nA[Client]\nend\nB[API]\nend\nSystem-->Other',
     );
     const byName = new Map(doc.elements.map((node) => [node.name, node]));
-    expect(byName.get("Client")?.parentId).toBe(byName.get("Inner")?.id ?? "missing");
-    expect(byName.get("Inner")?.parentId).toBe(byName.get("Outer")?.id ?? "missing");
+    expect(byName.get("Client")?.parentId).toBe(byName.get("Outer")?.id ?? "missing");
+    expect(byName.get("Outer")?.kind).toBe("workflowGroup");
+    expect(doc.views[0]?.boundaries[0]).toMatchObject({
+      name: "Inner",
+      parentBoundaryId: null,
+      elementIds: [byName.get("Client")?.id],
+    });
     expect(byName.get("API")?.parentId).toBe(byName.get("Outer")?.id ?? "missing");
     expect(doc.views[0]?.settings.autoLayoutDirection).toBe("LR");
     expect(doc.relationships).toHaveLength(2);
-    expect(doc.elements).toHaveLength(5);
+    expect(doc.elements).toHaveLength(4);
   });
 
   test("subgraph titles with spaces", () => {
-    expect(names("graph LR\nsubgraph My System\nA\nend")).toEqual(["My System", "A"]);
+    const doc = parse("graph LR\nsubgraph My System\nA\nend");
+    expect(doc.elements.map((node) => node.name)).toEqual(["A"]);
+    expect(doc.views[0]?.boundaries[0]?.name).toBe("My System");
   });
 
   test("StructSmith metadata and technology round trip through export", () => {
@@ -218,6 +289,38 @@ describe("Mermaid flowchart syntax", () => {
 });
 
 describe("Mermaid import domain persistence", () => {
+  test("ordinary flowchart shapes persist native semantic types", () => {
+    const { services, close } = createTestContext();
+    try {
+      const workspace = services.imports.importMermaid(
+        "flowchart LR; A[Capture] --> B{Safe?}; B --> C[[Publish]]; C --> D[(Ledgers)]; subgraph S[Process]; E[/Evidence/]; end; F",
+      );
+      expect(
+        Object.fromEntries(
+          services.model
+            .getDocument(workspace.id)
+            .elements.map(({ name, kind, role }) => [name, { kind, role }]),
+        ),
+      ).toEqual({
+        Capture: { kind: "action", role: null },
+        "Safe?": { kind: "decision", role: null },
+        Publish: { kind: "workflowGroup", role: null },
+        Ledgers: { kind: "container", role: "database" },
+        Evidence: { kind: "data", role: null },
+        F: { kind: "action", role: null },
+      });
+      const document = services.model.getDocument(workspace.id);
+      expect(document.views[0]?.boundaries[0]).toMatchObject({
+        name: "Process",
+        kind: "custom",
+        layer: "custom",
+        elementIds: [document.elements.find((node) => node.name === "Evidence")?.id],
+      });
+    } finally {
+      close();
+    }
+  });
+
   test("new workspaces get independent IDs and usable views", () => {
     const { services, close } = createTestContext();
     try {

@@ -1,4 +1,5 @@
 import type {
+  ArchitectureBoundary,
   ArchitectureElement,
   ArchitectureRelationship,
   ElementKind,
@@ -12,7 +13,8 @@ import {
   WorkspaceDocumentSchema,
 } from "@structsmith/contracts";
 import { createId, nowIso } from "./ids";
-import { computeLayout, DEFAULT_NODE_HEIGHT, DEFAULT_NODE_WIDTH } from "./layout";
+import { computeLayout, estimateElementSize } from "./layout";
+import { checkParent } from "./rules";
 
 export interface MermaidImportOptions {
   workspaceName?: string;
@@ -174,13 +176,13 @@ class Cursor {
     }
     throw new Error(`Missing closing ${close}.`);
   }
-  shape(): string | undefined {
+  shape(): { label: string; open: string; close: string } | undefined {
     this.space();
     for (const [open, close] of shapes) {
       if (!this.rest().startsWith(open)) continue;
       // Both sloping shapes share an opener; choose the closing slope actually present.
       if ((open === "[/" || open === "[\\") && !this.rest().includes(close)) continue;
-      return this.body(open, close);
+      return { label: this.body(open, close), open, close };
     }
     return undefined;
   }
@@ -214,7 +216,9 @@ class Cursor {
   }
 }
 
-function applyLabel(node: ArchitectureElement, raw: string): void {
+function applyLabel(node: ArchitectureElement, raw: string): { kind: boolean; role: boolean } {
+  let explicitKind = false;
+  let explicitRole = false;
   const lines = labelText(raw)
     .split("\n")
     .map((line) => line.trim())
@@ -226,8 +230,13 @@ function applyLabel(node: ArchitectureElement, raw: string): void {
     if (tokens.every((token) => kindByName.has(token) || roleByName.has(token))) {
       for (const [index, token] of tokens.entries()) {
         const kind = index === 0 ? kindByName.get(token) : undefined;
-        if (kind) node.kind = kind;
-        else node.role = roleByName.get(token) ?? node.role;
+        if (kind) {
+          node.kind = kind;
+          explicitKind = true;
+        } else {
+          node.role = roleByName.get(token) ?? node.role;
+          explicitRole = true;
+        }
       }
     } else if (/^\[.*\]$/.test(line)) {
       node.technology = line.slice(1, -1);
@@ -235,6 +244,26 @@ function applyLabel(node: ArchitectureElement, raw: string): void {
   }
   node.description = description.join("\n") || null;
   if (node.name.length > 200) throw new Error("Node names must be at most 200 characters.");
+  return { kind: explicitKind, role: explicitRole };
+}
+
+function shapeType(shape: string, close?: string): { kind: ElementKind; role: ElementRole | null } {
+  if (["[[", "subproc", "subprocess", "fr-rect"].includes(shape))
+    return { kind: "workflowGroup", role: null };
+  if (["{", "diam", "diamond", "decision"].includes(shape)) return { kind: "decision", role: null };
+  if (["[(", "cyl", "cylinder", "database"].includes(shape))
+    return { kind: "container", role: "database" };
+  if (["([", "((", "(((", "stadium", "circle", "dbl-circ"].includes(shape))
+    return { kind: "outcome", role: null };
+  if (
+    (shape === "[/" && close === "/]") ||
+    (shape === "[\\" && close === "\\]") ||
+    ["lean-r", "lean-l", "in-out", "lean-right", "lean-left"].includes(shape)
+  )
+    return { kind: "data", role: null };
+  if (["doc", "document"].includes(shape)) return { kind: "document", role: null };
+  if (shape === "fork" || shape === "join") return { kind: shape, role: null };
+  return { kind: "action", role: null };
 }
 
 /** Pure import adapter: Mermaid syntax -> semantic document -> view-only layout. */
@@ -281,6 +310,22 @@ export function parseMermaidToWorkspaceDocument(
   const edgeNames = new Set<string>();
   const groups = new Set<string>();
   const parents: string[] = [];
+  const explicitKinds = new Set<string>();
+  const explicitRoles = new Set<string>();
+
+  const inferType = (node: ArchitectureElement, shape: string, close?: string): void => {
+    const type = shapeType(shape, close);
+    if (!explicitKinds.has(node.id)) node.kind = type.kind;
+    if (!explicitRoles.has(node.id)) node.role = type.role;
+  };
+  const setLabel = (node: ArchitectureElement, label: string): void => {
+    const explicit = applyLabel(node, label);
+    if (explicit.kind) {
+      explicitKinds.add(node.id);
+      if (!explicit.role && !explicitRoles.has(node.id)) node.role = null;
+    }
+    if (explicit.role) explicitRoles.add(node.id);
+  };
 
   const nodeFor = (rawId: string): ArchitectureElement => {
     let node = nodes.get(rawId);
@@ -291,7 +336,7 @@ export function parseMermaidToWorkspaceDocument(
         id: createId(rawId),
         workspaceId,
         parentId: null,
-        kind: "custom",
+        kind: "action",
         role: null,
         name: rawId,
         description: null,
@@ -313,15 +358,25 @@ export function parseMermaidToWorkspaceDocument(
     const result: ArchitectureElement[] = [];
     for (;;) {
       const node = nodeFor(cursor.id());
-      const label = cursor.shape();
-      if (label !== undefined) applyLabel(node, label);
+      const shape = cursor.shape();
+      if (shape !== undefined) {
+        inferType(node, shape.open, shape.close);
+        setLabel(node, shape.label);
+      }
       const attrs = cursor.attributes();
-      if (attrs?.has("label")) applyLabel(node, attrs.get("label") ?? "");
-      // Explicit semantic metadata is accepted; arbitrary geometry does not imply C4 kinds.
+      if (attrs?.has("shape")) inferType(node, attrs.get("shape")?.toLowerCase() ?? "");
+      if (attrs?.has("label")) setLabel(node, attrs.get("label") ?? "");
       const kind = attrs?.get("kind")?.toLowerCase();
       const role = attrs?.get("role")?.toLowerCase();
-      if (kind && kindByName.has(kind)) node.kind = kindByName.get(kind) as ElementKind;
-      if (role && roleByName.has(role)) node.role = roleByName.get(role) as ElementRole;
+      if (kind && kindByName.has(kind)) {
+        node.kind = kindByName.get(kind) as ElementKind;
+        explicitKinds.add(node.id);
+        if (!explicitRoles.has(node.id)) node.role = null;
+      }
+      if (role && roleByName.has(role)) {
+        node.role = roleByName.get(role) as ElementRole;
+        explicitRoles.add(node.id);
+      }
       cursor.space();
       if (cursor.rest().startsWith(":::")) {
         cursor.index += 3;
@@ -383,13 +438,14 @@ export function parseMermaidToWorkspaceDocument(
           label = rawId;
         } else {
           rawId = cursor.id();
-          label = cursor.shape();
+          label = cursor.shape()?.label;
           cursor.space();
           if (cursor.rest()) throw new Error("Malformed subgraph declaration.");
         }
         if (!rawId || groups.has(rawId)) throw new Error("Empty or duplicate subgraph id.");
         const node = nodeFor(rawId);
-        if (label !== undefined) applyLabel(node, label);
+        if (!explicitKinds.has(node.id)) node.kind = "workflowGroup";
+        if (label !== undefined) setLabel(node, label);
         groups.add(rawId);
         parents.push(rawId);
         continue;
@@ -466,9 +522,9 @@ export function parseMermaidToWorkspaceDocument(
   }
   if (parents.length) throw new Error("Unclosed subgraph: missing end.");
   if (!nodes.size) throw new Error("The Mermaid diagram has no importable elements.");
-  const elements = [...nodes.values()];
-  const byId = new Map(elements.map((node) => [node.id, node]));
-  for (const node of elements) {
+  const allNodes = [...nodes.values()];
+  const byId = new Map(allNodes.map((node) => [node.id, node]));
+  for (const node of allNodes) {
     const seen = new Set<string>([node.id]);
     let parent = node.parentId;
     while (parent) {
@@ -477,15 +533,97 @@ export function parseMermaidToWorkspaceDocument(
       parent = byId.get(parent)?.parentId ?? null;
     }
   }
-  const settings = ViewSettingsSchema.parse({ autoLayoutDirection: direction });
+  const connectedIds = new Set(
+    edges.flatMap((edge) => [edge.sourceElementId, edge.targetElementId]),
+  );
+  const groupIds = new Set([...groups].map((rawId) => nodes.get(rawId)?.id));
+  for (const node of allNodes) {
+    if (groupIds.has(node.id) && !explicitKinds.has(node.id)) {
+      node.kind = "workflowGroup";
+      if (!explicitRoles.has(node.id)) node.role = null;
+    }
+  }
+  const sections = new Set(
+    allNodes
+      .filter(
+        (node) =>
+          groupIds.has(node.id) && !explicitKinds.has(node.id) && !connectedIds.has(node.id),
+      )
+      .map((node) => node.id),
+  );
+  const originalParents = new Map(allNodes.map((node) => [node.id, node.parentId]));
+  const elements = allNodes.filter((node) => !sections.has(node.id));
+  const visualSections = new Set(sections);
+  for (const node of elements) {
+    while (node.parentId && sections.has(node.parentId))
+      node.parentId = originalParents.get(node.parentId) ?? null;
+    const parent = node.parentId ? byId.get(node.parentId) : undefined;
+    if (
+      parent &&
+      groupIds.has(parent.id) &&
+      !explicitKinds.has(parent.id) &&
+      checkParent(node, parent)
+    ) {
+      // Inferred C4 objects keep visual membership without inheriting a workflow parent.
+      visualSections.add(parent.id);
+      node.parentId = null;
+    }
+  }
+  const sectionAncestor = (id: string): string | null => {
+    let parent = originalParents.get(id) ?? null;
+    while (parent) {
+      if (visualSections.has(parent)) return parent;
+      parent = originalParents.get(parent) ?? null;
+    }
+    return null;
+  };
+  const boundaryIds = new Map(
+    [...visualSections].map((id) => [id, sections.has(id) ? id : createId("mermaid-section")]),
+  );
+  const boundaries: ArchitectureBoundary[] = allNodes
+    .filter((node) => visualSections.has(node.id))
+    .map((node) => ({
+      id: boundaryIds.get(node.id) ?? node.id,
+      workspaceId,
+      viewId,
+      parentBoundaryId: boundaryIds.get(sectionAncestor(node.id) ?? "") ?? null,
+      name: node.name,
+      description: node.description,
+      kind: "custom",
+      layer: "custom",
+      classification: null,
+      tags: node.tags,
+      properties: node.properties,
+      elementIds: elements
+        .filter(
+          (element) =>
+            (visualSections.has(element.id) ? element.id : sectionAncestor(element.id)) === node.id,
+        )
+        .map((element) => element.id),
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    }));
+  const settings = ViewSettingsSchema.parse({
+    autoLayoutDirection: direction,
+    ...(boundaries.length ? { boundaryLayer: "custom" } : {}),
+  });
+  const sizes = new Map(elements.map((node) => [node.id, estimateElementSize(node, settings)]));
   const positions = computeLayout(
-    elements.map((node) => ({ id: node.id, parentId: node.parentId })),
+    elements.map((node) => ({
+      id: node.id,
+      parentId: node.parentId,
+      ...sizes.get(node.id),
+      groupId: boundaries.find((boundary) => boundary.elementIds.includes(node.id))?.id,
+    })),
     edges.map((edge) => ({
       source: edge.sourceElementId,
       target: edge.targetElementId,
       label: edge.description ?? undefined,
     })),
     direction,
+    "dagre",
+    undefined,
+    boundaries.map((boundary) => ({ id: boundary.id, parentId: boundary.parentBoundaryId })),
   );
   const placements = new Map(positions.map((position) => [position.id, position]));
   const maxX = Math.max(0, ...positions.map((position) => position.x));
@@ -503,7 +641,7 @@ export function parseMermaidToWorkspaceDocument(
     },
     elements,
     relationships: edges,
-    boundaries: [],
+    boundaries,
     records: [],
     views: [
       {
@@ -512,10 +650,10 @@ export function parseMermaidToWorkspaceDocument(
         key: "mermaid",
         name: "Imported Mermaid",
         description: null,
-        kind: "custom",
+        kind: "workflow",
         scopeElementId: null,
         settings,
-        boundaries: [],
+        boundaries,
         elements: elements.map((node, zIndex) => {
           const position = placements.get(node.id);
           const x = position?.x ?? 0;
@@ -525,8 +663,7 @@ export function parseMermaidToWorkspaceDocument(
             elementId: node.id,
             x: originalDirection === "RL" ? maxX - x : x,
             y: originalDirection === "BT" ? maxY - y : y,
-            width: DEFAULT_NODE_WIDTH,
-            height: DEFAULT_NODE_HEIGHT,
+            ...sizes.get(node.id),
             hidden: false,
             locked: false,
             zIndex,
