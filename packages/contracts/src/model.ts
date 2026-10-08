@@ -282,10 +282,22 @@ const annotationCells = z
 
 export const ViewAnnotationSchema = z.discriminatedUnion("kind", [
   z
-    .object({ id: IdSchema, kind: z.literal("text"), ...annotationGeometry, text: annotationText })
+    .object({
+      id: IdSchema,
+      kind: z.literal("text"),
+      ...annotationGeometry,
+      fontSize: z.number().finite().min(8).max(72).optional(),
+      text: annotationText,
+    })
     .strict(),
   z
-    .object({ id: IdSchema, kind: z.literal("note"), ...annotationGeometry, text: annotationText })
+    .object({
+      id: IdSchema,
+      kind: z.literal("note"),
+      ...annotationGeometry,
+      fontSize: z.number().finite().min(8).max(72).optional(),
+      text: annotationText,
+    })
     .strict(),
   z
     .object({
@@ -303,6 +315,7 @@ export const CreateViewAnnotationSchema = z.discriminatedUnion("kind", [
       id: IdSchema.optional(),
       kind: z.literal("text"),
       ...annotationGeometry,
+      fontSize: z.number().finite().min(8).max(72).optional(),
       text: annotationText,
     })
     .strict(),
@@ -311,6 +324,7 @@ export const CreateViewAnnotationSchema = z.discriminatedUnion("kind", [
       id: IdSchema.optional(),
       kind: z.literal("note"),
       ...annotationGeometry,
+      fontSize: z.number().finite().min(8).max(72).optional(),
       text: annotationText,
     })
     .strict(),
