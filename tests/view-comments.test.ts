@@ -311,7 +311,11 @@ test("attached comments require a placement in their own view and retain server 
     services.views.setElements(workspace.id, view.id, [placed.id], "add");
     services.views.saveLayout(workspace.id, view.id, [{ elementId: placed.id, x: 100, y: 200 }]);
     const run = (operations: ArchitectureOperationInput[]) =>
-      services.model.applyOperations(workspace.id, { operations }, "ui");
+      services.model.applyOperations(
+        workspace.id,
+        ApplyOperationsRequestSchema.parse({ operations }),
+        "ui",
+      );
     for (const elementId of ["missing", unplaced.id, foreign.id]) {
       expect(() =>
         run([
