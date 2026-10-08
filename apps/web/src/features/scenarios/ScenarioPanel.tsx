@@ -69,10 +69,16 @@ export function ScenarioPanel({
   const visible = elements.filter((element) =>
     view.elements.some((row) => row.elementId === element.id),
   );
+  const arrival = relationships.find((edge) => edge.id === step?.relationshipId);
+  const previous = selected?.steps[index - 1];
   const stale =
     step &&
     (!visible.some((element) => element.id === step.elementId) ||
-      (step.relationshipId && !relationships.some((edge) => edge.id === step.relationshipId)));
+      (step.relationshipId &&
+        (!arrival ||
+          !previous ||
+          arrival.sourceElementId !== previous.elementId ||
+          arrival.targetElementId !== step.elementId)));
 
   useEffect(() => {
     onStep(step && !stale ? step : null);
@@ -126,6 +132,7 @@ export function ScenarioPanel({
       setError(null);
       return true;
     } catch {
+      setDeleting(null);
       setError(t("scenarios.saveFailed"));
       return false;
     }
@@ -184,7 +191,7 @@ export function ScenarioPanel({
         </Button>
         {open && !draft && (
           <>
-            <Select value={selected?.id ?? ""} onValueChange={choose}>
+            <Select value={selected?.id ?? ""} onValueChange={choose} disabled={command.isPending}>
               <SelectTrigger aria-label={t("scenarios.choose")} className="h-7 min-w-0 flex-1">
                 <SelectValue placeholder={t("scenarios.choose")} />
               </SelectTrigger>
