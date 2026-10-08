@@ -64,7 +64,7 @@ export const presets: readonly ElementPreset[] = [
   { id: "component", label: "Component", kind: "component", role: null, icon: "Component" },
   {
     id: "workflowGroup",
-    label: "Workflow group",
+    label: "Subprocess",
     kind: "workflowGroup",
     role: null,
     icon: "Workflow",

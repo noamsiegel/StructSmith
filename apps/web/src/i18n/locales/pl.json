@@ -513,7 +513,15 @@
     "conflict": "Ktoś inny zmienił tę przestrzeń — wczytuję najnowszą wersję.",
     "layoutSaved": "Układ zapisany"
   },
-  "sections": { "fit": "Dopasuj sekcję do zawartości" },
+  "sections": {
+    "fit": "Dopasuj sekcję do zawartości",
+    "title": "Sekcja",
+    "newName": "Nowa sekcja",
+    "add": "Dodaj sekcję",
+    "rename": "Zmień nazwę sekcji",
+    "updated": "Zaktualizowano sekcję",
+    "membershipChanged": "Przeniesiono obiekty między sekcjami"
+  },
   "boundaries": {
     "title": "Strefy",
     "moveGroupHint": "Przeciągnij, aby przenieść grupę wraz z jej elementami",
@@ -541,7 +549,7 @@
       "networkZone": "Strefa sieciowa",
       "trustZone": "Strefa zaufania",
       "complianceScope": "Zakres zgodności",
-      "custom": "Własna"
+      "custom": "Sekcja"
     },
     "classification": {
       "public": "Publiczna",
@@ -564,7 +572,7 @@
     "deploymentNode": "Węzeł wdrożeniowy",
     "infrastructureNode": "Węzeł infrastruktury",
     "custom": "Własny",
-    "workflowGroup": "Grupa procesu",
+    "workflowGroup": "Podproces",
     "action": "Działanie",
     "decision": "Decyzja",
     "outcome": "Wynik"
@@ -621,7 +629,7 @@
     "externalApi": "Zewnętrzne API",
     "component": "Komponent",
     "custom": "Własny",
-    "workflowGroup": "Grupa procesu",
+    "workflowGroup": "Podproces",
     "action": "Działanie",
     "decision": "Decyzja",
     "outcome": "Wynik"
@@ -821,7 +829,7 @@
   "creationToolbar": {
     "title": "Add to diagram",
     "add": "Add {{name}}",
-    "workflowGroup": "Group",
+    "workflowGroup": "Podproces",
     "action": "Action",
     "decision": "Decision",
     "outcome": "Outcome",

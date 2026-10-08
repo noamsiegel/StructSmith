@@ -6,18 +6,34 @@ Build this checkout to run the fork; upstream images do not include these change
 
 ## Workflow navigation and status
 
-Use `workflowGroup`, `action`, `decision` and `outcome` for process steps and
-`workflow` views for their diagrams. Connect a saved detail view to its overview
-object using `scopeElementId`. Existing custom groups use the same drill-down.
+Use **Subprocess** (`kind: workflowGroup`), `action`, `decision` and `outcome`
+for workflow behavior and `workflow` views for their diagrams. A Subprocess is a
+shared model element with a stable ID, incoming/outgoing connections and child
+steps. It uses a compact block with double side lines; inline expansion and saved
+detail views reveal its contents. Connect a detail view to its overview object
+using `scopeElementId`.
 One matching view opens directly; multiple matches show a chooser. **Remember for
 this diagram** saves a preferred detail destination for that placement. Back and
 breadcrumbs restore the previous viewport and selection. Opening a saved view
 makes no model edits; creating a missing detail view requires the creation dialog.
 
-Groups and actions can contain steps; decisions and outcomes are leaves. Runtime
-C4 elements can appear alongside workflow steps. Titled boundaries and group
-outlines provide structure without depending on color. Prefer one functional
-hierarchy with a readable overview and at most four navigation levels.
+**Sections** organize a view for readers, such as “Inputs,” “Capture” and
+“Publication.” They are spacious, lightly tinted frames with outside titles,
+stored as custom view boundaries rather than model elements. They have no
+connections, expansion or drill-down. Use a Section for visual organization and
+a Subprocess for a connected step whose internals deserve their own explanation.
+
+Sections sit at the canvas root or inside another Section. They may contain
+Subprocesses and ordinary elements. Subprocesses contain steps and nested
+Subprocesses, never Sections. A scoped detail view can have top-level Sections
+around its visible steps; this does not change those steps' semantic parentage.
+Actions can also contain steps; decisions and outcomes are leaves. Runtime C4
+elements can appear alongside workflow steps. Prefer a readable overview and at
+most four navigation levels.
+
+The legacy portal backup's three semantic custom groups were converted in place
+to Subprocesses. The migration retained their IDs, children, detail views and
+saved presentation; see [the migration inventory](SECTION_MIGRATION_INVENTORY.md).
 
 Tag elements and relationships with `status:live` or `status:planned`. Status
 shows text badges and blue solid or purple dashed connections. Relationship tags
@@ -35,7 +51,7 @@ and resets to Status on reload, without editing the model or coordinates.
 
 ## Explore without copying diagrams
 
-- Expand or collapse a selected group's children in place using its existing model
+- Expand or collapse a selected Subprocess's children in place using its existing model
   IDs. Expansion is temporary, supports at most four visible hierarchy levels and
   does not add those children to the saved view. Use scoped views for durable detail.
 - The element inspector lists incoming/outgoing dependencies, including connections
@@ -70,8 +86,9 @@ and resets to Status on reload, without editing the model or coordinates.
   section at the visible canvas center. Click its title to rename it, drag
   the frame to move its members together, and select it to resize with corner/edge
   handles. Drop a block fully inside the body to join; drag it out to leave.
-  Existing custom groups and boundaries retain their IDs. Manual frame geometry
-  is view-owned `settings.sectionFrames`; membership uses existing grouping data.
+  Sections are view-owned custom boundaries. Manual frame geometry is view-owned
+  `settings.sectionFrames`; membership uses boundary members and nested boundaries,
+  independently of semantic element parents.
   Double-click the section background/outline, or select it and use **Fit section
   to contents**, to fit member bounds without moving them. Empty sections keep
   their size. Locked members prevent frame resizing and fitting.
@@ -84,11 +101,16 @@ and resets to Status on reload, without editing the model or coordinates.
   connections, comments and layout. Type changes affect the shared model across
   views; incompatible parent/child types are disabled. Actions use rectangles,
   decisions diamonds, outcomes rounded terminals, databases cylinders and
-  workflow groups subprocess outlines. Content stays upright inside each shape.
+  Subprocesses double side lines. Content stays upright inside each shape.
   Decisions reserve more room, so existing manual layouts may need auto-layout.
-- Drag a titled group frame to move its members together. Existing custom-parent
-  frames and view-owned boundaries use the same saved-layout behavior. A frame
-  with a locked member cannot be dragged. No second grouping model is introduced.
+- Drag a Section or expanded Subprocess frame to move its members together.
+  Both use saved view layout; the Section owns boundary membership and the
+  Subprocess retains semantic parentage. A frame with a locked saved member cannot
+  move. Quick-look children absent from the saved view remain temporary: they move
+  during the gesture, then may reflow around nearby cards when the view is rebuilt
+  or reopened. They are not added to the view by moving the Subprocess. Dragging
+  the expanded frame across a Section edge updates its visual membership.
+  Nested Sections grow their parent frame to keep the child outline and title inside.
 - **Auto layout** arranges custom and workflow nodes, including compound groups,
   using the selected algorithm and direction. It clears saved connector bends,
   attachment sides and label offsets, while retaining stroke styling and hidden
@@ -143,7 +165,7 @@ Model; Cmd/Ctrl+Alt+B toggles Inspector. Both start hidden on reload; reopening
 restores their width during the session. Explicit inspection actions can reveal
 Inspector. The diagram legend opens separately from the top navigation.
 
-The bottom-center creation toolbar adds sections, workflow groups, actions, decisions
+The bottom-center creation toolbar adds Sections, Subprocesses, actions, decisions
 and outcomes at the visible canvas center; **More** opens the existing element palette.
 Comments stay in the top controls and **C** starts placement. Cmd/Ctrl+/ opens
 searchable shortcut help, including gestures and platform-specific modifier names.

@@ -56,11 +56,11 @@ export function modelingGuide() {
       "Model each relationship once at the most specific meaningful C4 level.",
       "When a view hides descendants, StructSmith lifts and groups their relationships onto visible ancestors automatically. Do not add duplicate system-level relationships for a context view.",
       "Containers belong to software systems; components belong to containers.",
-      "Use workflowGroup, action, decision and outcome for process semantics, not fake C4 containers. Workflow steps can connect to existing runtime elements without changing their kinds.",
+      "Use workflowGroup (Subprocess), action, decision and outcome for process semantics, not fake C4 containers. Subprocesses are reusable semantic elements with connections, children, inline expansion and scoped detail views. Workflow steps can connect to existing runtime elements without changing their kinds.",
       "Use external=true for systems outside the modeled ownership boundary.",
       "Records capture assumptions, risks, unknowns, requirements, decisions and notes; they are not diagram nodes.",
-      "Boundaries belong to a view. They group that view's elements by deployment, security, compliance or ownership semantics; they are not model elements or relationship endpoints.",
-      "The same model element can have different boundary membership in different views. Within one view it can belong to at most one boundary in a layer.",
+      "Boundaries belong to a view. They group that view's elements by deployment, security, compliance or ownership semantics; they are not model elements or relationship endpoints. Custom boundaries are Sections: visual organization for readers, with no connections, expansion or drill-down.",
+      "The same model element can have different boundary membership in different views. Within one view it can belong to at most one boundary in a layer. Sections have no semantic parent; nest them only through parentBoundaryId under another Section in the same view and layer. Sections may group subprocesses and other visible elements but must not be placed inside a subprocess. A scoped detail view may have its own top-level Sections even when its steps belong semantically to the scope subprocess.",
     ],
     enums: {
       elementKinds,
@@ -100,7 +100,7 @@ export function modelingGuide() {
       recommended: [
         "Create a systemContext view for actors (`kind: person`), the focal software system and external systems.",
         "Create a container view scoped to the focal software system for runtime building blocks.",
-        "Create a workflow view for decisions, actions and outcomes, optionally scoped to a workflowGroup or action. A custom group can open existing scoped custom/workflow views; scopeElementId connects the overview to its internals.",
+        "Create a workflow view for decisions, actions and outcomes, optionally scoped to a workflowGroup (Subprocess) or action. scopeElementId connects the overview object to its internals. A Section is never a scope element; create it with createBoundary using kind: custom, layer: custom, the target viewId and optional parentBoundaryId.",
         "Seed elementIds when creating the view and include autoLayoutView in the same batch.",
       ],
       relationshipBehavior:
@@ -111,7 +111,7 @@ export function modelingGuide() {
         nodeColors:
           "Per-view #RRGGBB colors keyed by element ID or boundary:ID for group frames. Existing workspace elements and this view's boundaries are valid targets. Replace the map to remove a node color; connector colors use relationship presentation. Explicit colors override status outlines without changing tags.",
         sectionFrames:
-          "View-owned custom Section rectangles keyed by boundary:ID, with finite x/y and width >= 120, height >= 80. Membership uses existing boundaries/custom parents. Move or fit frames with updateView, without moving semantic endpoints.",
+          "View-owned Section rectangles keyed by boundary:ID, with finite x/y and width >= 120, height >= 80. Section membership uses custom boundaries, not custom-element parents. Create the boundary and setBoundaryMembers before setting its frame. Move or fit frames with updateView, without changing semantic parentage or connection endpoints.",
         commentPins:
           "View-owned threads ({id,x,y,text,resolved,replies:[{id,text}]}); comment_list/comment_get read threads. comment_create/update/delete and comment_reply_create/update/delete share model_apply_operations revision guards and undo snapshots. Updating data.resolved resolves/reopens a thread. Deleting a parent removes all replies; deleting a reply leaves the parent. No per-person ownership, mentions or notifications.",
         showFullTitles: "Wrap full element titles instead of truncating them.",

@@ -4,8 +4,8 @@
 
 <h1 align="center">StructSmith</h1>
 
-This fork adds native workflow steps, drill-down for custom groups, and editable
-connector presentation. See [the fork guide](docs/FORK.md). Build this checkout
+This fork adds native workflow steps, Subprocess drill-down, view-owned Sections,
+and editable connector presentation. See [the fork guide](docs/FORK.md). Build this checkout
 with Docker to run these changes; upstream release images and installers contain
 upstream's features. For host agents, pass your built image to `bun run docker:local --image IMAGE`.
 
