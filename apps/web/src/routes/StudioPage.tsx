@@ -19,6 +19,7 @@ import { useChatStore } from "@/features/chat/store";
 import { CommandPalette } from "@/features/command/CommandPalette";
 import { ElementPalette } from "@/features/command/ElementPalette";
 import { KeyboardShortcutsDialog } from "@/features/command/KeyboardShortcutsDialog";
+import { isShortcutHelp } from "@/features/command/shortcuts";
 import { Explorer } from "@/features/explorer/Explorer";
 import { Inspector, ViewInspector } from "@/features/inspector/Inspector";
 import { DetailNavigationContext } from "@/features/navigation/DetailNavigation";
@@ -328,7 +329,7 @@ function StudioContent({
         setCommandOpen(true);
         return;
       }
-      if (primary && event.key === "/") {
+      if (isShortcutHelp(event)) {
         event.preventDefault();
         setShortcutsOpen(true);
         return;
@@ -526,7 +527,19 @@ function StudioContent({
           mcpReadOnly={settings.data?.mcpReadOnly ?? false}
         />
 
-        <ElementPalette workspaceId={workspaceId} view={view.data ?? null} />
+        <ElementPalette
+          workspaceId={workspaceId}
+          view={view.data ?? null}
+          getCreationPoint={() => {
+            const bounds = document.querySelector(".react-flow")?.getBoundingClientRect();
+            return bounds
+              ? flow.screenToFlowPosition({
+                  x: bounds.left + bounds.width / 2,
+                  y: bounds.top + bounds.height / 2,
+                })
+              : { x: 0, y: 0 };
+          }}
+        />
         <KeyboardShortcutsDialog />
         {view.data && (
           <Dialog open={viewSettingsOpen} onOpenChange={setViewSettingsOpen}>

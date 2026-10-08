@@ -281,7 +281,8 @@
   },
   "palette": {
     "title": "Add element",
-    "hint": "Presets create the right kind and role — you can change both later."
+    "hint": "Presets create the right kind and role — you can change both later.",
+    "added": "Added {{name}}"
   },
   "canvas": {
     "legend": "Ownership",
@@ -449,7 +450,37 @@
     "scroll": "scroll",
     "zoom": "Zoom canvas",
     "click": "click",
-    "dragCanvas": "drag canvas"
+    "dragCanvas": "drag canvas",
+    "groups": {
+      "editor": "Editor",
+      "canvas": "Canvas",
+      "connectors": "Connectors",
+      "comments": "Comments",
+      "controls": "Controls and dialogs",
+      "chat": "Agent chat"
+    },
+    "saveStatus": "Show save status (changes save automatically)",
+    "moveElement": "Move a focused, selected element",
+    "moveElementFast": "Move a focused, selected element farther",
+    "arrowKeys": "Arrow keys",
+    "moveLabel": "Move a focused connector label horizontally",
+    "moveLabelFast": "Move a focused connector label by 10 units",
+    "moveSegment": "Move a focused connector segment perpendicular to its line",
+    "moveSegmentFast": "Move a focused connector segment by 10 units",
+    "cancelDrag": "Cancel connector dragging",
+    "commentCenter": "Place a comment at the view center (comment mode)",
+    "commentCancel": "Leave comment mode or close a thread",
+    "nextControl": "Focus the next control",
+    "previousControl": "Focus the previous control",
+    "chooseResult": "Choose a search result or menu item",
+    "toolbarNavigation": "Navigate the creation toolbar",
+    "dismiss": "Close a dialog or menu",
+    "commitField": "Save an editable field",
+    "cancelField": "Cancel an editable field",
+    "chatSend": "Send the current chat message",
+    "chatNewline": "Insert a newline in the chat message",
+    "chatReorder": "Pick up, move and drop a chat topic",
+    "chatCancelReorder": "Cancel reordering a chat topic"
   },
   "status": {
     "revision": "rev {{revision}}",
@@ -773,5 +804,15 @@
   "tagFocus": {
     "title": "Focus by tag",
     "all": "All tags"
+  },
+  "creationToolbar": {
+    "title": "Add to diagram",
+    "add": "Add {{name}}",
+    "workflowGroup": "Group",
+    "action": "Action",
+    "decision": "Decision",
+    "outcome": "Outcome",
+    "more": "More",
+    "moreHint": "More elements"
   }
 }

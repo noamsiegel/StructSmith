@@ -47,6 +47,7 @@ import { useCopyAgentReference } from "../reference/useCopyAgentReference";
 import { ScenarioPanel } from "../scenarios/ScenarioPanel";
 import { BoundaryNode } from "./BoundaryNode";
 import { CanvasComments } from "./CanvasComments";
+import { CreationToolbar } from "./CreationToolbar";
 import { buildPasteOperations, createDiagramClipboard, type DiagramCopyMode } from "./clipboard";
 import { ElementNode } from "./ElementNode";
 import {
@@ -1363,6 +1364,19 @@ export function Canvas({
           />
         </ReactFlow>
 
+        <CreationToolbar
+          workspaceId={workspaceId}
+          view={view}
+          getCreationPoint={() => {
+            const bounds = canvasRef.current?.getBoundingClientRect();
+            return bounds
+              ? flow.screenToFlowPosition({
+                  x: bounds.left + bounds.width / 2,
+                  y: bounds.top + bounds.height / 2,
+                })
+              : { x: 0, y: 0 };
+          }}
+        />
         {graph.nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
             <p className="text-sm font-medium">{t("canvas.empty")}</p>
@@ -1379,7 +1393,7 @@ export function Canvas({
         )}
 
         {graph.nodes.length > 0 && (
-          <div className="pointer-events-none absolute left-12 bottom-3 max-w-[calc(100%-16rem)] flex flex-wrap items-center gap-2 rounded-md border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider shadow-sm backdrop-blur-sm">
+          <div className="pointer-events-none absolute left-3 bottom-20 max-w-[calc(100%-14rem)] flex flex-wrap items-center gap-2 rounded-md border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider shadow-sm backdrop-blur-sm">
             {view.kind === "workflow" &&
               (["workflowGroup", "action", "decision", "outcome"] as const).map((kind) => {
                 const Icon = iconFor(kind, null);
