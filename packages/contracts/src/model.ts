@@ -191,9 +191,11 @@ export type UpdateRelationshipInput = z.infer<typeof UpdateRelationshipSchema>;
 export const ViewCommentReplySchema = z.object({
   id: IdSchema,
   text: z.string().trim().min(1).max(4000),
+  createdAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime().optional(),
 });
 export type ViewCommentReply = z.infer<typeof ViewCommentReplySchema>;
-export const AddViewCommentReplySchema = ViewCommentReplySchema.omit({ id: true });
+export const AddViewCommentReplySchema = ViewCommentReplySchema.pick({ text: true });
 export type AddViewCommentReplyInput = z.infer<typeof AddViewCommentReplySchema>;
 
 export const ViewCommentSchema = z.object({
@@ -201,6 +203,9 @@ export const ViewCommentSchema = z.object({
   x: z.number().finite(),
   y: z.number().finite(),
   text: ViewCommentReplySchema.shape.text,
+  elementId: IdSchema.nullable().optional(),
+  createdAt: z.iso.datetime().optional(),
+  updatedAt: z.iso.datetime().optional(),
   resolved: z.boolean().default(false),
   replies: z
     .array(ViewCommentReplySchema)
@@ -211,17 +216,46 @@ export const ViewCommentSchema = z.object({
     .default([]),
 });
 export type ViewComment = z.infer<typeof ViewCommentSchema>;
-export const AddViewCommentSchema = ViewCommentSchema.pick({ x: true, y: true, text: true });
+export const AddViewCommentSchema = ViewCommentSchema.pick({
+  x: true,
+  y: true,
+  text: true,
+  elementId: true,
+});
 export type AddViewCommentInput = z.infer<typeof AddViewCommentSchema>;
 export const UpdateViewCommentSchema = z.object({
   x: ViewCommentSchema.shape.x.optional(),
   y: ViewCommentSchema.shape.y.optional(),
   text: ViewCommentSchema.shape.text.optional(),
   resolved: z.boolean().optional(),
+  elementId: IdSchema.nullable().optional(),
 });
 export type UpdateViewCommentInput = z.infer<typeof UpdateViewCommentSchema>;
 
+export const ViewScenarioStepSchema = z.object({
+  elementId: IdSchema,
+  relationshipId: IdSchema.optional(),
+  title: z.string().trim().min(1).max(200),
+  description: z.string().max(2000).optional(),
+});
+export type ViewScenarioStep = z.infer<typeof ViewScenarioStepSchema>;
+export const ViewScenarioSchema = z.object({
+  id: IdSchema,
+  name: z.string().trim().min(1).max(200),
+  steps: z.array(ViewScenarioStepSchema).min(1).max(200),
+});
+export type ViewScenario = z.infer<typeof ViewScenarioSchema>;
+
 export const ViewSettingsSchema = z.object({
+  preferredDetailViews: z.record(IdSchema, IdSchema).default({}),
+  scenarios: z
+    .array(ViewScenarioSchema)
+    .max(100)
+    .refine(
+      (scenarios) => new Set(scenarios.map((scenario) => scenario.id)).size === scenarios.length,
+      "Scenario IDs must be unique.",
+    )
+    .default([]),
   commentPins: z
     .array(ViewCommentSchema)
     .refine(
@@ -269,6 +303,8 @@ export type ViewSettings = z.infer<typeof ViewSettingsSchema>;
 // Zod 4 applies defaults even inside optional fields. A patch must only carry
 // explicitly supplied settings, otherwise it resets the other stored values.
 const ViewSettingsPatchSchema = z.object({
+  preferredDetailViews: ViewSettingsSchema.shape.preferredDetailViews.unwrap().optional(),
+  scenarios: ViewSettingsSchema.shape.scenarios.unwrap().optional(),
   commentPins: ViewSettingsSchema.shape.commentPins.unwrap().optional(),
   showBoundaries: ViewSettingsSchema.shape.showBoundaries.unwrap().optional(),
   snapToGrid: ViewSettingsSchema.shape.snapToGrid.unwrap().optional(),
@@ -313,6 +349,8 @@ export const RelationshipPresentationSchema = z
     targetArrow: z.enum(["none", "arrow", "arrowclosed"]).optional(),
     sourceSide: z.enum(["left", "right", "top", "bottom"]).nullable().optional(),
     targetSide: z.enum(["left", "right", "top", "bottom"]).nullable().optional(),
+    sourceSlot: z.number().int().min(0).max(2).optional(),
+    targetSlot: z.number().int().min(0).max(2).optional(),
     labelOffset: ControlPointSchema.optional(),
   })
   .strict();

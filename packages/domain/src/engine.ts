@@ -46,6 +46,8 @@ import { checkParent, descendantsOf, wouldCreateCycle } from "./rules";
 /* ------------------------------------------------------------------ */
 
 export const defaultViewSettings: ViewSettings = {
+  preferredDetailViews: {},
+  scenarios: [],
   commentPins: [],
   showBoundaries: true,
   snapToGrid: false,

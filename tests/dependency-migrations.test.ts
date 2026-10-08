@@ -24,6 +24,8 @@ describe("Zod view settings", () => {
       showFullTitles: false,
       showDescriptions: false,
       commentPins: [],
+      preferredDetailViews: {},
+      scenarios: [],
     });
   });
 
@@ -62,6 +64,8 @@ describe("Zod view settings", () => {
         showFullTitles: true,
         showDescriptions: true,
         commentPins: [],
+        preferredDetailViews: {},
+        scenarios: [],
       });
     } finally {
       close();

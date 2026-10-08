@@ -56,6 +56,8 @@ const view: ViewDetail = {
     showFullTitles: false,
     showDescriptions: false,
     commentPins: [],
+    preferredDetailViews: {},
+    scenarios: [],
   },
   createdAt: timestamp,
   updatedAt: timestamp,
