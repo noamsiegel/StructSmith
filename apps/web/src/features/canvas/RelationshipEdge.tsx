@@ -55,6 +55,7 @@ function RelationshipEdgeComponent({
   selected,
   target,
   data,
+  style,
 }: EdgeProps & { data?: RelationshipEdgeData }) {
   const { t } = useTranslation();
   const flow = useReactFlow();
@@ -279,7 +280,7 @@ function RelationshipEdgeComponent({
             strokeDasharray: relationshipDash(data?.relationship.interactionStyle, strokeStyle),
             strokeLinecap: strokeStyle === "dotted" ? "round" : undefined,
             stroke,
-            opacity: focus === "dimmed" ? 0.7 : 1,
+            opacity: style?.opacity ?? (focus === "dimmed" ? 0.7 : 1),
             filter: focus === "connected" ? "drop-shadow(0 0 3px var(--primary))" : undefined,
             transition: "stroke 150ms, stroke-width 150ms, opacity 150ms, filter 150ms",
           }}
@@ -303,7 +304,7 @@ function RelationshipEdgeComponent({
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               backgroundColor: relationshipLabelBackground(focus),
-              opacity: focus === "dimmed" ? 0.75 : 1,
+              opacity: style?.opacity ?? (focus === "dimmed" ? 0.75 : 1),
               touchAction: "none",
               cursor: editable ? "grab" : "default",
               overflowWrap: "anywhere",

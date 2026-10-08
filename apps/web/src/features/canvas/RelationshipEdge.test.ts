@@ -23,13 +23,14 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
       sourceElementId: source.id,
       targetElementId: target.id,
     }).result;
-    const render = (status: ImplementationStatus | null) =>
+    const render = (status: ImplementationStatus | null, opacity?: number) =>
       renderToStaticMarkup(
         createElement(
           ReactFlowProvider,
           null,
           createElement(RelationshipEdge, {
             id: relationship.id,
+            style: opacity === undefined ? undefined : { opacity },
             source: source.id,
             target: target.id,
             sourceX: 0,
@@ -84,6 +85,8 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
     expect(planned).toContain("stroke-dasharray:5 4");
     expect(render("conflict")).toContain("stroke:var(--muted-foreground)");
     expect(render(null)).toBe(html);
+    const dimmed = render(null, 0.25);
+    expect(dimmed).toMatch(/<path[^>]*style="[^"]*opacity:0\.25/);
   } finally {
     close();
   }
