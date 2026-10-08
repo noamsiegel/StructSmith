@@ -59,6 +59,7 @@ import {
   boundaryMoveEntries,
   buildGraph,
   CANVAS_FIT_PADDING,
+  canvasFitBounds,
   computeCanvasBoundaries,
   type FlowEdge,
   type FlowNode,
@@ -123,7 +124,7 @@ export function Canvas({
   canOpenDetails,
 }: CanvasProps) {
   const { t } = useTranslation();
-  const flow = useReactFlow();
+  const flow = useReactFlow<FlowNode, FlowEdge>();
   const onError = useApiErrorHandler();
   const applyOperations = useApplyOperations(workspaceId);
   const copyReference = useCopyAgentReference();
@@ -273,16 +274,30 @@ export function Canvas({
   const fittedLayoutRequest = useRef(layoutFitRequest);
   const fittedViewId = useRef<string | null>(null);
   const initialViewport = useRef(initialLocation?.viewport);
+  const fit = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    void flow.setViewport(
+      getViewportForBounds(
+        canvasFitBounds(flow.getNodes()),
+        canvas.clientWidth,
+        canvas.clientHeight,
+        0.15,
+        1,
+        CANVAS_FIT_PADDING,
+      ),
+      { duration: 250 },
+    );
+  }, [flow]);
 
   useEffect(() => {
     if (!flow.viewportInitialized || nodes.length === 0 || !nodesInitialized) return;
     if (fittedViewId.current === view.id) return;
     fittedViewId.current = view.id;
     if (initialViewport.current) void flow.setViewport(initialViewport.current);
-    else if (nodes.length > 0)
-      void flow.fitView({ padding: CANVAS_FIT_PADDING, maxZoom: 1, duration: 250 });
+    else if (nodes.length > 0) fit();
     if (restoredSelection.current) select(restoredSelection.current);
-  }, [nodesInitialized, nodes.length, view.id, flow, select]);
+  }, [nodesInitialized, nodes.length, view.id, flow, select, fit]);
 
   useEffect(() => {
     if (fittedLayoutRequest.current === layoutFitRequest || !nodesInitialized) return;
@@ -300,7 +315,7 @@ export function Canvas({
     fittedLayoutRequest.current = layoutFitRequest;
     void flow.setViewport(
       getViewportForBounds(
-        flow.getNodesBounds(graph.nodes),
+        canvasFitBounds(flow.getNodes()),
         width,
         height,
         0.1,
@@ -1670,6 +1685,7 @@ export function Canvas({
             showInteractive={false}
             position="bottom-left"
             fitViewOptions={{ padding: CANVAS_FIT_PADDING }}
+            onFitView={fit}
           />
           <MiniMap
             pannable

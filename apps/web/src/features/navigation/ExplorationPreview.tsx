@@ -9,13 +9,14 @@ import {
   Background,
   BackgroundVariant,
   Controls,
+  getViewportForBounds,
   ReactFlow,
   ReactFlowProvider,
-  useNodesInitialized,
+  useNodesState,
   useReactFlow,
 } from "@xyflow/react";
 import { ArrowLeft, ArrowUpRight, ChevronRight, X } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -29,7 +30,12 @@ import { useView, useViews } from "@/hooks/useApi";
 import { BoundaryNode } from "../canvas/BoundaryNode";
 import { commandWheelViewport } from "../canvas/commandWheel";
 import { ElementNode } from "../canvas/ElementNode";
-import { buildGraph, computeCanvasBoundaries, type FlowNode } from "../canvas/graph";
+import {
+  buildGraph,
+  canvasFitBounds,
+  computeCanvasBoundaries,
+  type FlowNode,
+} from "../canvas/graph";
 import { RelationshipEdge } from "../canvas/RelationshipEdge";
 import { applyNodeColors } from "../canvas/selectionColors";
 import type { StatusOverlay } from "../canvas/statusOverlay";
@@ -56,8 +62,7 @@ function PreviewCanvas({
   onDrill: (elementId: string) => void;
 }) {
   const { t } = useTranslation();
-  const flow = useReactFlow();
-  const initialized = useNodesInitialized();
+  const flow = useReactFlow<FlowNode>();
   const container = useRef<HTMLDivElement>(null);
   const graph = useMemo(() => {
     const graph = buildGraph({ view, elements, relationships, records, statusOverlay });
@@ -109,9 +114,32 @@ function PreviewCanvas({
     };
   }, [view, elements, relationships, records, statusOverlay]);
 
+  const [nodes, setNodes, onNodesChange] = useNodesState<FlowNode>(graph.nodes);
+  useEffect(() => setNodes(graph.nodes), [graph.nodes, setNodes]);
+  const initialized =
+    graph.nodes.length > 0 &&
+    graph.nodes.every((node) => {
+      if (node.type === "boundary") return true;
+      const rendered = nodes.find((entry) => entry.id === node.id);
+      return (rendered?.measured?.width ?? 0) > 0 && (rendered?.measured?.height ?? 0) > 0;
+    });
+  const fit = useCallback(() => {
+    const canvas = container.current;
+    if (!canvas) return;
+    void flow.setViewport(
+      getViewportForBounds(
+        canvasFitBounds(flow.getNodes()),
+        canvas.clientWidth,
+        canvas.clientHeight,
+        0.15,
+        1,
+        0.15,
+      ),
+    );
+  }, [flow]);
   useEffect(() => {
-    if (initialized) void flow.fitView({ padding: 0.15, maxZoom: 1, duration: 0 });
-  }, [initialized, flow]);
+    if (initialized && flow.viewportInitialized) fit();
+  }, [initialized, flow, fit]);
 
   useEffect(() => {
     const canvas = container.current;
@@ -138,11 +166,12 @@ function PreviewCanvas({
   return (
     <div
       ref={container}
-      className="relative min-h-0 flex-1 bg-canvas [&_.react-flow__handle]:opacity-0! [&_.react-flow__handle]:pointer-events-none!"
+      className="exploration-preview relative min-h-0 flex-1 bg-canvas"
       data-testid="exploration-preview-canvas"
     >
       <ReactFlow
-        nodes={graph.nodes}
+        nodes={nodes}
+        onNodesChange={onNodesChange}
         edges={graph.edges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
@@ -161,15 +190,13 @@ function PreviewCanvas({
         zoomActivationKeyCode={["Meta", "Control"]}
         minZoom={0.15}
         maxZoom={2.5}
-        fitView
-        fitViewOptions={{ padding: 0.15, maxZoom: 1 }}
-        onNodeDoubleClick={(_event, node) => {
+        onNodeClick={(_event, node) => {
           const elementId = node.type === "boundary" ? node.data.elementId : node.id;
           if (typeof elementId === "string") onDrill(elementId);
         }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false} onFitView={fit} />
       </ReactFlow>
       {!graph.nodes.length && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-sm text-muted-foreground">
@@ -218,13 +245,13 @@ export function ExplorationPreview({
     [scope, current, destination, saved.data, elements, relationships],
   );
   const drill = (id: string) => {
+    const ancestorIndex = trail.findIndex((entry) => entry.elementId === id);
+    if (ancestorIndex >= 0) {
+      setTrail((trail) => trail.slice(0, ancestorIndex + 1));
+      return;
+    }
     const element = elements.find((item) => item.id === id);
-    if (
-      !view ||
-      !element ||
-      trail.some((entry) => entry.elementId === id) ||
-      !canOpenElementDetails(element, elements, views.data ?? [], view.id)
-    )
+    if (!view || !element || !canOpenElementDetails(element, elements, views.data ?? [], view.id))
       return;
     setTrail((trail) => [...trail, { elementId: id, source: view }]);
   };

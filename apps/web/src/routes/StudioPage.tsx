@@ -1,5 +1,5 @@
 import { canOpenElementDetails, preferredDetailView } from "@structsmith/domain";
-import { ReactFlowProvider, useReactFlow } from "@xyflow/react";
+import { getViewportForBounds, ReactFlowProvider, useReactFlow, useStore } from "@xyflow/react";
 import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Group, Panel, Separator, usePanelRef } from "react-resizable-panels";
@@ -14,7 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Canvas } from "@/features/canvas/Canvas";
-import { CANVAS_FIT_PADDING } from "@/features/canvas/graph";
+import { CANVAS_FIT_PADDING, canvasFitBounds, type FlowNode } from "@/features/canvas/graph";
 import type { StatusOverlay } from "@/features/canvas/statusOverlay";
 import { useChatStore } from "@/features/chat/store";
 import { CommandPalette } from "@/features/command/CommandPalette";
@@ -125,7 +125,9 @@ function StudioContent({
   setStatusOverlay: Dispatch<SetStateAction<StatusOverlay>>;
 }) {
   const { t } = useTranslation();
-  const flow = useReactFlow();
+  const flow = useReactFlow<FlowNode>();
+  const canvasWidth = useStore((state) => state.width);
+  const canvasHeight = useStore((state) => state.height);
 
   const settings = useSettings();
   const workspaces = useWorkspaces();
@@ -303,7 +305,18 @@ function StudioContent({
     );
   };
 
-  const fitView = (): void => void flow.fitView({ duration: 300, padding: CANVAS_FIT_PADDING });
+  const fitView = (): void =>
+    void flow.setViewport(
+      getViewportForBounds(
+        canvasFitBounds(flow.getNodes()),
+        canvasWidth,
+        canvasHeight,
+        0.15,
+        2.5,
+        CANVAS_FIT_PADDING,
+      ),
+      { duration: 300 },
+    );
 
   /* ------------------------------- shortcuts ------------------------------- */
 

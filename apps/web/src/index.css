@@ -195,6 +195,9 @@
   width: 7px;
   height: 7px;
 }
+.exploration-preview .react-flow__handle {
+  visibility: hidden;
+}
 .react-flow__node.selected > .as-node {
   outline: 2px solid var(--ring);
   outline-offset: 1px;
