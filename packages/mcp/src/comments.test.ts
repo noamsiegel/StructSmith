@@ -49,12 +49,32 @@ test("MCP comment CRUD preserves replies, guards revisions and snapshots thread 
       replies: [{ id: replyId, text: "Reply" }],
     });
     expect(updated.comments[0].createdAt).toBe(pin.createdAt);
+    const element = services.elements.create(workspace.id, {
+      kind: "custom",
+      name: "Comment anchor",
+    }).result;
+    const unattached = await client.callTool({
+      name: "comment_update",
+      arguments: { ...base, commentId: pin.id, data: { elementId: element.id } },
+    });
+    expect(unattached.isError).toBe(true);
+    services.views.setElements(workspace.id, view.id, [element.id], "add");
+    const attached = await call("comment_update", {
+      commentId: pin.id,
+      data: { elementId: element.id, x: 4, y: 5 },
+    });
+    expect(await call("comment_get", { commentId: pin.id })).toMatchObject({
+      elementId: element.id,
+      x: 4,
+      y: 5,
+      createdAt: pin.createdAt,
+    });
     const stale = await client.callTool({
       name: "comment_delete",
       arguments: { ...base, commentId: pin.id, expectedRevision: created.revision },
     });
     expect(stale.isError).toBe(true);
-    expect(await call("comment_get", { commentId: pin.id })).toEqual(updated.comments[0]);
+    expect(await call("comment_get", { commentId: pin.id })).toEqual(attached.comments[0]);
     const replyEdited = await call("comment_reply_update", {
       commentId: pin.id,
       replyId,
