@@ -16,6 +16,7 @@ Groups and actions can contain steps. Decisions and outcomes are leaves. Runtime
 C4 elements retain their kinds and can appear beside workflow steps or connect
 to them using ordinary relationships. Group outlines, decision icons and outcome
 shapes distinguish their roles without depending on color.
+Workflow views include a compact legend using the same icons as their cards.
 
 Opening a saved detail view creates no model edits. A group without a saved view
 offers the existing explicit creation dialog; custom leaves without a saved view
@@ -50,3 +51,53 @@ forward only; keep the untouched original volume to return to the old release.
 
 Milestone timelines and expansion in place are separate future work. Drill-down
 reuses scoped views; it does not embed all internals into the overview canvas.
+
+## Browser regression check
+
+Use a non-production workspace with a relationship labelled `Evidence`. Select
+that label, then run this in the CUA browser runtime with its tab bound to `tab`.
+This exercises real keyboard input, concurrent saves and view refreshes. Discarding
+measured node dimensions during a refresh unmounts the edge and loses keyboard
+focus; retaining them lets ResizeObserver update the card without dropping input.
+
+```js
+const label = tab.playwright.getByRole("button", { name: "Move label: Evidence", exact: true });
+const offset = tab.playwright.getByLabel("Label offset X", { exact: true });
+await label.click();
+await tab.getAXState({ emit: false });
+const before = Number(await offset.evaluate((element) => element.value));
+for (let index = 0; index < 10; index++) await label.press("ArrowRight");
+await label.and(tab.playwright.locator('[aria-busy="false"]')).waitFor({ state: "visible" });
+await tab.getAXState({ emit: false });
+const actual = Number(await offset.evaluate((element) => element.value));
+if (actual !== before + 10) throw new Error(`Lost input: expected ${before + 10}, got ${actual}`);
+if (await tab.playwright.evaluate(() => document.activeElement?.getAttribute("aria-label")) !== "Move label: Evidence") {
+  throw new Error("Label lost keyboard focus during save");
+}
+await tab.reload();
+await tab.getAXState({ emit: false });
+await label.click();
+await tab.getAXState({ emit: false });
+if (Number(await offset.evaluate((element) => element.value)) !== before + 10) {
+  throw new Error("Label moves did not survive reload");
+}
+const saved = before + 10;
+await label.press("ArrowRight");
+await label.press("ArrowLeft");
+await label.and(tab.playwright.locator('[aria-busy="false"]')).waitFor({ state: "visible" });
+await offset.fill(String(saved + 20));
+await offset.press("Enter");
+await tab.getAXState({ emit: false });
+await label.press("ArrowRight");
+await label.and(tab.playwright.locator('[aria-busy="false"]')).waitFor({ state: "visible" });
+await tab.getAXState({ emit: false });
+if (Number(await offset.evaluate((element) => element.value)) !== saved + 21) {
+  throw new Error("Opposing moves left a stale pending offset");
+}
+```
+
+Also exercise dragging, both endpoint sides, label position along an orthogonal
+path, reset, undo and export. PNG/SVG retain the rendered connector appearance.
+Their existing framing can leave wide margins, and dense saved views still need
+zoom to read all descriptions. Mermaid preserves workflow semantics, without
+promising connector appearance fidelity.

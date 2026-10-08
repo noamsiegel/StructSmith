@@ -85,6 +85,7 @@ function RelationshipEdgeComponent({
   }, [path, labelPosition]);
   const savedOffset = presentation?.labelOffset ?? { x: 0, y: 0 };
   const [dragOffset, setDragOffset] = useState<ControlPoint | null>(null);
+  const pendingOffset = useRef<ControlPoint | null>(null);
   const drag = useRef<{ start: ControlPoint; offset: ControlPoint; current: ControlPoint } | null>(
     null,
   );
@@ -103,12 +104,16 @@ function RelationshipEdgeComponent({
   const labelSaveSequence = useRef(0);
   const saveOffset = (next: ControlPoint) => {
     if (!data || !editable) return;
+    pendingOffset.current = next;
     const sequence = ++labelSaveSequence.current;
     labelSaves.current = labelSaves.current
       .then(() => data.onLabelOffsetChange?.(data.relationship.id, next))
       .catch(() => undefined)
       .finally(() => {
-        if (sequence === labelSaveSequence.current) setDragOffset(null);
+        if (sequence === labelSaveSequence.current) {
+          pendingOffset.current = null;
+          setDragOffset(null);
+        }
       });
   };
 
@@ -164,6 +169,7 @@ function RelationshipEdgeComponent({
             type="button"
             variant="outline"
             aria-label={t("relationshipPresentation.moveLabel", { label })}
+            aria-busy={pendingOffset.current !== null}
             title={t("relationshipPresentation.moveLabelHint")}
             disabled={!editable}
             className={cn(
@@ -227,9 +233,10 @@ function RelationshipEdgeComponent({
               event.preventDefault();
               event.stopPropagation();
               const step = event.shiftKey ? 10 : 1;
+              const current = pendingOffset.current ?? offset;
               const next = {
-                x: offset.x + (move[0] ?? 0) * step,
-                y: offset.y + (move[1] ?? 0) * step,
+                x: current.x + (move[0] ?? 0) * step,
+                y: current.y + (move[1] ?? 0) * step,
               };
               setDragOffset(next);
               saveOffset(next);

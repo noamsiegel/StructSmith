@@ -31,9 +31,10 @@ import { useChatStore } from "@/features/chat/store";
 import { useApiErrorHandler, useApplyOperations } from "@/hooks/useApi";
 import { api } from "@/lib/api";
 import { hasPrimaryModifier, primaryModifierKeyCode } from "@/lib/platform";
-import { invalidateWorkspace } from "@/lib/query";
+import { invalidateWorkspace, queryClient, queryKeys } from "@/lib/query";
 import { useEditorStore } from "@/store/editor";
 import { useHistoryStore } from "@/store/history";
+import { iconFor } from "../icons";
 import type { ViewLocation } from "../navigation/history";
 import { useCopyAgentReference } from "../reference/useCopyAgentReference";
 import { BoundaryNode } from "./BoundaryNode";
@@ -147,10 +148,13 @@ export function Canvas({
   // the highlight does not blink off while the inspector still shows the item.
   useEffect(() => {
     setNodes((current) => {
-      const selected = new Set(current.filter((node) => node.selected).map((node) => node.id));
-      return selected.size === 0
-        ? graph.nodes
-        : graph.nodes.map((node) => (selected.has(node.id) ? { ...node, selected: true } : node));
+      const previous = new Map(current.map((node) => [node.id, node]));
+      return graph.nodes.map((node) => ({
+        ...node,
+        selected: previous.get(node.id)?.selected ?? node.selected,
+        // Keep edges mounted while ResizeObserver measures refreshed cards.
+        measured: previous.get(node.id)?.measured,
+      }));
     });
   }, [graph.nodes]);
 
@@ -939,6 +943,12 @@ export function Canvas({
             },
           ],
         })
+        .then(() =>
+          queryClient.refetchQueries(
+            { queryKey: queryKeys.view(view.id) },
+            { cancelRefetch: false },
+          ),
+        )
         .then(() => undefined);
     },
     [applyOperations, t, view.id],
@@ -1068,6 +1078,16 @@ export function Canvas({
 
       {graph.nodes.length > 0 && (
         <div className="pointer-events-none absolute left-3 top-3 flex items-center gap-2 rounded-md border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider shadow-sm backdrop-blur-sm">
+          {view.kind === "workflow" &&
+            (["workflowGroup", "action", "decision", "outcome"] as const).map((kind) => {
+              const Icon = iconFor(kind, null);
+              return (
+                <span key={kind} className="flex items-center gap-1">
+                  <Icon className="h-3 w-3" aria-hidden="true" />
+                  {t(`kinds.${kind}`)}
+                </span>
+              );
+            })}
           <span className="text-muted-foreground">{t("canvas.legend")}</span>
           <span className="flex items-center gap-1 text-ownership-internal">
             <span className="h-2 w-2 rounded-sm bg-ownership-internal" />
