@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import {
   boundaryHeaderHeight,
+  canvasFitBounds,
   computeCanvasBoundaries,
 } from "../apps/web/src/features/canvas/graph";
 import { createTestContext, createWorkspace } from "./helpers";
@@ -41,6 +42,36 @@ test("saved parent Sections enclose nested Section frames and their outside titl
       width: 120,
       height: 80,
     });
+  } finally {
+    close();
+  }
+});
+
+test("fit bounds include long top-level Section titles without changing saved geometry", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const view = services.views.create(workspace.id, { kind: "workflow", name: "Overview" }).result;
+    const section = services.boundaries.create(workspace.id, {
+      viewId: view.id,
+      kind: "custom",
+      layer: "custom",
+      name: "Portal login roster, complete sibling account captures, safe evidence persistence, and downstream charges",
+    }).result;
+    const nodes = computeCanvasBoundaries([], new Map(), [section], "custom", true, {
+      [`boundary:${section.id}`]: { x: 120, y: 100, width: 160, height: 120 },
+    }).semanticBoundaries;
+    const before = structuredClone(nodes);
+    const titleHeight = boundaryHeaderHeight(section.name, 160, true);
+    expect(titleHeight).toBeGreaterThan(48);
+    expect(canvasFitBounds(nodes)).toEqual({
+      x: 120,
+      y: 100 - titleHeight,
+      width: 160,
+      height: 120 + titleHeight,
+    });
+    expect(nodes).toEqual(before);
+    expect(canvasFitBounds([])).toEqual({ x: 0, y: 0, width: 0, height: 0 });
   } finally {
     close();
   }

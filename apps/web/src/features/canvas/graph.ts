@@ -17,7 +17,7 @@ import {
   resolveRelationshipsForView,
   wrappedLines,
 } from "@structsmith/domain";
-import type { Edge, Node } from "@xyflow/react";
+import { type Edge, getNodesBounds, type Node } from "@xyflow/react";
 import {
   type ImplementationStatus,
   relationshipStatus,
@@ -80,6 +80,32 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
 
 export type FlowNode = Node<ElementNodeData, "element"> | Node<BoundaryNodeData, "boundary">;
 export type FlowEdge = Edge<RelationshipEdgeData>;
+
+/** Section titles sit outside node rectangles, but must remain visible when fitting. */
+export function canvasFitBounds(nodes: readonly FlowNode[]) {
+  return getNodesBounds(
+    nodes
+      .filter((node) => !node.hidden)
+      .map((node) => {
+        const width = node.measured?.width ?? node.width ?? DEFAULT_NODE_WIDTH;
+        const height =
+          node.measured?.height ??
+          node.height ??
+          (node.type === "element" ? node.data.minimumHeight : DEFAULT_NODE_HEIGHT);
+        const titleHeight =
+          node.type === "boundary" && node.data.section
+            ? boundaryHeaderHeight(node.data.name, width, true)
+            : 0;
+        return {
+          ...node,
+          position: { ...node.position, y: node.position.y - titleHeight },
+          width,
+          height: height + titleHeight,
+          measured: { width, height: height + titleHeight },
+        };
+      }),
+  );
+}
 
 interface BuildInput {
   view: ViewDetail;
