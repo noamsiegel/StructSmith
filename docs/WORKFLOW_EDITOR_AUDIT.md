@@ -264,6 +264,93 @@ call them current defects without a new failing browser reproduction.
 
 ## Core IcePanel comparison
 
+Orthogonal routing acceptance, 2026-10-08: reproduced the user's real
+`mermaid-edge-vqzz65` in `hoa-portal-first-task-and-charge-decisio-r1ml9e`,
+view `mermaid-view-g02umu`. The rendered SVG joined `(3838.5,434)` diagonally
+to saved `(3876.86,485)`, and saved `(3876.86,82)` diagonally to `(4123.5,105)`.
+After the shared geometry repair, a browser DOM check over all 26 rendered paths
+reported zero diagonal legs or curve commands. Existing authored layout was
+not rewritten. The URL's `view` parameter requires the view ID, not its key;
+choosing Imported Mermaid in the view menu loaded the intended canvas.
+
+CUA browser acceptance on the shared UI demo exercised endpoint movement,
+reload persistence, segment dragging, label dragging onto a vertical leg,
+Undo and Redo. The label remained horizontal at route coordinate
+`(439.927,1104.04)`. Curved demo: six of six paths retained curve commands;
+straight demo: six paths, zero multi-segment or curved paths. Console warning/error
+queries returned empty lists. Browser request capture was unavailable through
+the active CUA API. `bun run ui:demo --reset` saved a snapshot and restored the
+shared baseline after the interaction tests.
+
+Commands: `bun run test` returned 294 passes, zero failures;
+`bun run typecheck`, `bun run check`, `bun run build` and Docker build succeeded.
+Six mutations covering raw route rendering, repair bypass, endpoint axes,
+redundant handles and input mutation were caught by the focused regression tests.
+Biome reports an existing schema-version information notice; Vite reports the
+existing bundle-size warning. No exports or obstacle-avoidance routing were tested.
+
+### Native element coverage
+
+Read-only comparison refreshed on 2026-10-08 against live official FigJam,
+IcePanel and OMG UML documentation. Local evidence:
+`packages/contracts/src/enums.ts`, `packages/contracts/src/model.ts`,
+`packages/domain/src/presets.ts`, `packages/domain/src/node-shapes.ts`,
+`CreationToolbar.tsx`, `ElementPalette.tsx`, and `ScenarioPanel.tsx`.
+This is a recommended backlog, not implementation or full product parity.
+
+| Priority | Native addition | Purpose and ownership |
+| --- | --- | --- |
+| 1 | Text block | Headings, legends and explanatory paragraphs. View-owned annotation; wrap at a chosen width and grow vertically. |
+| 2 | Table | Decision matrices, account outcomes and field mappings. View-owned annotation with editable rows/cells and spreadsheet paste. |
+| 3 | Note / sticky note | Visible questions and assumptions. View-owned annotation, distinct from comment discussion threads. |
+| 4 | Data / document artifact | Rosters, ledgers, evidence and charge drafts. Shared semantic objects when connected or reused; labels must distinguish data from processing steps. |
+| 5 | Start, end, fork, join, merge | Workflow control: process termination, concurrent branches and alternative convergence. Shared workflow nodes; Outcome remains a business result. |
+| 6 | Code block | SQL, JSON and examples. View-owned annotation with monospace text. |
+
+Annotations should follow the view ownership of Sections, be available through
+REST/MCP, and avoid adding decorative headings or tables to the architecture
+hierarchy. Connected data objects should follow shared model ownership. Use
+existing roles before adding architecture kinds. Custom stays an escape hatch;
+imports and the creation palette should offer native equivalents for routine work.
+Mermaid import currently assigns Custom to every node and ignores its shape.
+Native shape/type preservation in import is also needed to make Custom rare.
+
+**FigJam:** confirmed absent canvas objects include text, tables, sticky notes,
+code blocks, images/video/GIF, drawing/highlighter and link previews. Extra
+flowchart shapes include input/output, document and manual input. Stamps,
+stickers and mind maps are lower priority for these diagrams. Existing decision,
+database and subprocess shapes cover part of the shape catalog.
+Sources: [Text](https://help.figma.com/hc/en-us/articles/1500004291281),
+[Tables](https://help.figma.com/hc/en-us/articles/12583849250199),
+[Sticky notes](https://help.figma.com/hc/en-us/articles/1500004414322),
+[Code blocks](https://help.figma.com/hc/en-us/articles/4410965151127),
+[Shapes](https://help.figma.com/hc/en-us/articles/1500004414382).
+
+**IcePanel:** Actor, System, App, Store and Component already map to Person,
+Software System, Container roles and Component. The material object gap is
+reusable model Groups with membership across diagrams; our Sections are visual
+frames owned by one view. Keep those concepts separate. Domains and connection
+Via objects are further organization/presentation capabilities. Queue nodes
+already cover the immediate queue use case. Ordered scenario playback already
+exists; alternative/parallel flow storytelling is broader than the current
+linear scenarios. Sources: [Modelling](https://docs.icepanel.io/core-features/modelling),
+[Diagramming](https://docs.icepanel.io/core-features/diagramming),
+[Groups](https://docs.icepanel.io/core-features/modelling/groups),
+[Flows](https://docs.icepanel.io/visual-storytelling/flows).
+
+**UML:** practical gaps are notes, explicit control nodes and data artifacts.
+Responsibility swimlanes can build on Section layout; timer/wait and send/receive
+events are later additions. Database cylinders and double-sided subprocesses
+are common architecture/flowchart conventions, not normative UML datastore or
+call-activity symbols. Class compartments, inheritance/composition/multiplicity,
+sequence lifelines and state-machine transitions need dedicated diagram modes
+and relationship semantics; a generic box or styled arrow is insufficient.
+Source: [OMG UML 2.5.1](https://www.omg.org/spec/UML/2.5.1/PDF),
+notes section 7.2.4, control nodes 15.3.4, objects 15.4.4, swimlanes 15.6.4,
+actions 16.2.4 and artifacts 19.3.4.
+
+### Earlier capability audit
+
 Read-only comparison against official docs fetched live on 2026-10-07 with
 `search_service_web_run`, plus the fork's current source. **Priorities are
 [INFERENCE] for these portal diagrams**, not promises of full IcePanel parity.
