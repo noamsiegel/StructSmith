@@ -622,6 +622,13 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         name: "Hidden placement",
         description: "Present in model, hidden in this view only.",
       }),
+      add({
+        id: "demo-state-mixed",
+        kind: "action",
+        name: "Mixed status",
+        tags: ["status:live", "status:planned"],
+        description: "Conflicting status tags must remain visibly Mixed.",
+      }),
     ];
     services.relationships.create(UI_DEMO_WORKSPACE_ID, {
       id: "demo-state-edge",
@@ -629,6 +636,14 @@ export function buildUiDemoDocument(): WorkspaceDocument {
       targetElementId: "demo-state-planned",
       description: "Next step",
       interactionStyle: "async",
+    });
+    services.relationships.create(UI_DEMO_WORKSPACE_ID, {
+      id: "demo-state-mixed-edge",
+      sourceElementId: "demo-state-neutral",
+      targetElementId: "demo-state-mixed",
+      description: "Mixed connection",
+      tags: ["status:live", "status:planned"],
+      interactionStyle: "sync",
     });
     const stateView = view(
       "states",

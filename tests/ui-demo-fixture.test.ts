@@ -253,6 +253,10 @@ describe("UI demo fixture", () => {
     expect(byId.get("demo-state-live")?.tags).toContain("status:live");
     expect(byId.get("demo-state-planned")?.tags).toContain("status:planned");
     expect(byId.get("demo-state-neutral")?.tags).toEqual([]);
+    expect(byId.get("demo-state-mixed")?.tags).toEqual(["status:live", "status:planned"]);
+    expect(
+      document.relationships.find((edge) => edge.id === "demo-state-mixed-edge")?.tags,
+    ).toEqual(["status:live", "status:planned"]);
     expect(states?.settings.nodeColors["boundary:demo-state-section"]).toBe("#2563eb");
     expect(states?.settings.nodeColors["demo-state-planned"]).toBe("#7c3aed");
     expect(states?.elements.find((entry) => entry.elementId === "demo-state-locked")?.locked).toBe(

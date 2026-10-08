@@ -19,6 +19,53 @@ this audit distinguishes actual browser observations from source-only support.
 
 ## October 8 acceptance evidence
 
+### Shared demo and QA cleanup
+
+The reusable [UI demo](UI_DEMO.md) now replaces disposable editor fixtures:
+one workspace, 79 elements, 17 relationships and 14 focused views. New cases
+belong in `scripts/ui-demo-fixture.ts`; repository AGENTS.md points future agents
+to its seed/reset command and browser checklist.
+
+- `bun run ui:demo` created the live `structsmith-ui-demo` at revision 2.
+  `bun run ui:demo --reset` restored the final baseline at revision 11 after
+  comment-resolution and auto-layout exercises, first saving a reset snapshot.
+  The real HTTP seed test verifies edit preservation, reset snapshot restoration,
+  unrelated-workspace refusal and interrupted-seed recovery guidance.
+- Browser `tab.goto(...)` opened all 14 views. Home Open details reached Sections;
+  Preview opened Process request, then Validate identity within the same dialog.
+  `tab.click([50,200])` dismissed it and retained the Section overview URL.
+  Resolve, outside-click and reload on an attached comment retained its resolved
+  state. Actual Auto layout on the multiline stress view retained all six cards
+  with no console warnings/errors; its fitted text needs zooming.
+- Rendered node-bound checks on the corrected catalog, typography, stress,
+  Sections, validation and state views found no overlapping peer cards. All three
+  connector-routing views rendered six labels each; their measured label bounds
+  intersected no cards. Live, Planned and Mixed node/connection labels appeared.
+  `tab.dev.logs({levels:["error","warn"],limit:20})` returned `[]`.
+- The Bun REST cleanup probe rechecked exact archived documents/revisions before
+  each DELETE, received 204 for eleven QA workspaces, then read five remaining
+  workspaces. All four retained existing documents matched their fresh pre-cleanup
+  baseline exactly. The chooser showed those five workspaces after reload.
+  An earlier preflight stopped without deleting anything when the retained v6
+  business workspace changed concurrently; its newer content was backed up.
+
+Complete serialized database backups, chat data, all original native documents,
+the fresh retained-document baseline and cleanup manifest are under
+`~/.local/share/structsmith/backups/20261008-ui-demo/`. Canonical HOA, its backup,
+the distinct task/charge v6 workspace and Client Portal remain. Native imports
+alone do not restore snapshot/activity history; use the complete database backup
+when recovering that history.
+
+New seed/fixture checks killed 23 deliberate mutations: edit/snapshot guards,
+coverage/spacing, label clearance and Mixed status tags. A requested 900x700
+browser override left the measured viewport at 2186x1351; compact-viewport
+acceptance is **unverified** in this pass. A complete browser network trace and
+exhaustive gesture/CRUD replay are also **unverified** here. This pass added test
+data and tooling, not editor runtime behavior or export work. Existing Biome
+schema-version information and the web bundle-size warning remain informational.
+
+### Earlier feature-specific acceptance
+
 Workers exercised disposable QA workspaces against the local fork. Exploration
 and the reply-save conflict were independently observed by this audit worker;
 Section, color and type observations were supplied by their focused workers.
