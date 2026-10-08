@@ -12,7 +12,7 @@ import type {
   ViewDetail,
 } from "@structsmith/contracts";
 import { elementKinds, elementRoles, interactionStyles } from "@structsmith/contracts";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -224,42 +224,10 @@ export function Inspector({
           )}
 
           {!element && !relationship && !boundary && selection.type !== "elements" && view && (
-            <ViewInspector
-              key={view.id}
-              view={view}
-              workspaceId={workspaceId}
-              renamePending={applyOperations.isPending}
-              onRename={(name) =>
-                applyOperations.mutate({
-                  label: t("views.renamed"),
-                  operations: [{ op: "updateView", viewId: view.id, data: { name } }],
-                })
-              }
-              onPatch={(settings) =>
-                applyOperations.mutate({
-                  label: settings.autoLayoutAlgorithm
-                    ? t("inspector.layoutAlgorithm")
-                    : settings.autoLayoutDirection
-                      ? t("inspector.layoutDirection")
-                      : t("inspector.viewSettings"),
-                  operations: [
-                    { op: "updateView", viewId: view.id, data: { settings } },
-                    ...(settings.autoLayoutDirection || settings.autoLayoutAlgorithm
-                      ? [
-                          {
-                            op: "autoLayoutView" as const,
-                            viewId: view.id,
-                            direction:
-                              settings.autoLayoutDirection ?? view.settings.autoLayoutDirection,
-                            algorithm:
-                              settings.autoLayoutAlgorithm ?? view.settings.autoLayoutAlgorithm,
-                          },
-                        ]
-                      : []),
-                  ],
-                })
-              }
-            />
+            <>
+              <p className="text-xs text-muted-foreground">{t("inspector.nothingSelected")}</p>
+              <ViewInspector key={view.id} view={view} workspaceId={workspaceId} />
+            </>
           )}
 
           {!element && !relationship && !boundary && !view && (
@@ -889,20 +857,37 @@ function RelationshipInspector({
 
 /* ----------------------------------- view ----------------------------------- */
 
-function ViewInspector({
-  view,
-  workspaceId,
-  renamePending,
-  onRename,
-  onPatch,
-}: {
-  view: ViewDetail;
-  workspaceId: string;
-  renamePending: boolean;
-  onRename: (name: string) => void;
-  onPatch: (settings: Partial<ViewDetail["settings"]>) => void;
-}) {
+export function ViewInspector({ view, workspaceId }: { view: ViewDetail; workspaceId: string }) {
   const { t } = useTranslation();
+  const fieldId = useId();
+  const applyOperations = useApplyOperations(workspaceId);
+  const renamePending = applyOperations.isPending;
+  const onRename = (name: string) =>
+    applyOperations.mutate({
+      label: t("views.renamed"),
+      operations: [{ op: "updateView", viewId: view.id, data: { name } }],
+    });
+  const onPatch = (settings: Partial<ViewDetail["settings"]>) =>
+    applyOperations.mutate({
+      label: settings.autoLayoutAlgorithm
+        ? t("inspector.layoutAlgorithm")
+        : settings.autoLayoutDirection
+          ? t("inspector.layoutDirection")
+          : t("inspector.viewSettings"),
+      operations: [
+        { op: "updateView", viewId: view.id, data: { settings } },
+        ...(settings.autoLayoutDirection || settings.autoLayoutAlgorithm
+          ? [
+              {
+                op: "autoLayoutView" as const,
+                viewId: view.id,
+                direction: settings.autoLayoutDirection ?? view.settings.autoLayoutDirection,
+                algorithm: settings.autoLayoutAlgorithm ?? view.settings.autoLayoutAlgorithm,
+              },
+            ]
+          : []),
+      ],
+    });
   const [name, setName] = useState(view.name);
   useEffect(() => setName(view.name), [view.name]);
 
@@ -928,12 +913,10 @@ function ViewInspector({
           }}
         />
       </div>
-      <p className="text-xs text-muted-foreground">{t("inspector.nothingSelected")}</p>
-
       <div className="space-y-1">
-        <Label htmlFor="view-name">{t("views.viewName")}</Label>
+        <Label htmlFor={`${fieldId}-view-name`}>{t("views.viewName")}</Label>
         <Input
-          id="view-name"
+          id={`${fieldId}-view-name`}
           value={name}
           maxLength={200}
           disabled={renamePending}
@@ -956,22 +939,22 @@ function ViewInspector({
         <Label>{t("inspector.viewSettings")}</Label>
 
         <div className="flex items-center justify-between gap-3">
-          <label htmlFor="view-full-titles" className="cursor-pointer text-[12.5px]">
+          <label htmlFor={`${fieldId}-view-full-titles`} className="cursor-pointer text-[12.5px]">
             {t("inspector.showFullTitles")}
           </label>
           <Switch
-            id="view-full-titles"
+            id={`${fieldId}-view-full-titles`}
             checked={view.settings.showFullTitles}
             onCheckedChange={(checked) => onPatch({ showFullTitles: checked })}
           />
         </div>
 
         <div className="flex items-center justify-between gap-3">
-          <label htmlFor="view-descriptions" className="cursor-pointer text-[12.5px]">
+          <label htmlFor={`${fieldId}-view-descriptions`} className="cursor-pointer text-[12.5px]">
             {t("inspector.showDescriptions")}
           </label>
           <Switch
-            id="view-descriptions"
+            id={`${fieldId}-view-descriptions`}
             checked={view.settings.showDescriptions}
             onCheckedChange={(checked) => onPatch({ showDescriptions: checked })}
           />
@@ -980,6 +963,7 @@ function ViewInspector({
         <div className="flex items-center justify-between">
           <span className="text-[12.5px]">{t("inspector.showBoundaries")}</span>
           <Switch
+            aria-label={t("inspector.showBoundaries")}
             checked={view.settings.showBoundaries}
             onCheckedChange={(checked) => onPatch({ showBoundaries: checked })}
           />
@@ -988,6 +972,7 @@ function ViewInspector({
         <div className="flex items-center justify-between">
           <span className="text-[12.5px]">{t("inspector.snapToGrid")}</span>
           <Switch
+            aria-label={t("inspector.snapToGrid")}
             checked={view.settings.snapToGrid}
             onCheckedChange={(checked) => onPatch({ snapToGrid: checked })}
           />
@@ -998,7 +983,7 @@ function ViewInspector({
             value={view.settings.autoLayoutDirection}
             onValueChange={(value) => onPatch({ autoLayoutDirection: value as "LR" | "TB" })}
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("inspector.layoutDirection")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1017,7 +1002,7 @@ function ViewInspector({
               })
             }
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("inspector.layoutAlgorithm")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1037,7 +1022,7 @@ function ViewInspector({
               onPatch({ boundaryLayer: value as ViewDetail["settings"]["boundaryLayer"] })
             }
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("boundaries.layerLabel")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1061,7 +1046,7 @@ function ViewInspector({
               })
             }
           >
-            <SelectTrigger>
+            <SelectTrigger aria-label={t("inspector.relationshipRouting")}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -1075,6 +1060,7 @@ function ViewInspector({
         <div className="flex items-center justify-between">
           <span className="text-[12.5px]">{t("inspector.showRelationshipLabels")}</span>
           <Switch
+            aria-label={t("inspector.showRelationshipLabels")}
             checked={view.settings.showRelationshipLabels}
             onCheckedChange={(checked) => onPatch({ showRelationshipLabels: checked })}
           />

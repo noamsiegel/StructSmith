@@ -4,6 +4,15 @@ import { type Dispatch, type SetStateAction, useEffect, useMemo, useRef, useStat
 import { useTranslation } from "react-i18next";
 import { Group, Panel, Separator } from "react-resizable-panels";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Canvas } from "@/features/canvas/Canvas";
 import type { StatusOverlay } from "@/features/canvas/statusOverlay";
 import { useChatStore } from "@/features/chat/store";
@@ -11,7 +20,7 @@ import { CommandPalette } from "@/features/command/CommandPalette";
 import { ElementPalette } from "@/features/command/ElementPalette";
 import { KeyboardShortcutsDialog } from "@/features/command/KeyboardShortcutsDialog";
 import { Explorer } from "@/features/explorer/Explorer";
-import { Inspector } from "@/features/inspector/Inspector";
+import { Inspector, ViewInspector } from "@/features/inspector/Inspector";
 import { DetailNavigationContext } from "@/features/navigation/DetailNavigation";
 import { DetailViewDialog } from "@/features/navigation/DetailViewDialog";
 import {
@@ -127,6 +136,7 @@ function StudioContent({
   const setCommandOpen = useEditorStore((state) => state.setCommandOpen);
   const setShortcutsOpen = useEditorStore((state) => state.setShortcutsOpen);
   const handledReference = useRef<string | null>(null);
+  const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
   const [detailElementId, setDetailElementId] = useState<string | null>(null);
   const connectFrom = useEditorStore((state) => state.connectFrom);
 
@@ -346,6 +356,7 @@ function StudioContent({
                       edges.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
                     );
                     useEditorStore.getState().clearSelection();
+                    setViewSettingsOpen(true);
                   }}
                 />
                 <div className="min-h-0 flex-1 bg-canvas">
@@ -411,6 +422,26 @@ function StudioContent({
 
         <ElementPalette workspaceId={workspaceId} view={view.data ?? null} />
         <KeyboardShortcutsDialog />
+        {view.data && (
+          <Dialog open={viewSettingsOpen} onOpenChange={setViewSettingsOpen}>
+            <DialogContent
+              hideClose
+              className="max-h-[85vh] overflow-y-auto"
+              aria-describedby={undefined}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <DialogHeader>
+                <DialogTitle>{t("inspector.viewSettings")}</DialogTitle>
+              </DialogHeader>
+              <ViewInspector key={view.data.id} view={view.data} workspaceId={workspaceId} />
+              <DialogFooter>
+                <DialogClose asChild>
+                  <Button variant="outline">{t("common.close")}</Button>
+                </DialogClose>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
         {detailElement && (
           <DetailViewDialog
             key={detailElement.id}
