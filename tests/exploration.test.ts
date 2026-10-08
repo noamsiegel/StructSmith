@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { resolveRelationshipsForView } from "@structsmith/domain";
 import { deriveExpandedView, preferredDetailView } from "../packages/domain/src/exploration";
+import { estimateElementSize } from "../packages/domain/src/layout";
 import { createTestContext } from "./helpers";
 
 function fixture() {
@@ -188,6 +189,107 @@ test("temporary children avoid existing cards and each other", () => {
         f.view.elements.every((saved) => child.x !== saved.x || child.y !== saved.y),
       ),
     ).toBe(true);
+  } finally {
+    f.close();
+  }
+});
+
+test("inline children sit below the parent header without enveloping a peer to the right", () => {
+  const f = fixture();
+  try {
+    const view = {
+      ...f.view,
+      elements: f.view.elements.map((entry) => ({
+        ...entry,
+        x: entry.elementId === f.root.id ? 100 : 500,
+        y: 200,
+      })),
+    };
+    const result = deriveExpandedView(view, f.elements, new Set([f.root.id]));
+    const child = result.view.elements.find((entry) =>
+      result.temporaryElementIds.has(entry.elementId),
+    );
+    if (!child) throw new Error("Missing child");
+    expect(child.x).toBe(124);
+    expect(child.y).toBe(200);
+    const size = estimateElementSize(f.chain[1], view.settings, child);
+    expect(child.x + size.width + 24).toBeLessThan(500);
+    expect(
+      result.view.elements.filter((entry) => !result.temporaryElementIds.has(entry.elementId)),
+    ).toEqual(view.elements);
+  } finally {
+    f.close();
+  }
+});
+
+test("nested expansion reserves the entire subtree before placing its sibling", () => {
+  const f = fixture();
+  try {
+    const sibling = f.services.elements.create(f.workspace.id, {
+      kind: "action",
+      parentId: f.root.id,
+      name: "Sibling",
+    }).result;
+    const view = {
+      ...f.view,
+      elements: f.view.elements.map((entry) => ({
+        ...entry,
+        x: entry.elementId === f.root.id ? 100 : 700,
+        y: 200,
+      })),
+    };
+    const elements = [...f.elements, sibling];
+    const result = deriveExpandedView(
+      view,
+      elements,
+      new Set(f.chain.map((element) => element.id)),
+    );
+    const placements = new Map(result.view.elements.map((entry) => [entry.elementId, entry]));
+    const first = placements.get(f.chain[1]?.id ?? "");
+    const second = placements.get(f.chain[2]?.id ?? "");
+    const third = placements.get(f.chain[3]?.id ?? "");
+    const peer = placements.get(sibling.id);
+    if (!first || !second || !third || !peer) throw new Error("Missing subtree");
+    expect(first.x).toBe(124);
+    expect(second.x).toBe(first.x + 24);
+    expect(second.y).toBe(first.y + 48);
+    expect(third.y).toBe(second.y + 48);
+    const leaf = estimateElementSize(f.chain[3], view.settings, third);
+    expect(peer.y).toBeGreaterThanOrEqual(third.y + leaf.height + 48);
+    expect(peer.x).toBe(first.x);
+    expect(
+      result.view.elements.filter((entry) => !result.temporaryElementIds.has(entry.elementId)),
+    ).toEqual(view.elements);
+  } finally {
+    f.close();
+  }
+});
+
+test("a temporary subtree clears overlapping saved cards using its full width", () => {
+  const f = fixture();
+  try {
+    const view = {
+      ...f.view,
+      elements: f.view.elements.map((entry) => ({
+        ...entry,
+        x: entry.elementId === f.root.id ? 100 : 390,
+        y: 200,
+      })),
+    };
+    const result = deriveExpandedView(
+      view,
+      f.elements,
+      new Set(f.chain.map((element) => element.id)),
+    );
+    const first = result.view.elements.find((entry) => entry.elementId === f.chain[1]?.id);
+    const saved = view.elements.find((entry) => entry.elementId === f.external.id);
+    if (!first || !saved) throw new Error("Missing placements");
+    const peerSize = estimateElementSize(f.external, view.settings, saved);
+    expect(first.x).toBe(124);
+    expect(first.y).toBeGreaterThanOrEqual(saved.y + peerSize.height + 32);
+    expect(result.view.elements.find((entry) => entry.elementId === saved.elementId)).toEqual(
+      saved,
+    );
   } finally {
     f.close();
   }
