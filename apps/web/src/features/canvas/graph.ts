@@ -5,6 +5,7 @@ import type {
   ArchitectureRelationship,
   ControlPoint,
   SectionFrame,
+  ViewAnnotation,
   ViewDetail,
   ViewElement,
   ViewRelationship,
@@ -18,6 +19,7 @@ import {
   wrappedLines,
 } from "@structsmith/domain";
 import type { Edge, Node } from "@xyflow/react";
+import { annotationNodeId, annotationSize } from "./annotations";
 import {
   type ImplementationStatus,
   relationshipStatus,
@@ -78,7 +80,15 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
   onLabelOffsetChange?: (relationshipId: string, offset: ControlPoint) => Promise<void>;
 }
 
-export type FlowNode = Node<ElementNodeData, "element"> | Node<BoundaryNodeData, "boundary">;
+export interface AnnotationNodeData extends Record<string, unknown> {
+  annotation: ViewAnnotation;
+  onEdit?: () => void;
+  onResize?: (frame: SectionFrame) => void;
+}
+export type FlowNode =
+  | Node<ElementNodeData, "element">
+  | Node<BoundaryNodeData, "boundary">
+  | Node<AnnotationNodeData, "annotation">;
 export type FlowEdge = Edge<RelationshipEdgeData>;
 
 /** Section titles sit outside node rectangles, but must remain visible when fitting. */
@@ -263,6 +273,21 @@ export function buildGraph({
       },
     };
   });
+
+  for (const annotation of view.settings.annotations ?? []) {
+    const size = annotationSize(annotation);
+    nodes.push({
+      id: annotationNodeId(annotation.id),
+      type: "annotation",
+      position: { x: annotation.x, y: annotation.y },
+      data: { annotation },
+      width: size.width,
+      height: size.height,
+      style: { ...size },
+      zIndex: 25,
+      connectable: false,
+    });
+  }
 
   return { nodes, edges, hiddenCount: placements.length - visible.length };
 }

@@ -4,6 +4,8 @@ import type {
   ArchitectureRecord,
   ArchitectureRelationship,
   SectionFrame,
+  UpdateViewAnnotationInput,
+  ViewAnnotation,
   ViewDetail,
   ViewElement,
   ViewRelationshipPatch,
@@ -48,6 +50,16 @@ import type { ViewLocation } from "../navigation/history";
 import { InlineExpansionContext } from "../navigation/InlineExpansion";
 import { useCopyAgentReference } from "../reference/useCopyAgentReference";
 import { ScenarioPanel } from "../scenarios/ScenarioPanel";
+import { AnnotationEditor } from "./AnnotationEditor";
+import { AnnotationNode } from "./AnnotationNode";
+import {
+  annotationId,
+  annotationNodeId,
+  annotationSize,
+  containingAnnotationSection,
+  isAnnotationId,
+} from "./annotations";
+import "./annotationTranslations";
 import { BoundaryNode } from "./BoundaryNode";
 import { CanvasComments } from "./CanvasComments";
 import { CreationToolbar } from "./CreationToolbar";
@@ -89,7 +101,7 @@ import { focusGraphByTag } from "./tagFocus";
 const relationshipIdOf = (edge: { id: string; data?: Record<string, unknown> }): string =>
   (edge.data as RelationshipEdgeData | undefined)?.relationship.id ?? edge.id;
 
-const nodeTypes = { element: ElementNode, boundary: BoundaryNode };
+const nodeTypes = { element: ElementNode, boundary: BoundaryNode, annotation: AnnotationNode };
 const edgeTypes = { relationship: RelationshipEdge };
 const LAYOUT_DEBOUNCE_MS = 500;
 const NO_INLINE_EXPANSIONS = new Set<string>();
@@ -126,6 +138,7 @@ export function Canvas({
   canOpenDetails,
 }: CanvasProps) {
   const { t } = useTranslation();
+  const { t: ta } = useTranslation("annotations");
   const flow = useReactFlow<FlowNode, FlowEdge>();
   const onError = useApiErrorHandler();
   const applyOperations = useApplyOperations(workspaceId);
@@ -144,6 +157,7 @@ export function Canvas({
   const clipboard = useEditorStore((state) => state.clipboard);
   const setClipboard = useEditorStore((state) => state.setClipboard);
 
+  const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
   const [previewElementId, setPreviewElementId] = useState<string | null>(null);
   const [scenarioStep, setScenarioStep] = useState<ViewScenarioStep | null>(null);
   const expansion = useMemo(
@@ -182,8 +196,10 @@ export function Canvas({
       selected:
         initialLocation?.selection.type === "element"
           ? initialLocation.selection.id === node.id
-          : initialLocation?.selection.type === "elements" &&
-            initialLocation.selection.ids.includes(node.id),
+          : initialLocation?.selection.type === "annotation"
+            ? annotationNodeId(initialLocation.selection.id) === node.id
+            : initialLocation?.selection.type === "elements" &&
+              initialLocation.selection.ids.includes(node.id),
     })),
   );
   // React Flow keeps selection *inside* the elements array, so edges must be
@@ -213,6 +229,7 @@ export function Canvas({
     revision: number;
     frames: Record<string, SectionFrame>;
     nestedFrameIds: Set<string>;
+    annotations: ViewAnnotation[];
   } | null>(null);
 
   // A rebuild happens after every mutation; carry the current selection over so
@@ -414,6 +431,20 @@ export function Canvas({
         x: Math.round(position.x),
         y: Math.round(position.y),
       }));
+    const annotationEntries = pending.filter(([id]) => isAnnotationId(id));
+    if (annotationEntries.length)
+      applyOperations.mutate(
+        {
+          label: ta("updated"),
+          operations: annotationEntries.map(([id, position]) => ({
+            op: "updateViewAnnotation",
+            viewId: view.id,
+            annotationId: annotationId(id),
+            data: position,
+          })),
+        },
+        { onError: () => invalidateWorkspace(workspaceId) },
+      );
     if (entries.length === 0) return;
 
     const previous = entries.map(({ elementId }) => {
@@ -421,7 +452,7 @@ export function Canvas({
       return { elementId, x: stored?.x ?? 0, y: stored?.y ?? 0 };
     });
     persistLayout(entries, previous);
-  }, [persistLayout, view.elements]);
+  }, [persistLayout, view.elements, view.id, applyOperations, ta, workspaceId]);
 
   const flushLayoutRef = useRef(flushLayout);
   flushLayoutRef.current = flushLayout;
@@ -508,6 +539,17 @@ export function Canvas({
             locked: expansion.temporaryElementIds.has(entry.elementId) ? false : entry.locked,
           })),
           revision: workspace.revision,
+          annotations: (view.settings.annotations ?? []).filter((annotation) => {
+            if (!node.data.section || !annotation.sectionId) return false;
+            let section = boundaries.find((item) => item.id === annotation.sectionId);
+            const seen = new Set<string>();
+            while (section && !seen.has(section.id)) {
+              if (section.id === node.data.boundaryId) return true;
+              seen.add(section.id);
+              section = boundaries.find((item) => item.id === section?.parentBoundaryId);
+            }
+            return false;
+          }),
           frames,
           nestedFrameIds: new Set(
             dragSectionNodes.current
@@ -570,9 +612,19 @@ export function Canvas({
         drag.nestedFrameIds,
       ),
     );
-    const positions = new Map(
-      entries.map((entry) => [entry.elementId, { x: entry.x, y: entry.y }]),
-    );
+    const positions = new Map([
+      ...entries.map((entry) => [entry.elementId, { x: entry.x, y: entry.y }] as const),
+      ...drag.annotations.map(
+        (annotation) =>
+          [
+            annotationNodeId(annotation.id),
+            {
+              x: annotation.x + node.position.x - drag.position.x,
+              y: annotation.y + node.position.y - drag.position.y,
+            },
+          ] as const,
+      ),
+    ]);
     setNodes((current) =>
       current.map((item) => ({ ...item, position: positions.get(item.id) ?? item.position })),
     );
@@ -605,6 +657,15 @@ export function Canvas({
             expectedRevision: drag.revision,
             label: t("toast.layoutSaved"),
             operations: [
+              ...drag.annotations.map((annotation) => ({
+                op: "updateViewAnnotation" as const,
+                viewId: view.id,
+                annotationId: annotation.id,
+                data: {
+                  x: annotation.x + node.position.x - drag.position.x,
+                  y: annotation.y + node.position.y - drag.position.y,
+                },
+              })),
               {
                 op: "setLayout",
                 viewId: view.id,
@@ -665,6 +726,8 @@ export function Canvas({
                 .filter((entry) => drag.members.has(entry.elementId))
                 .map((entry) => [entry.elementId, { x: entry.x, y: entry.y }]),
             );
+            for (const annotation of drag.annotations)
+              previous.set(annotationNodeId(annotation.id), { x: annotation.x, y: annotation.y });
             setNodes((current) =>
               current.map((item) => ({
                 ...item,
@@ -701,6 +764,61 @@ export function Canvas({
             boundary.viewId === view.id && boundary.layer === view.settings.boundaryLayer,
         ),
       );
+      const annotationChanges = changes.filter((change) => isAnnotationId(change.elementId));
+      if (annotationChanges.length) {
+        const sections = dragSectionNodes.current.flatMap((section) =>
+          section.type === "boundary" && section.data.boundaryId
+            ? [
+                {
+                  id: section.data.boundaryId,
+                  frame: {
+                    ...section.position,
+                    width: section.width ?? 120,
+                    height: section.height ?? 80,
+                  },
+                },
+              ]
+            : [],
+        );
+        const elementChanges = changes.filter((change) => !isAnnotationId(change.elementId));
+        applyOperations.mutate(
+          {
+            label: ta("updated"),
+            operations: [
+              ...annotationChanges.map(({ elementId, after }) => {
+                const annotation = view.settings.annotations.find(
+                  (item) => item.id === annotationId(elementId),
+                );
+                const size = annotation ? annotationSize(annotation) : { width: 120, height: 40 };
+                return {
+                  op: "updateViewAnnotation" as const,
+                  viewId: view.id,
+                  annotationId: annotationId(elementId),
+                  data: {
+                    ...after,
+                    sectionId: containingAnnotationSection({ ...after, ...size }, sections),
+                  },
+                };
+              }),
+              ...(elementChanges.length
+                ? [
+                    {
+                      op: "setLayout" as const,
+                      viewId: view.id,
+                      entries: elementChanges.map(({ elementId, after }) => ({
+                        elementId,
+                        ...after,
+                      })),
+                    },
+                  ]
+                : []),
+              ...membership,
+            ],
+          },
+          { onError: () => invalidateWorkspace(workspaceId) },
+        );
+        return;
+      }
       if (dragSectionNodes.current.length > 0 && changes.length > 0) {
         applyOperations.mutate(
           {
@@ -743,6 +861,7 @@ export function Canvas({
       boundaries,
       applyOperations,
       sectionFrames,
+      ta,
     ],
   );
 
@@ -821,7 +940,9 @@ export function Canvas({
       const node = elementNodes[0] ?? selectedNodes[0];
       const edge = selectedEdges[0];
       if (node) {
-        if (node.type === "boundary" && node.data?.boundaryId) {
+        if (node.type === "annotation") {
+          select({ type: "annotation", id: annotationId(node.id) });
+        } else if (node.type === "boundary" && node.data?.boundaryId) {
           select({ type: "boundary", id: String(node.data.boundaryId) });
         } else {
           select({
@@ -860,7 +981,7 @@ export function Canvas({
         }
         return;
       }
-      if (!connectFrom) return;
+      if (node.type === "annotation" || !connectFrom) return;
       ignoreDetailsUntil.current = Date.now() + 600;
       createRelationship(connectFrom, node.id);
       setConnectFrom(null);
@@ -918,30 +1039,42 @@ export function Canvas({
             .filter((id) => !id.startsWith("implied:")),
         ),
       ];
-      if (elementIds.length === 0 && relationshipIds.length === 0) return;
+      const annotationIds = deletedNodes
+        .filter((node) => node.type === "annotation")
+        .map((node) => annotationId(node.id));
+      if (elementIds.length === 0 && relationshipIds.length === 0 && annotationIds.length === 0)
+        return;
 
-      applyOperations.mutate({
-        label: t("canvas.deletedSelection"),
-        operations: [
-          ...(elementIds.length > 0
-            ? [
-                {
-                  op: "setViewElements" as const,
-                  viewId: view.id,
-                  elementIds,
-                  mode: "remove" as const,
-                },
-              ]
-            : []),
-          ...relationshipIds.map((relationshipId) => ({
-            op: "deleteRelationship" as const,
-            relationshipId,
-          })),
-        ],
-      });
+      applyOperations.mutate(
+        {
+          label: t("canvas.deletedSelection"),
+          operations: [
+            ...annotationIds.map((annotationId) => ({
+              op: "deleteViewAnnotation" as const,
+              viewId: view.id,
+              annotationId,
+            })),
+            ...(elementIds.length > 0
+              ? [
+                  {
+                    op: "setViewElements" as const,
+                    viewId: view.id,
+                    elementIds,
+                    mode: "remove" as const,
+                  },
+                ]
+              : []),
+            ...relationshipIds.map((relationshipId) => ({
+              op: "deleteRelationship" as const,
+              relationshipId,
+            })),
+          ],
+        },
+        { onError: () => invalidateWorkspace(workspaceId) },
+      );
       clearSelection();
     },
-    [applyOperations, clearSelection, t, view.id],
+    [applyOperations, clearSelection, t, view.id, workspaceId],
   );
 
   const deleteFromModel = useCallback(
@@ -997,6 +1130,48 @@ export function Canvas({
   const onNodeContextMenu = useCallback<NodeMouseHandler>(
     (event, node) => {
       event.preventDefault();
+      if (node.type === "annotation") {
+        const id = annotationId(node.id);
+        select({ type: "annotation", id });
+        setMenu({
+          x: event.clientX,
+          y: event.clientY,
+          items: [
+            {
+              label: ta("edit", {
+                kind: ta(
+                  String(node.data.annotation && (node.data.annotation as ViewAnnotation).kind),
+                ),
+              }),
+              onSelect: () => setEditingAnnotationId(id),
+            },
+            {
+              label: ta("duplicate"),
+              onSelect: () => {
+                const copied = createDiagramClipboard(workspaceId, view, elements, relationships, [
+                  node.id,
+                ]);
+                if (copied)
+                  applyOperations.mutate({
+                    label: ta("created"),
+                    operations: buildPasteOperations(copied, workspaceId, view),
+                  });
+              },
+            },
+            {
+              label: ta("delete"),
+              destructive: true,
+              separatorBefore: true,
+              onSelect: () =>
+                applyOperations.mutate({
+                  label: ta("deleted"),
+                  operations: [{ op: "deleteViewAnnotation", viewId: view.id, annotationId: id }],
+                }),
+            },
+          ],
+        });
+        return;
+      }
       // Right-click and right-button panning must never activate a boundary.
       // Boundaries remain selectable with an intentional left click.
       if (node.type === "boundary") {
@@ -1091,6 +1266,11 @@ export function Canvas({
       });
     },
     [
+      applyOperations,
+      elements,
+      relationships,
+      view,
+      ta,
       askAgent,
       connectFrom,
       canOpenDetails,
@@ -1248,14 +1428,19 @@ export function Canvas({
       const key = event.key.toLowerCase();
       if (key === "a") {
         event.preventDefault();
-        const ids = nodes.filter((node) => node.type === "element").map((node) => node.id);
+        const ids = nodes.filter((node) => node.type !== "boundary").map((node) => node.id);
         setNodes((current) =>
-          current.map((node) => ({ ...node, selected: node.type === "element" })),
+          current.map((node) => ({ ...node, selected: node.type !== "boundary" })),
         );
         setEdges((current) =>
           current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
         );
-        if (ids.length === 1) select({ type: "element", id: ids[0] as string });
+        if (ids.length === 1)
+          select(
+            isAnnotationId(ids[0] as string)
+              ? { type: "annotation", id: annotationId(ids[0] as string) }
+              : { type: "element", id: ids[0] as string },
+          );
         else if (ids.length > 1) select({ type: "elements", ids: ids.sort() });
         else clearSelection();
         return;
@@ -1263,7 +1448,7 @@ export function Canvas({
 
       if (key === "c") {
         const ids = nodes
-          .filter((node) => node.type === "element" && node.selected)
+          .filter((node) => node.type !== "boundary" && node.selected)
           .map((node) => node.id);
         if (!copyElementsToClipboard(ids)) return;
         event.preventDefault();
@@ -1369,6 +1554,7 @@ export function Canvas({
       ...boundary,
       selected: selection.type === "boundary" && selection.id === boundary.data.boundaryId,
     }));
+    const annotationNodes = nodes.filter((node) => node.type === "annotation");
     const frames = [...legacyBoundaries, ...semanticBoundaries].map((boundary) => {
       if (boundary.type !== "boundary") return boundary;
       const members = boundaryMemberIds(
@@ -1399,6 +1585,25 @@ export function Canvas({
             ),
           })),
       ];
+      for (const node of annotationNodes) {
+        if (
+          node.type === "annotation" &&
+          (node.data.annotation.sectionId === boundary.data.boundaryId ||
+            boundaries.some(
+              (section) =>
+                section.id === node.data.annotation.sectionId &&
+                section.parentBoundaryId === boundary.data.boundaryId,
+            ))
+        ) {
+          members.add(node.id);
+          fitSources.push({
+            id: node.id,
+            ...node.position,
+            width: node.width ?? 120,
+            height: node.height ?? 40,
+          });
+        }
+      }
       const fittedFrame = boundary.data.section ? fitSectionFrame(fitSources, members) : null;
       return {
         ...boundary,
@@ -1476,11 +1681,34 @@ export function Canvas({
     const transformed = new Set(expandedFrames.map((frame) => frame.id));
     return applyNodeColors(
       [...frames, ...expandedFrames, ...nodes.filter((node) => !transformed.has(node.id))].map(
-        (node) => ({
-          ...node,
-          className:
-            scenarioStep?.elementId === node.id ? "ring-2 ring-primary rounded-lg" : undefined,
-        }),
+        (node): FlowNode => {
+          const className =
+            scenarioStep?.elementId === node.id ? "ring-2 ring-primary rounded-lg" : undefined;
+          if (node.type !== "annotation") return { ...node, className };
+          return {
+            ...node,
+            className,
+            data: {
+              ...node.data,
+              onEdit: () => setEditingAnnotationId(node.data.annotation.id),
+              onResize: (frame: SectionFrame) =>
+                applyOperations.mutate(
+                  {
+                    label: ta("updated"),
+                    operations: [
+                      {
+                        op: "updateViewAnnotation",
+                        viewId: view.id,
+                        annotationId: node.data.annotation.id,
+                        data: frame,
+                      },
+                    ],
+                  },
+                  { onError: () => invalidateWorkspace(workspaceId) },
+                ),
+            },
+          };
+        },
       ),
       view.settings.nodeColors,
     );
@@ -1498,6 +1726,8 @@ export function Canvas({
     view.scopeElementId,
     view.settings.sectionFrames,
     view.settings.nodeColors,
+    ta,
+    workspaceId,
     view.settings.showFullTitles,
     view.settings.showDescriptions,
     selection,
@@ -1624,6 +1854,10 @@ export function Canvas({
               )
             )
               return;
+            if (node.type === "annotation") {
+              setEditingAnnotationId(node.data.annotation.id);
+              return;
+            }
             const elementId = node.type === "boundary" ? node.data.elementId : node.id;
             if (elementId) onOpenDetails(String(elementId));
           }}
@@ -1722,9 +1956,76 @@ export function Canvas({
             />
           )}
         </SelectionColorToolbar>
+        {editingAnnotationId &&
+          view.settings.annotations.find((item) => item.id === editingAnnotationId) && (
+            <AnnotationEditor
+              key={editingAnnotationId}
+              annotation={
+                view.settings.annotations.find(
+                  (item) => item.id === editingAnnotationId,
+                ) as ViewAnnotation
+              }
+              onClose={() => setEditingAnnotationId(null)}
+              onSave={async (data: UpdateViewAnnotationInput) => {
+                await applyOperations.mutateAsync({
+                  label: ta("updated"),
+                  operations: [
+                    {
+                      op: "updateViewAnnotation",
+                      viewId: view.id,
+                      annotationId: editingAnnotationId,
+                      data,
+                    },
+                  ],
+                });
+              }}
+            />
+          )}
         <CreationToolbar
           workspaceId={workspaceId}
           view={view}
+          onCreateAnnotation={(kind) => {
+            const bounds = canvasRef.current?.getBoundingClientRect();
+            const position = bounds
+              ? flow.screenToFlowPosition({
+                  x: bounds.left + bounds.width / 2 - 140,
+                  y: bounds.top + bounds.height / 2 - 60,
+                })
+              : { x: 0, y: 0 };
+            const id = `annotation-${crypto.randomUUID().slice(0, 12)}`;
+            applyOperations.mutate(
+              {
+                label: ta("created"),
+                operations: [
+                  {
+                    op: "createViewAnnotation",
+                    viewId: view.id,
+                    data: {
+                      id,
+                      ...position,
+                      width: kind === "table" ? 420 : 280,
+                      height: kind === "note" ? 180 : 60,
+                      ...(kind === "table"
+                        ? {
+                            kind,
+                            cells: [
+                              ["", "", ""],
+                              ["", "", ""],
+                            ],
+                          }
+                        : { kind, text: ta(kind === "text" ? "newText" : "newNote") }),
+                    },
+                  },
+                ],
+              },
+              {
+                onSuccess: () => {
+                  select({ type: "annotation", id });
+                  setEditingAnnotationId(id);
+                },
+              },
+            );
+          }}
           onCreateSection={() => {
             const bounds = canvasRef.current?.getBoundingClientRect();
             const point = bounds
@@ -1740,7 +2041,10 @@ export function Canvas({
                 : selection.type === "element"
                   ? [selection.id]
                   : [];
-            const selectedNodes = nodes.filter((node) => selectedIds.includes(node.id));
+            const selectedNodes = nodes.filter(
+              (node) =>
+                selectedIds.includes(node.id) || (node.type === "annotation" && node.selected),
+            );
             const x = selectedNodes.length
               ? Math.min(...selectedNodes.map((node) => node.position.x)) - 28
               : point.x;
@@ -1789,6 +2093,14 @@ export function Canvas({
                       ),
                     },
                   },
+                  ...nodes
+                    .filter((node) => node.type === "annotation" && node.selected)
+                    .map((node) => ({
+                      op: "updateViewAnnotation" as const,
+                      viewId: view.id,
+                      annotationId: annotationId(node.id),
+                      data: { sectionId: id },
+                    })),
                   {
                     op: "updateView",
                     viewId: view.id,

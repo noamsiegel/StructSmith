@@ -18,7 +18,10 @@ export function createDiagramClipboard(
 ): DiagramClipboard | null {
   const selected = new Set(selectedElementIds);
   const copiedElements = elements.filter((element) => selected.has(element.id));
-  if (copiedElements.length === 0) return null;
+  const annotations = (view.settings.annotations ?? []).filter((annotation) =>
+    selected.has(`annotation:${annotation.id}`),
+  );
+  if (copiedElements.length === 0 && annotations.length === 0) return null;
 
   const copiedRelationships =
     mode === "with-connections"
@@ -34,6 +37,7 @@ export function createDiagramClipboard(
     workspaceId,
     viewId: view.id,
     elements: copiedElements,
+    annotations,
     relationships: copiedRelationships,
     placements: view.elements.filter((placement) => selected.has(placement.elementId)),
     relationshipPlacements: view.relationships.filter((placement) =>
@@ -98,29 +102,31 @@ export function buildPasteOperations(
     },
   }));
 
-  operations.push({
-    op: "setViewElements",
-    viewId,
-    elementIds: clipboard.elements.map((element) => referenceTo(element.id)),
-    mode: "add",
-  });
-  operations.push({
-    op: "setLayout",
-    viewId,
-    entries: clipboard.elements.map((element) => {
-      const placement = clipboard.placements.find((item) => item.elementId === element.id);
-      return {
-        elementId: referenceTo(element.id),
-        x: (placement?.x ?? 0) + offset,
-        y: (placement?.y ?? 0) + offset,
-        width: placement?.width,
-        height: placement?.height,
-        hidden: false,
-        locked: placement?.locked ?? false,
-        zIndex: placement?.zIndex ?? 0,
-      };
-    }),
-  });
+  if (clipboard.elements.length)
+    operations.push({
+      op: "setViewElements",
+      viewId,
+      elementIds: clipboard.elements.map((element) => referenceTo(element.id)),
+      mode: "add",
+    });
+  if (clipboard.elements.length)
+    operations.push({
+      op: "setLayout",
+      viewId,
+      entries: clipboard.elements.map((element) => {
+        const placement = clipboard.placements.find((item) => item.elementId === element.id);
+        return {
+          elementId: referenceTo(element.id),
+          x: (placement?.x ?? 0) + offset,
+          y: (placement?.y ?? 0) + offset,
+          width: placement?.width,
+          height: placement?.height,
+          hidden: false,
+          locked: placement?.locked ?? false,
+          zIndex: placement?.zIndex ?? 0,
+        };
+      }),
+    });
 
   if (Object.keys(clipboard.nodeColors).length > 0) {
     operations.push({
@@ -191,5 +197,17 @@ export function buildPasteOperations(
     });
   }
 
+  operations.push(
+    ...(clipboard.annotations ?? []).map(({ id: _id, ...annotation }) => ({
+      op: "createViewAnnotation" as const,
+      viewId,
+      data: {
+        ...annotation,
+        x: annotation.x + offset,
+        y: annotation.y + offset,
+        sectionId: sameWorkspace && clipboard.viewId === viewId ? annotation.sectionId : null,
+      },
+    })),
+  );
   return operations;
 }

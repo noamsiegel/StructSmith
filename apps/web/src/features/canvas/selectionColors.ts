@@ -1,5 +1,6 @@
 import type { ArchitectureOperation, ViewDetail } from "@structsmith/contracts";
 import type { Selection } from "../../store/editor";
+import { annotationId, isAnnotationId } from "./annotations";
 import type { FlowEdge, FlowNode } from "./graph";
 
 export function selectionColorTargets(
@@ -11,6 +12,9 @@ export function selectionColorTargets(
     .filter((node) => {
       if (selection.type === "boundary")
         return node.type === "boundary" && node.data.boundaryId === selection.id;
+      if (selection.type === "annotation")
+        return node.type === "annotation" && annotationId(node.id) === selection.id;
+      if (node.type === "annotation") return node.selected === true;
       const id = node.type === "boundary" ? node.data.elementId : node.id;
       return selection.type === "element"
         ? id === selection.id
@@ -41,10 +45,20 @@ export function colorSelectionOperations(
   if (nodeIds.length) {
     const nodeColors = { ...view.settings.nodeColors };
     for (const id of nodeIds) {
+      if (isAnnotationId(id)) {
+        operations.push({
+          op: "updateViewAnnotation",
+          viewId: view.id,
+          annotationId: annotationId(id),
+          data: { color },
+        });
+        continue;
+      }
       if (color === null) delete nodeColors[id];
       else nodeColors[id] = color;
     }
-    operations.push({ op: "updateView", viewId: view.id, data: { settings: { nodeColors } } });
+    if (nodeIds.some((id) => !isAnnotationId(id)))
+      operations.push({ op: "updateView", viewId: view.id, data: { settings: { nodeColors } } });
   }
   if (relationshipIds.length)
     operations.push({
@@ -63,6 +77,7 @@ export function applyNodeColors(
   colors: Readonly<Record<string, string>>,
 ): FlowNode[] {
   return nodes.map((node) => {
+    if (node.type === "annotation") return node;
     const color = colors[node.id];
     if (!color) return node;
     if (node.type === "boundary")

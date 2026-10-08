@@ -46,6 +46,7 @@ const view: ViewDetail = {
   kind: "container",
   scopeElementId: null,
   settings: {
+    annotations: [],
     nodeColors: {},
     sectionFrames: {},
     showBoundaries: true,
@@ -177,4 +178,51 @@ describe("diagram clipboard", () => {
       },
     });
   });
+});
+
+test("copies view-owned annotations without creating model objects or connections", () => {
+  const annotatedView = {
+    ...view,
+    settings: {
+      ...view.settings,
+      annotations: [
+        {
+          id: "note",
+          kind: "note" as const,
+          text: "Local context",
+          x: 10,
+          y: 20,
+          width: 200,
+          height: 100,
+          sectionId: "section",
+        },
+      ],
+    },
+  };
+  const copied = createDiagramClipboard("workspace", annotatedView, [], [], ["annotation:note"]);
+  expect(copied?.annotations.length).toBe(1);
+  expect(copied?.elements).toEqual([]);
+  const operations = buildPasteOperations(
+    copied ??
+      (() => {
+        throw new Error("Missing clipboard");
+      })(),
+    "different-workspace",
+    annotatedView,
+  );
+  expect(operations).toEqual([
+    {
+      op: "createViewAnnotation",
+      viewId: view.id,
+      data: {
+        kind: "note",
+        text: "Local context",
+        x: 50,
+        y: 60,
+        width: 200,
+        height: 100,
+        sectionId: null,
+      },
+    },
+  ]);
 });

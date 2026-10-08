@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useApplyOperations } from "@/hooks/useApi";
 import { useEditorStore } from "@/store/editor";
+import { annotationId, isAnnotationId } from "./annotations";
 import type { FlowEdge, FlowNode } from "./graph";
 import { colorSelectionOperations, selectionColorTargets } from "./selectionColors";
 
@@ -44,7 +45,12 @@ export function SelectionColorToolbar({
   const command = useApplyOperations(workspaceId);
   const { nodeIds, relationshipIds } = selectionColorTargets(selection, nodes, edges);
   const colors = [
-    ...nodeIds.map((id) => view.settings.nodeColors[id]),
+    ...nodeIds.map((id) =>
+      isAnnotationId(id)
+        ? (view.settings.annotations.find((annotation) => annotation.id === annotationId(id))
+            ?.color ?? undefined)
+        : view.settings.nodeColors[id],
+    ),
     ...relationshipIds.map(
       (id) =>
         view.relationships.find((row) => row.relationshipId === id)?.presentation?.color ??

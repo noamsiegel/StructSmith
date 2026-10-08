@@ -1,6 +1,7 @@
 import type {
   ArchitectureElement,
   ArchitectureRelationship,
+  ViewAnnotation,
   ViewElement,
   ViewRelationship,
 } from "@structsmith/contracts";
@@ -8,6 +9,7 @@ import { create } from "zustand";
 
 export type Selection =
   | { type: "none" }
+  | { type: "annotation"; id: string }
   | { type: "element"; id: string }
   | { type: "elements"; ids: string[] }
   | { type: "boundary"; id: string }
@@ -19,6 +21,7 @@ export interface DiagramClipboard {
   workspaceId: string;
   viewId: string;
   elements: ArchitectureElement[];
+  annotations: ViewAnnotation[];
   relationships: ArchitectureRelationship[];
   placements: ViewElement[];
   relationshipPlacements: ViewRelationship[];
