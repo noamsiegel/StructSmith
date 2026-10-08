@@ -1,6 +1,6 @@
 /* biome-ignore-all lint/suspicious/noArrayIndexKey: Table cells are controlled and addressed by row and column coordinates. */
 import type { UpdateViewAnnotationInput, ViewAnnotation } from "@structsmith/contracts";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, X } from "lucide-react";
 import { useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -62,9 +62,20 @@ export function AnnotationEditor({
       }}
     >
       <DialogContent
+        hideClose
         className="max-h-[85vh] max-w-3xl overflow-y-auto"
         onKeyDown={(event) => event.stopPropagation()}
       >
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute right-3 top-3 h-7 w-7"
+          aria-label={t("cancel")}
+          disabled={pending}
+          onClick={onClose}
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
         <DialogHeader>
           <DialogTitle>{t("edit", { kind: t(annotation.kind) })}</DialogTitle>
           <DialogDescription>
