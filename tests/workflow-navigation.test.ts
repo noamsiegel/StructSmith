@@ -129,6 +129,16 @@ test("native workflow semantics coexist with strict C4 and survive documents, im
         parentId: decision.id,
       }),
     ).toThrow();
+    for (const kind of ["decision", "outcome"] as const) {
+      expect(() => services.elements.update(workspace.id, group.id, { kind })).toThrow();
+      expect(services.elements.list(workspace.id).find((item) => item.id === group.id)?.kind).toBe(
+        "workflowGroup",
+      );
+    }
+    expect(() =>
+      services.elements.update(workspace.id, action.id, { kind: "container" }),
+    ).toThrow();
+    expect(services.model.validate(workspace.id).valid).toBe(true);
   } finally {
     close();
   }

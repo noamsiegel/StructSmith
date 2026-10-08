@@ -91,7 +91,7 @@ function ColorField({
         id={id}
         type="color"
         value={draft}
-        onChange={(event) => setDraft(event.target.value)}
+        onInput={(event) => setDraft(event.currentTarget.value)}
         onBlur={() => {
           if (draft !== value) onChange(draft);
         }}

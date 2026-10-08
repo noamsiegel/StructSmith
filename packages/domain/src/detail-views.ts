@@ -44,8 +44,7 @@ export function canOpenElementDetails(
 ): boolean {
   if (!detailViewKind(element)) return false;
   if (detailViewsFor(element, views, currentViewId).length > 0) return true;
-  if (views.some((view) => view.id === currentViewId && view.scopeElementId === element.id))
-    return false;
+  if (detailViewsFor(element, views).some((view) => view.id === currentViewId)) return false;
   return (
     element.kind === "softwareSystem" ||
     element.kind === "container" ||

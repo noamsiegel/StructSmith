@@ -604,5 +604,33 @@
     "directoryHint": "Absolute path on the server. Used for reading local code; leave empty for architecture only. Project assignment stays fixed.",
     "confirmDelete": "Confirm delete",
     "retry": "Retry"
+  },
+  "relationshipPresentation": {
+    "title": "Connector appearance",
+    "color": "Color",
+    "strokeWidth": "Line width",
+    "strokeStyle": "Line style",
+    "sourceArrow": "Start arrow",
+    "targetArrow": "End arrow",
+    "sourceSide": "Start side",
+    "targetSide": "End side",
+    "labelPosition": "Position along line (0-1)",
+    "labelOffsetX": "Label offset X",
+    "labelOffsetY": "Label offset Y",
+    "reset": "Reset appearance",
+    "updated": "Update connector appearance",
+    "moveLabel": "Move label: {{label}}",
+    "moveLabelHint": "Drag to move the label. Arrow keys move 1 unit; Shift moves 10.",
+    "solid": "Solid",
+    "dashed": "Dashed",
+    "dotted": "Dotted",
+    "none": "None",
+    "arrow": "Open arrow",
+    "arrowclosed": "Filled arrow",
+    "left": "Left",
+    "right": "Right",
+    "top": "Top",
+    "bottom": "Bottom",
+    "auto": "Auto"
   }
 }

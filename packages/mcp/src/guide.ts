@@ -104,7 +104,7 @@ export function modelingGuide() {
         "Seed elementIds when creating the view and include autoLayoutView in the same batch.",
       ],
       relationshipBehavior:
-        "Visible relationships are derived from the semantic model. Descendant relationships may be lifted and grouped; explicit view relationship entries only customize visibility and routing.",
+        "Visible relationships are derived from the semantic model. Descendant relationships may be lifted and grouped; explicit view relationship entries customize visibility, routing and presentation without changing semantic endpoints.",
       boundaryBehavior:
         "Each view owns its boundary tree. The view boundaryLayer selects which layer is rendered and used by boundary-aware layout; showBoundaries controls rendering without deleting boundaries or memberships. Add elements to the view before assigning them to a boundary. Elements with no boundary in the active layer remain ordinary items in the view; 'Items in view' is a UI grouping, not a boundary object.",
       settings: {
@@ -120,6 +120,8 @@ export function modelingGuide() {
         snapToGrid: "Snap manual element movement to the canvas grid.",
       },
       layouts: {
+        relationshipPresentation:
+          "Per-view relationship presentation supports color (#RRGGBB), strokeWidth (0.5-12), strokeStyle (solid/dashed/dotted), sourceArrow/targetArrow (none/arrow/arrowclosed), sourceSide/targetSide (left/right/top/bottom; null means automatic), and labelOffset ({x,y}). labelPosition (0-1) locates the label along the rendered path; controlPoints set bends. Patch fields merge; null resets presentation. Grouped implied edges use the first relationship's presentation and cannot be reconnected or label-dragged.",
         persistence:
           "Manual positions, optional sizes, locks and relationship presentation are saved by view_set_layout or setLayout/setViewRelationships operations. Automatic layout overwrites only unlocked element coordinates.",
         dagre:

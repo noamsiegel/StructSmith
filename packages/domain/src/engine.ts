@@ -149,13 +149,6 @@ export function updateElement(
     parentId = input.parentId;
     if (parentId === elementId) throw badRequest("An element cannot be its own parent.");
     if (parentId) {
-      const parent = requireElement(repos, parentId, workspace.id);
-      enforceHierarchy(
-        workspace.mode,
-        { kind: input.kind ?? current.kind, name: input.name ?? current.name },
-        parent,
-        warnings,
-      );
       const all = repos.elements.listByWorkspace(workspace.id);
       const parentOf = new Map(all.map((item) => [item.id, item.parentId]));
       if (wouldCreateCycle(elementId, parentId, (id) => parentOf.get(id) ?? null)) {
@@ -178,6 +171,15 @@ export function updateElement(
     properties: input.properties ?? current.properties,
     updatedAt: nowIso(),
   };
+  if (input.parentId !== undefined || input.kind !== undefined) {
+    const parent = parentId ? requireElement(repos, parentId, workspace.id) : undefined;
+    enforceHierarchy(workspace.mode, next, parent, warnings);
+    if (input.kind !== undefined && input.kind !== current.kind) {
+      for (const child of repos.elements.listByWorkspace(workspace.id)) {
+        if (child.parentId === elementId) enforceHierarchy(workspace.mode, child, next, warnings);
+      }
+    }
+  }
   repos.elements.update(next);
   return next;
 }

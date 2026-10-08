@@ -30,7 +30,10 @@ assert.deepEqual(canonical(after), canonical(before), "Workspace identities or m
 for (const workspace of before.workspaces) {
   for (const suffix of ["document", "snapshots", "activity?limit=100000"]) {
     const path = `/api/workspaces/${encodeURIComponent(workspace.id)}/${suffix}`;
-    const [left, right]: [unknown, unknown] = await Promise.all([read(baseline, path), read(candidate, path)]);
+    const [left, right]: [unknown, unknown] = await Promise.all([
+      read(baseline, path),
+      read(candidate, path),
+    ]);
     assert.deepEqual(canonical(right), canonical(left), `${workspace.id}: ${suffix} changed`);
   }
   console.log(`${workspace.id}: document, snapshots and activity unchanged`);

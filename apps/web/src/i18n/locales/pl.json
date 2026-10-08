@@ -612,5 +612,33 @@
     "directoryHint": "Pełna ścieżka na serwerze. Służy do czytania lokalnego kodu; pozostaw puste, aby pracować tylko z architekturą. Przypisanie projektu jest stałe.",
     "confirmDelete": "Potwierdź usunięcie",
     "retry": "Ponów"
+  },
+  "relationshipPresentation": {
+    "title": "Wygląd połączenia",
+    "color": "Kolor",
+    "strokeWidth": "Grubość linii",
+    "strokeStyle": "Styl linii",
+    "sourceArrow": "Strzałka początkowa",
+    "targetArrow": "Strzałka końcowa",
+    "sourceSide": "Strona początkowa",
+    "targetSide": "Strona końcowa",
+    "labelPosition": "Pozycja na linii (0-1)",
+    "labelOffsetX": "Przesunięcie etykiety X",
+    "labelOffsetY": "Przesunięcie etykiety Y",
+    "reset": "Resetuj wygląd",
+    "updated": "Zmień wygląd połączenia",
+    "moveLabel": "Przenieś etykietę: {{label}}",
+    "moveLabelHint": "Przeciągnij etykietę. Strzałki przesuwają o 1, Shift o 10.",
+    "solid": "Ciągła",
+    "dashed": "Przerywana",
+    "dotted": "Kropkowana",
+    "none": "Brak",
+    "arrow": "Otwarta strzałka",
+    "arrowclosed": "Wypełniona strzałka",
+    "left": "Lewa",
+    "right": "Prawa",
+    "top": "Góra",
+    "bottom": "Dół",
+    "auto": "Automatycznie"
   }
 }
