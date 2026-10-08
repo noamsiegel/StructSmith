@@ -415,9 +415,22 @@ export function computeSemanticBoundaries(
     collectMembers(boundary.id);
     const saved = boundary.kind === "custom" ? sectionFrames[`boundary:${boundary.id}`] : undefined;
     if (saved) {
-      const enclosing = subprocessFrames.filter((frame) =>
-        frame.elementIds.some((id) => members.has(id)),
-      );
+      const enclosing = [
+        ...subprocessFrames.filter((frame) => frame.elementIds.some((id) => members.has(id))),
+        ...active
+          .filter((child) => child.parentBoundaryId === boundary.id)
+          .flatMap((child) => {
+            const box = boxFor(child, visiting);
+            if (!box) return [];
+            return [
+              {
+                ...box,
+                y: box.y - (child.kind === "custom" ? BOUNDARY_HEADER : 0),
+                height: box.height + (child.kind === "custom" ? BOUNDARY_HEADER : 0),
+              },
+            ];
+          }),
+      ];
       const x = Math.min(saved.x, ...enclosing.map((frame) => frame.x - BOUNDARY_PADDING));
       const y = Math.min(saved.y, ...enclosing.map((frame) => frame.y - BOUNDARY_PADDING));
       const box = {
@@ -529,6 +542,7 @@ export function computeCanvasBoundaries(
     layer,
     enabled,
     sectionFrames,
+    expandedFrames,
   );
   if (!enabled) return { parentBoundaries: [], semanticBoundaries };
 
@@ -558,14 +572,7 @@ export function computeCanvasBoundaries(
           y: node.position.y,
           width: node.width,
           height: node.height,
-          elementIds: [
-            ...boundaryMemberIds(
-              { boundaryId: String(boundaryId) },
-              elementsById,
-              boundaries,
-              layer,
-            ),
-          ],
+          elementIds: members,
         },
       ];
     });
@@ -580,14 +587,7 @@ export function computeCanvasBoundaries(
   ).filter((node) => !expandedFrames.some((frame) => frame.id === node.data.elementId));
   return {
     parentBoundaries,
-    semanticBoundaries: computeSemanticBoundaries(
-      sources,
-      boundaries,
-      layer,
-      enabled,
-      sectionFrames,
-      expandedFrames,
-    ),
+    semanticBoundaries,
   };
 }
 
@@ -600,6 +600,7 @@ export function boundaryMemberIds(
   elementsById: ReadonlyMap<string, ArchitectureElement>,
   boundaries: readonly ArchitectureBoundary[],
   layer: ArchitectureBoundary["layer"],
+  expandedElementIds?: ReadonlySet<string>,
 ): Set<string> {
   const members = new Set<string>();
   if (data.boundaryId) {
@@ -615,7 +616,13 @@ export function boundaryMemberIds(
       }
     };
     collect(data.boundaryId);
+    for (const elementId of [...members]) {
+      if (!expandedElementIds?.has(elementId)) continue;
+      for (const descendant of boundaryMemberIds({ elementId }, elementsById, boundaries, layer))
+        members.add(descendant);
+    }
   } else if (data.elementId) {
+    members.add(data.elementId);
     for (const element of elementsById.values()) {
       let parentId = element.parentId;
       const visited = new Set<string>();

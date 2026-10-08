@@ -2,6 +2,47 @@ import { expect, test } from "bun:test";
 import { computeCanvasBoundaries } from "../apps/web/src/features/canvas/graph";
 import { createTestContext, createWorkspace } from "./helpers";
 
+test("saved parent Sections enclose nested Section frames and their outside titles", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const view = services.views.create(workspace.id, { kind: "workflow", name: "Overview" }).result;
+    const parent = services.boundaries.create(workspace.id, {
+      viewId: view.id,
+      kind: "custom",
+      layer: "custom",
+      name: "Capture",
+    }).result;
+    const child = services.boundaries.create(workspace.id, {
+      viewId: view.id,
+      kind: "custom",
+      layer: "custom",
+      name: "Replay",
+      parentBoundaryId: parent.id,
+    }).result;
+    const frames = computeCanvasBoundaries([], new Map(), [parent, child], "custom", true, {
+      [`boundary:${parent.id}`]: { x: 0, y: 180, width: 120, height: 80 },
+      [`boundary:${child.id}`]: { x: 200, y: 200, width: 120, height: 80 },
+    });
+    expect(
+      frames.semanticBoundaries.find((node) => node.data.boundaryId === parent.id),
+    ).toMatchObject({
+      position: { x: 0, y: 136 },
+      width: 348,
+      height: 172,
+    });
+    expect(
+      frames.semanticBoundaries.find((node) => node.data.boundaryId === child.id),
+    ).toMatchObject({
+      position: { x: 200, y: 200 },
+      width: 120,
+      height: 80,
+    });
+  } finally {
+    close();
+  }
+});
+
 test("legacy custom model frames are not visual Sections", () => {
   const { services, close } = createTestContext();
   try {

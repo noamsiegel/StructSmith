@@ -427,8 +427,10 @@ export function Canvas({
       const relevant = changes.filter(
         (change) =>
           (!("id" in change) || !isBoundaryId(change.id as string)) &&
+          !(change.type === "dimensions" && expansion.expandedElementIds.has(change.id)) &&
           !(boundaryDrag.current && change.type === "position"),
       );
+      if (relevant.length === 0) return;
       setNodes((current) => applyNodeChanges(relevant, current) as FlowNode[]);
 
       for (const change of relevant) {
@@ -450,7 +452,7 @@ export function Canvas({
         scheduleLayoutSave();
       }
     },
-    [scheduleLayoutSave],
+    [scheduleLayoutSave, expansion.expandedElementIds],
   );
 
   const onNodeDragStart = useCallback<OnNodeDrag<FlowNode>>(
@@ -473,13 +475,19 @@ export function Canvas({
           elementsById,
           boundaries,
           view.settings.boundaryLayer,
+          expansion.expandedElementIds,
         );
         const current = new Map(nodes.map((item) => [item.id, item.position]));
         boundaryDrag.current = {
           id: node.id,
           position: node.position,
           members,
-          placements: view.elements.map((entry) => ({ ...entry, ...current.get(entry.elementId) })),
+          placements: expansion.view.elements.map((entry) => ({
+            ...entry,
+            ...current.get(entry.elementId),
+            // Temporary children are locked against individual edits, not group movement.
+            locked: expansion.temporaryElementIds.has(entry.elementId) ? false : entry.locked,
+          })),
           revision: workspace.revision,
           frames,
           nestedFrameIds: new Set(
@@ -510,7 +518,19 @@ export function Canvas({
         });
       }
     },
-    [flushLayout, workspaceId, elementsById, boundaries, view, nodes, flow, sectionFrames],
+    [
+      flushLayout,
+      workspaceId,
+      elementsById,
+      boundaries,
+      view,
+      expansion.view,
+      expansion.expandedElementIds,
+      expansion.temporaryElementIds,
+      nodes,
+      flow,
+      sectionFrames,
+    ],
   );
 
   const onNodeDrag = useCallback<OnNodeDrag<FlowNode>>((_event, node) => {
@@ -566,7 +586,13 @@ export function Canvas({
             expectedRevision: drag.revision,
             label: t("toast.layoutSaved"),
             operations: [
-              { op: "setLayout", viewId: view.id, entries },
+              {
+                op: "setLayout",
+                viewId: view.id,
+                entries: entries.filter((entry) =>
+                  view.elements.some((saved) => saved.elementId === entry.elementId),
+                ),
+              },
               {
                 op: "updateView",
                 viewId: view.id,
@@ -584,6 +610,18 @@ export function Canvas({
                   },
                 },
               },
+              ...(node.data.elementId
+                ? sectionMembershipOperations(
+                    [node],
+                    dragSectionNodes.current,
+                    elementsById,
+                    boundaries.filter(
+                      (boundary) =>
+                        boundary.viewId === view.id &&
+                        boundary.layer === view.settings.boundaryLayer,
+                    ),
+                  )
+                : []),
             ],
           }),
         );
@@ -788,7 +826,9 @@ export function Canvas({
       if (node.type === "boundary") {
         setNodes((current) =>
           current.map((candidate) =>
-            candidate.selected ? { ...candidate, selected: false } : candidate,
+            candidate.selected === (candidate.id === node.id)
+              ? candidate
+              : { ...candidate, selected: candidate.id === node.id },
           ),
         );
         setEdges((current) =>
@@ -1260,10 +1300,19 @@ export function Canvas({
           : (node.measured?.height ?? node.height ?? NODE_HEIGHT),
       }));
     const expandedFrames = inlineFrames(sources, elementsById, expansion.expandedElementIds).map(
-      (frame) => ({
-        ...frame,
-        selected: selection.type === "element" && selection.id === frame.id,
-      }),
+      (frame) => {
+        const members = boundaryMemberIds(
+          { elementId: frame.id },
+          elementsById,
+          boundaries,
+          view.settings.boundaryLayer,
+        );
+        return {
+          ...frame,
+          draggable: !view.elements.some((entry) => entry.locked && members.has(entry.elementId)),
+          selected: nodes.some((node) => node.id === frame.id && node.selected),
+        };
+      },
     );
     const expandedSources = expandedFrames.map((frame) => ({
       id: frame.id,
@@ -1271,7 +1320,6 @@ export function Canvas({
       width: frame.width ?? 0,
       height: frame.height ?? 0,
       elementIds: [
-        frame.id,
         ...boundaryMemberIds(
           { elementId: frame.id },
           elementsById,
@@ -1309,6 +1357,7 @@ export function Canvas({
         elementsById,
         boundaries,
         view.settings.boundaryLayer,
+        expansion.expandedElementIds,
       );
       const placements = view.elements.filter((entry) => members.has(entry.elementId));
       const fitSources = [

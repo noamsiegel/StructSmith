@@ -58,6 +58,7 @@ test("boundary membership follows descendants and its active layer, never overla
     "hidden",
   ]);
   expect([...boundaryMemberIds({ elementId: "group" }, elements, boundaries, "custom")]).toEqual([
+    "group",
     "first",
     "nested",
     "second",
@@ -65,6 +66,15 @@ test("boundary membership follows descendants and its active layer, never overla
   expect([...boundaryMemberIds({ boundaryId: "missing" }, elements, boundaries, "custom")]).toEqual(
     [],
   );
+  expect([
+    ...boundaryMemberIds(
+      { boundaryId: "frame" },
+      elements,
+      boundaries.slice(0, 1).map((boundary) => ({ ...boundary, elementIds: ["group"] })),
+      "custom",
+      new Set(["group"]),
+    ),
+  ]).toEqual(["group", "first", "nested", "second"]);
 });
 
 test("group layout batch is guarded, atomic, and restored in one snapshot", () => {

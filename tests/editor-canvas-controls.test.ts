@@ -150,6 +150,10 @@ test("inline group frames reuse endpoint IDs and contain nested frames below sep
     expect(frames).toHaveLength(2);
     expect(parentFrame?.type).toBe("boundary");
     expect(parentFrame?.draggable).toBe(false);
+    expect(parentFrame?.measured).toEqual({
+      width: parentFrame?.width,
+      height: parentFrame?.height,
+    });
     expect((childFrame?.position.y ?? 0) - (parentFrame?.position.y ?? 0)).toBeGreaterThanOrEqual(
       36,
     );

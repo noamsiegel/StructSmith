@@ -43,6 +43,7 @@ export function inlineFrames(
       position: { x, y },
       width,
       height,
+      measured: { width, height },
       draggable: false,
       selectable: true,
       zIndex: -expandedDepth(id, elements),
