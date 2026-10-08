@@ -384,6 +384,12 @@
     "fitView": "Fit view",
     "clearSelection": "Clear selection",
     "pan": "Pan canvas",
+    "panVertical": "Pan up and down",
+    "panHorizontal": "Pan left and right",
+    "panTrackpad": "Pan with trackpad",
+    "twoFingerScroll": "two-finger scroll",
+    "scroll": "scroll",
+    "zoom": "Zoom canvas",
     "click": "click",
     "dragCanvas": "drag canvas"
   },

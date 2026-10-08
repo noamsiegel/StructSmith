@@ -1172,6 +1172,9 @@ export function Canvas({
         maxZoom={2.5}
         defaultViewport={initialViewport.current}
         fitView={!initialViewport.current}
+        panOnScroll
+        zoomOnScroll={false}
+        zoomActivationKeyCode={["Meta", "Control"]}
         fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
         proOptions={{ hideAttribution: false }}
         deleteKeyCode={["Delete", "Backspace"]}

@@ -392,6 +392,12 @@
     "fitView": "Dopasuj widok",
     "clearSelection": "Wyczyść zaznaczenie",
     "pan": "Przesuń kanwę",
+    "panVertical": "Przesuń w górę i w dół",
+    "panHorizontal": "Przesuń w lewo i w prawo",
+    "panTrackpad": "Przesuń gładzikiem",
+    "twoFingerScroll": "przewijanie dwoma palcami",
+    "scroll": "przewijanie",
+    "zoom": "Powiększ kanwę",
     "click": "kliknięcie",
     "dragCanvas": "przeciągnięcie po kanwie"
   },

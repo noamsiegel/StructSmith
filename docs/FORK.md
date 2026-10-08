@@ -40,6 +40,14 @@ Opening a saved detail view creates no model edits. A group without a saved view
 offers the existing explicit creation dialog; custom leaves without a saved view
 do not show an empty navigation shortcut.
 
+## Canvas navigation
+
+Canvas navigation follows [FigJam's mouse and trackpad gestures](https://help.figma.com/hc/en-us/articles/1500004414582-Pan-and-zoom-in-FigJam):
+scroll to pan vertically, Shift+scroll to pan horizontally, or use two-finger
+trackpad scrolling in either direction. Cmd/Ctrl+scroll and trackpad pinch zoom.
+Dragging the canvas still pans; `F` fits the diagram. These gestures are listed
+in the keyboard shortcut dialog.
+
 ## Preserve an existing service
 
 Keep the service URL and MCP connection unchanged. The local deployment uses

@@ -32,6 +32,10 @@ export function KeyboardShortcutsDialog() {
     [t("shortcuts.fitView"), "F"],
     [t("shortcuts.clearSelection"), "Escape"],
     [t("shortcuts.pan"), t("shortcuts.dragCanvas")],
+    [t("shortcuts.panVertical"), t("shortcuts.scroll")],
+    [t("shortcuts.panHorizontal"), `Shift + ${t("shortcuts.scroll")}`],
+    [t("shortcuts.panTrackpad"), t("shortcuts.twoFingerScroll")],
+    [t("shortcuts.zoom"), `${primary} + ${t("shortcuts.scroll")}`],
   ] as const;
 
   return (
