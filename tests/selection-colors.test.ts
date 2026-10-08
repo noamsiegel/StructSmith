@@ -12,6 +12,42 @@ import {
 } from "../apps/web/src/features/canvas/selectionColors";
 import { createTestContext, createWorkspace } from "./helpers";
 
+test("coloring selected annotations includes the entire canvas selection", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const view = services.views.create(workspace.id, {
+      name: "Annotations",
+      kind: "workflow",
+      settings: {
+        annotations: ["first", "second"].map((id) => ({
+          id,
+          kind: "note" as const,
+          text: id,
+          x: 0,
+          y: 0,
+          width: 200,
+          height: 100,
+        })),
+      },
+    }).result;
+    const graph = buildGraph({
+      view: services.views.get(view.id),
+      elements: [],
+      relationships: [],
+      records: [],
+    });
+    const targets = selectionColorTargets(
+      { type: "annotation", id: "first" },
+      graph.nodes.map((node) => ({ ...node, selected: true })),
+      [],
+    );
+    expect(targets.nodeIds.sort()).toEqual(["annotation:first", "annotation:second"]);
+  } finally {
+    close();
+  }
+});
+
 test("selection colors validate, persist per view, reset independently, undo, import and prune", () => {
   const { services, close } = createTestContext();
   try {

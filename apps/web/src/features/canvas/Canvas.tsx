@@ -1965,7 +1965,15 @@ export function Canvas({
                   (item) => item.id === editingAnnotationId,
                 ) as ViewAnnotation
               }
-              onClose={() => setEditingAnnotationId(null)}
+              onClose={() => {
+                setNodes((current) =>
+                  current.map((node) => ({
+                    ...node,
+                    selected: node.id === annotationNodeId(editingAnnotationId),
+                  })),
+                );
+                setEditingAnnotationId(null);
+              }}
               onSave={async (data: UpdateViewAnnotationInput) => {
                 await applyOperations.mutateAsync({
                   label: ta("updated"),

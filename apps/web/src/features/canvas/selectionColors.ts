@@ -13,7 +13,10 @@ export function selectionColorTargets(
       if (selection.type === "boundary")
         return node.type === "boundary" && node.data.boundaryId === selection.id;
       if (selection.type === "annotation")
-        return node.type === "annotation" && annotationId(node.id) === selection.id;
+        return (
+          node.type === "annotation" &&
+          (node.selected === true || annotationId(node.id) === selection.id)
+        );
       if (node.type === "annotation") return node.selected === true;
       const id = node.type === "boundary" ? node.data.elementId : node.id;
       return selection.type === "element"
