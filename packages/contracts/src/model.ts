@@ -254,7 +254,101 @@ export const SectionFrameSchema = z.object({
 });
 export type SectionFrame = z.infer<typeof SectionFrameSchema>;
 
+const annotationGeometry = {
+  x: z.number().finite().min(-1_000_000).max(1_000_000),
+  y: z.number().finite().min(-1_000_000).max(1_000_000),
+  width: z.number().finite().min(20).max(10_000),
+  height: z.number().finite().min(20).max(10_000),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .optional(),
+  sectionId: IdSchema.nullable().optional(),
+};
+const annotationText = z.string().max(20_000);
+const annotationCells = z
+  .array(z.array(z.string().max(5_000)).min(1).max(20))
+  .min(1)
+  .max(100)
+  .refine(
+    (rows) => rows.every((row) => row.length === rows[0]?.length),
+    "Table rows must have the same number of cells.",
+  )
+  .refine(
+    (rows) => rows.flat().reduce((size, cell) => size + cell.length, 0) <= 100_000,
+    "Table text must not exceed 100,000 characters.",
+  );
+
+export const ViewAnnotationSchema = z.discriminatedUnion("kind", [
+  z
+    .object({ id: IdSchema, kind: z.literal("text"), ...annotationGeometry, text: annotationText })
+    .strict(),
+  z
+    .object({ id: IdSchema, kind: z.literal("note"), ...annotationGeometry, text: annotationText })
+    .strict(),
+  z
+    .object({
+      id: IdSchema,
+      kind: z.literal("table"),
+      ...annotationGeometry,
+      cells: annotationCells,
+    })
+    .strict(),
+]);
+export type ViewAnnotation = z.infer<typeof ViewAnnotationSchema>;
+export const CreateViewAnnotationSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      id: IdSchema.optional(),
+      kind: z.literal("text"),
+      ...annotationGeometry,
+      text: annotationText,
+    })
+    .strict(),
+  z
+    .object({
+      id: IdSchema.optional(),
+      kind: z.literal("note"),
+      ...annotationGeometry,
+      text: annotationText,
+    })
+    .strict(),
+  z
+    .object({
+      id: IdSchema.optional(),
+      kind: z.literal("table"),
+      ...annotationGeometry,
+      cells: annotationCells,
+    })
+    .strict(),
+]);
+export type CreateViewAnnotationInput = z.infer<typeof CreateViewAnnotationSchema>;
+export const UpdateViewAnnotationSchema = z
+  .object({
+    x: annotationGeometry.x.optional(),
+    y: annotationGeometry.y.optional(),
+    width: annotationGeometry.width.optional(),
+    height: annotationGeometry.height.optional(),
+    color: annotationGeometry.color,
+    sectionId: annotationGeometry.sectionId,
+    fontSize: z.number().finite().min(8).max(72).optional(),
+    text: annotationText.optional(),
+    cells: annotationCells.optional(),
+  })
+  .strict();
+export type UpdateViewAnnotationInput = z.infer<typeof UpdateViewAnnotationSchema>;
+
 export const ViewSettingsSchema = z.object({
+  annotations: z
+    .array(ViewAnnotationSchema)
+    .max(500)
+    .refine(
+      (annotations) =>
+        new Set(annotations.map((annotation) => annotation.id)).size === annotations.length,
+      "Annotation IDs must be unique.",
+    )
+    .default([]),
   nodeColors: z
     .record(z.string().min(1).max(80), z.string().regex(/^#[0-9a-fA-F]{6}$/))
     .describe("Per-view colors keyed by element ID or boundary:<ID> for a section/frame.")
@@ -324,6 +418,7 @@ export type ViewSettings = z.infer<typeof ViewSettingsSchema>;
 // Zod 4 applies defaults even inside optional fields. A patch must only carry
 // explicitly supplied settings, otherwise it resets the other stored values.
 const ViewSettingsPatchSchema = z.object({
+  annotations: ViewSettingsSchema.shape.annotations.unwrap().optional(),
   nodeColors: ViewSettingsSchema.shape.nodeColors.unwrap().optional(),
   sectionFrames: ViewSettingsSchema.shape.sectionFrames.unwrap().optional(),
   preferredDetailViews: ViewSettingsSchema.shape.preferredDetailViews.unwrap().optional(),

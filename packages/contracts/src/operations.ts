@@ -7,6 +7,7 @@ import {
   CreateElementSchema,
   CreateRecordSchema,
   CreateRelationshipSchema,
+  CreateViewAnnotationSchema,
   CreateViewSchema,
   IdSchema,
   LayoutEntrySchema,
@@ -14,6 +15,7 @@ import {
   UpdateElementSchema,
   UpdateRecordSchema,
   UpdateRelationshipSchema,
+  UpdateViewAnnotationSchema,
   UpdateViewCommentSchema,
   UpdateViewSchema,
   ValidationResultSchema,
@@ -116,6 +118,24 @@ export const UpdateViewOpSchema = z.object({
   op: z.literal("updateView"),
   viewId: IdSchema,
   data: UpdateViewSchema,
+});
+
+export const CreateViewAnnotationOpSchema = z.object({
+  op: z.literal("createViewAnnotation"),
+  ref,
+  viewId: IdSchema,
+  data: CreateViewAnnotationSchema,
+});
+export const UpdateViewAnnotationOpSchema = z.object({
+  op: z.literal("updateViewAnnotation"),
+  viewId: IdSchema,
+  annotationId: IdSchema,
+  data: UpdateViewAnnotationSchema,
+});
+export const DeleteViewAnnotationOpSchema = z.object({
+  op: z.literal("deleteViewAnnotation"),
+  viewId: IdSchema,
+  annotationId: IdSchema,
 });
 
 export const AddViewCommentOpSchema = z.object({
@@ -233,6 +253,9 @@ export const ArchitectureOperationSchema = z.discriminatedUnion("op", [
   DeleteRelationshipOpSchema,
   CreateViewOpSchema,
   UpdateViewOpSchema,
+  CreateViewAnnotationOpSchema,
+  UpdateViewAnnotationOpSchema,
+  DeleteViewAnnotationOpSchema,
   AddViewCommentOpSchema,
   UpdateViewCommentOpSchema,
   DeleteViewCommentOpSchema,
