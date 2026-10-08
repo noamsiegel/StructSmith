@@ -980,17 +980,6 @@ export function ViewInspector({ view, workspaceId }: { view: ViewDetail; workspa
         <Label>{t("inspector.viewSettings")}</Label>
 
         <div className="flex items-center justify-between gap-3">
-          <label htmlFor={`${fieldId}-view-full-titles`} className="cursor-pointer text-[12.5px]">
-            {t("inspector.showFullTitles")}
-          </label>
-          <Switch
-            id={`${fieldId}-view-full-titles`}
-            checked={view.settings.showFullTitles}
-            onCheckedChange={(checked) => onPatch({ showFullTitles: checked })}
-          />
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
           <label htmlFor={`${fieldId}-view-descriptions`} className="cursor-pointer text-[12.5px]">
             {t("inspector.showDescriptions")}
           </label>
