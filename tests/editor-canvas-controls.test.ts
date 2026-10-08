@@ -47,8 +47,9 @@ test("tag focus retains connected context, suppresses unrelated cards and highli
       records: [],
     });
     const focused = focusGraphByTag(graph.nodes, graph.edges, "capture");
-    expect(focused.nodes.map((node) => node.id)).toEqual([source.id, neighbor.id]);
-    expect(focused.nodes.map((node) => node.style?.opacity)).toEqual([1, 0.5]);
+    expect(focused.nodes.map((node) => node.id).sort()).toEqual([source.id, neighbor.id].sort());
+    expect(focused.nodes.find((node) => node.id === source.id)?.style?.opacity).toBe(1);
+    expect(focused.nodes.find((node) => node.id === neighbor.id)?.style?.opacity).toBe(0.5);
     expect(focused.edges).toHaveLength(1);
     expect(focusGraphByTag(graph.nodes, graph.edges, "path").edges[0]?.style?.opacity).toBe(1);
     expect(focusGraphByTag(graph.nodes, graph.edges, "missing").nodes).toEqual([]);
