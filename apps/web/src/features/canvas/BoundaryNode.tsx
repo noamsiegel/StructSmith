@@ -2,9 +2,11 @@ import { type NodeProps, NodeResizer } from "@xyflow/react";
 import { GripVertical, Scan } from "lucide-react";
 import { memo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { iconFor } from "../icons";
 import { DetailViewAction } from "../navigation/DetailNavigation";
 import { InlineExpansionAction } from "../navigation/InlineExpansion";
 import { ConnectionHandles } from "./ConnectionHandles";
@@ -33,6 +35,7 @@ function BoundaryNodeComponent({
       : data.classification === "private"
         ? "var(--ownership-internal)"
         : "var(--boundary)");
+  const Icon = iconFor(data.kind ?? "custom", null);
 
   return (
     <div
@@ -50,6 +53,9 @@ function BoundaryNodeComponent({
       }}
       className={cn(
         "as-node h-full w-full rounded-lg",
+        data.elementId &&
+          !selected &&
+          "[&>[data-handlepos]]:opacity-0! [&:hover>[data-handlepos]]:opacity-100! [&:focus-within>[data-handlepos]]:opacity-100!",
         selected && "ring-2 ring-primary ring-offset-2 ring-offset-canvas",
       )}
       style={{
@@ -71,7 +77,7 @@ function BoundaryNodeComponent({
         className={cn(
           data.section
             ? "absolute -top-8 left-0 flex h-7 max-w-full items-center gap-1 rounded-md bg-canvas px-1 text-xs font-medium"
-            : "flex h-9 items-center gap-2 border-b px-3 py-2 text-xs font-bold uppercase tracking-wider backdrop-blur-sm",
+            : "flex h-9 min-w-0 items-center gap-2 rounded-t-lg border-b px-3 text-xs",
           draggable && "cursor-grab active:cursor-grabbing",
         )}
         title={draggable ? t("boundaries.moveGroupHint") : undefined}
@@ -81,18 +87,27 @@ function BoundaryNodeComponent({
             : `color-mix(in oklch, ${accent} 45%, var(--canvas))`,
           backgroundColor: data.section
             ? "var(--canvas)"
-            : `color-mix(in oklch, ${accent} 34%, var(--canvas))`,
+            : `color-mix(in oklch, ${accent} 12%, var(--canvas))`,
         }}
       >
         {draggable && <GripVertical className="h-3 w-3 shrink-0" aria-hidden="true" />}
-        {!data.section && (
+        {data.elementId ? (
+          <span
+            role="img"
+            aria-label={data.kind ? t(`kinds.${data.kind}`) : undefined}
+            className="shrink-0 text-muted-foreground"
+            title={data.kind ? t(`kinds.${data.kind}`) : undefined}
+          >
+            <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+          </span>
+        ) : !data.section ? (
           <span
             className={cn(
-              "h-2 w-2 rounded-sm",
+              "h-2 w-2 shrink-0 rounded-sm",
               data.classification === "public" ? "bg-ownership-external" : "bg-ownership-internal",
             )}
           />
-        )}
+        ) : null}
         {data.section && editing ? (
           <Input
             autoFocus
@@ -125,26 +140,21 @@ function BoundaryNodeComponent({
             {data.name}
           </Button>
         ) : (
-          <span className="text-foreground drop-shadow-sm">{data.name}</span>
+          <span className="min-w-0 flex-1 truncate font-semibold text-foreground" title={data.name}>
+            {data.name}
+          </span>
         )}
-        <span
-          className={cn(
-            "font-medium",
-            data.section
-              ? "text-muted-foreground"
-              : data.classification === "public"
-                ? "text-ownership-external"
-                : "text-ownership-internal",
-          )}
-        >
-          {data.section
-            ? t("sections.title")
-            : data.classification
+        {data.section ? (
+          <span className="font-medium text-muted-foreground">{t("sections.title")}</span>
+        ) : !data.elementId ? (
+          <Badge variant="outline" className="shrink-0 normal-case tracking-normal">
+            {data.classification
               ? t(`boundaries.classification.${data.classification}`)
               : data.kind
                 ? t(`kinds.${data.kind}`)
                 : t(`boundaries.layer.${data.layer}`)}
-        </span>
+          </Badge>
+        ) : null}
         {data.section && selected && (
           <Button
             type="button"
@@ -162,8 +172,12 @@ function BoundaryNodeComponent({
             <Scan className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
         )}
-        {data.elementId && <InlineExpansionAction elementId={data.elementId} compact />}
-        {data.elementId && <DetailViewAction elementId={data.elementId} compact />}
+        {data.elementId && (
+          <div className="flex shrink-0 items-center gap-0.5 border-l border-border pl-1">
+            <InlineExpansionAction elementId={data.elementId} compact />
+            <DetailViewAction elementId={data.elementId} compact />
+          </div>
+        )}
       </div>
     </div>
   );
