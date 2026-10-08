@@ -32,8 +32,8 @@ function wrappedLines(text: string, width: number, characterWidth: number): numb
 }
 
 /**
- * Reserve room for expanded cards in both server layout and the canvas. The UI
- * can grow beyond this estimate for font differences; saved sizes stay intact.
+ * Reserve readable text in both server layout and the canvas. Saved dimensions
+ * are minimums; the browser can grow cards further for fonts and translations.
  */
 export function estimateElementSize(
   element:
@@ -46,31 +46,34 @@ export function estimateElementSize(
   const diamond = shape === "diamond";
   const width = diamond
     ? Math.max(size.width ?? 0, DEFAULT_NODE_WIDTH * 2)
-    : (size.width ?? DEFAULT_NODE_WIDTH);
-  const minimumHeight = size.height ?? DEFAULT_NODE_HEIGHT;
+    : Math.max(size.width ?? DEFAULT_NODE_WIDTH, 160);
   const contentWidth = diamond ? width / 2 : width;
   const verticalInset = shape === "cylinder" ? 24 : shape === "terminal" ? 8 : 0;
-  if (!element || (!settings.showFullTitles && !settings.showDescriptions)) {
+  const minimumHeight = Math.max(
+    size.height ?? 0,
+    diamond ? DEFAULT_NODE_HEIGHT * 2 : DEFAULT_NODE_HEIGHT + verticalInset,
+  );
+  if (!element) {
     return {
       width,
-      height: diamond
-        ? Math.max(minimumHeight, DEFAULT_NODE_HEIGHT * 2)
-        : Math.max(minimumHeight, DEFAULT_NODE_HEIGHT + verticalInset),
+      height: minimumHeight,
     };
   }
 
-  // Horizontal padding, ownership stripe, icon and space for status indicators.
-  const titleWidth = contentWidth - 82 - (size.locked ? 20 : 0);
-  const titleLines = settings.showFullTitles
-    ? wrappedLines(element.name.replace(/\s+/g, " "), titleWidth, 7.5)
-    : 1;
-  const headerHeight = Math.max(24, titleLines * 16 + (element.technology ? 16 : 0));
+  const paddingInline = diamond ? 24 : shape === "terminal" ? 40 : shape === "subprocess" ? 32 : 24;
+  // Title actions live in the footer; reserve icon and warning/lock indicators.
+  const titleWidth = contentWidth - paddingInline - 52 - (size.locked ? 20 : 0);
+  const titleLines = wrappedLines(element.name, titleWidth, 7.5);
+  const technologyHeight = element.technology
+    ? 2 + wrappedLines(element.technology, titleWidth, 6.5) * 14
+    : 0;
+  const headerHeight = Math.max(24, titleLines * 16 + technologyHeight);
   const description = settings.showDescriptions ? element.description?.trim() : null;
   const descriptionHeight = description
-    ? 8 + wrappedLines(description, contentWidth - 30, 6) * 16
+    ? 8 + wrappedLines(description, contentWidth - paddingInline, 6) * 16
     : 0;
-  // Vertical padding/borders (22), footer gap (8) and ownership badge (20).
-  const contentHeight = 50 + headerHeight + descriptionHeight;
+  // Padding/borders (22), footer gap (8), and two readable badge/action rows (40).
+  const contentHeight = 70 + headerHeight + descriptionHeight;
   return {
     width,
     height: Math.max(minimumHeight, diamond ? contentHeight * 2 : contentHeight + verticalInset),

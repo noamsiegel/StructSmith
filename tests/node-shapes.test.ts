@@ -32,7 +32,7 @@ test("diamond layout reserves a readable text rectangle and DB caps clear conten
       kind: "container",
       role: "database",
     }).result;
-    const settings = { showFullTitles: true, showDescriptions: true };
+    const settings = { showFullTitles: false, showDescriptions: true };
     const actionSize = estimateElementSize(action, settings);
     const decisionSize = estimateElementSize(decision, settings, { width: 220, height: 96 });
     expect(decisionSize.width / 2).toBe(actionSize.width);
@@ -81,5 +81,37 @@ test("compact database and outcome shapes retain an explicitly saved height", ()
     const first = estimateElementSize(element, settings, { height: 200 });
     expect(first.height).toBe(200);
     expect(estimateElementSize(element, settings, first).height).toBe(200);
+  }
+});
+
+test("legacy title settings and saved heights cannot clip wrapped card content", () => {
+  const hiddenTitles = { showFullTitles: false, showDescriptions: false };
+  const fullTitles = { ...hiddenTitles, showFullTitles: true };
+  for (const shape of [
+    { kind: "custom" as const, role: null },
+    { kind: "decision" as const, role: null },
+    { kind: "workflowGroup" as const, role: null },
+    { kind: "container" as const, role: "database" as const },
+  ]) {
+    const short = { ...shape, name: "Rule", description: null, technology: null };
+    const long = {
+      ...short,
+      name: "Rule: mail has a property? Check account matched evidence before creating charges".repeat(
+        3,
+      ),
+      technology: "PostgreSQL with account matched ledger capture storage".repeat(2),
+    };
+    const shortSize = estimateElementSize(short, hiddenTitles);
+    const size = estimateElementSize(long, hiddenTitles, { width: shortSize.width, height: 40 });
+    expect(size.height).toBeGreaterThan(shortSize.height);
+    expect(size).toEqual(
+      estimateElementSize(long, fullTitles, { width: shortSize.width, height: 40 }),
+    );
+    const wider = estimateElementSize(long, hiddenTitles, { width: size.width + 200 });
+    expect(wider.width).toBe(size.width + 200);
+    expect(wider.height).toBeLessThan(size.height);
+    const saved = estimateElementSize(long, hiddenTitles, { ...size, height: size.height + 200 });
+    expect(saved.height).toBe(size.height + 200);
+    expect(estimateElementSize(long, hiddenTitles, saved)).toEqual(saved);
   }
 });

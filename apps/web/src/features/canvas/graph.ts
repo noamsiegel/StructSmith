@@ -132,7 +132,6 @@ export function buildGraph({
     const element = byId.get(entry.elementId);
     if (!element) continue;
     const size = estimateElementSize(element, view.settings, entry);
-    const expanded = view.settings.showFullTitles || view.settings.showDescriptions;
     nodes.push({
       id: element.id,
       type: "element",
@@ -151,8 +150,7 @@ export function buildGraph({
       // paths above their fills, and cards above both.
       zIndex: 20 + entry.zIndex,
       width: size.width,
-      height: expanded ? undefined : size.height,
-      style: expanded ? { minHeight: size.height } : undefined,
+      style: { minHeight: size.height },
     });
   }
 

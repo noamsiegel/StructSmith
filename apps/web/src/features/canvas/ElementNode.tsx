@@ -16,7 +16,7 @@ import { statusColor } from "./statusOverlay";
 /** Custom node (spec §33) — icon, name, technology and a small kind/role badge. */
 function ElementNodeComponent({ data, selected, width }: NodeProps & { data: ElementNodeData }) {
   const { t } = useTranslation();
-  const { element, severity, locked, showFullTitles, showDescriptions, minimumHeight } = data;
+  const { element, severity, locked, showDescriptions, minimumHeight } = data;
   const Icon = iconFor(element.kind, element.role);
   const workflow = ["workflowGroup", "action", "decision", "outcome"].includes(element.kind);
   const shape = elementShape(element);
@@ -40,7 +40,7 @@ function ElementNodeComponent({ data, selected, width }: NodeProps & { data: Ele
         minHeight: minimumHeight,
         outline: "none",
       }}
-      className="as-node group relative flex h-full w-full overflow-visible"
+      className="as-node group relative flex w-full overflow-visible"
     >
       <NodeSilhouette
         shape={shape}
@@ -93,15 +93,12 @@ function ElementNodeComponent({ data, selected, width }: NodeProps & { data: Ele
           <div className="min-w-0 flex-1">
             <div
               title={element.name}
-              className={cn(
-                "text-[13px] font-semibold leading-4",
-                showFullTitles ? "whitespace-normal [overflow-wrap:anywhere]" : "truncate",
-              )}
+              className="whitespace-pre-line text-[13px] font-semibold leading-4 [overflow-wrap:anywhere]"
             >
               {element.name}
             </div>
             {element.technology && (
-              <div className="mt-0.5 truncate font-mono text-[10.5px] text-muted-foreground">
+              <div className="mt-0.5 whitespace-pre-line font-mono text-[10.5px] leading-[14px] text-muted-foreground [overflow-wrap:anywhere]">
                 {element.technology}
               </div>
             )}
@@ -115,8 +112,6 @@ function ElementNodeComponent({ data, selected, width }: NodeProps & { data: Ele
             />
           )}
           {locked && <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />}
-          <DetailViewAction elementId={element.id} compact />
-          <InlineExpansionAction elementId={element.id} compact />
         </div>
 
         {showDescriptions && element.description?.trim() && (
@@ -125,11 +120,11 @@ function ElementNodeComponent({ data, selected, width }: NodeProps & { data: Ele
           </p>
         )}
 
-        <div className="mt-2 flex min-w-0 items-center gap-1.5">
+        <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5">
           {data.status && (
             <Badge
               variant="outline"
-              className="shrink-0 text-[9px] normal-case tracking-normal"
+              className="max-w-full whitespace-normal text-[9px] normal-case tracking-normal [overflow-wrap:anywhere]"
               style={{
                 color: statusColor(data.status),
                 borderColor: statusColor(data.status),
@@ -142,7 +137,7 @@ function ElementNodeComponent({ data, selected, width }: NodeProps & { data: Ele
           {!workflow && (
             <span
               className={cn(
-                "shrink-0 rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider",
+                "max-w-full whitespace-normal rounded border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider [overflow-wrap:anywhere]",
                 element.external
                   ? "border-ownership-external/45 bg-ownership-external/10 text-ownership-external"
                   : "border-ownership-internal/45 bg-ownership-internal/10 text-ownership-internal",
@@ -151,9 +146,13 @@ function ElementNodeComponent({ data, selected, width }: NodeProps & { data: Ele
               {element.external ? t("inspector.external") : t("inspector.internal")}
             </span>
           )}
-          <span className="truncate text-[9.5px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span className="min-w-0 whitespace-normal text-[9.5px] font-medium uppercase tracking-wider text-muted-foreground [overflow-wrap:anywhere]">
             {badge}
           </span>
+          <div className="ml-auto flex shrink-0 items-center gap-1">
+            <DetailViewAction elementId={element.id} compact />
+            <InlineExpansionAction elementId={element.id} compact />
+          </div>
         </div>
       </div>
     </div>

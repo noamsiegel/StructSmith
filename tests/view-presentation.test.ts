@@ -23,7 +23,7 @@ test("relationship labels use an opaque card background", () => {
   );
 });
 
-test("presentation switches are independent, scoped to a view and undoable without moving cards", () => {
+test("legacy title settings stay scoped and undoable while readable cards retain placement", () => {
   const { services, close } = createTestContext();
   try {
     const workspace = createWorkspace(services);
@@ -80,7 +80,9 @@ test("presentation switches are independent, scoped to a view and undoable witho
       showDescriptions: true,
     });
     update({ showFullTitles: false, showDescriptions: false });
-    expect(graph().nodes[0]).toMatchObject({ width: 220, height: 96 });
+    expect(graph().nodes[0]).toMatchObject({ width: 220 });
+    expect(graph().nodes[0]?.data.minimumHeight).toBeGreaterThan(96);
+    expect(graph().nodes[0]?.height).toBeUndefined();
     expect(services.views.get(view.id).elements).toEqual(originalPlacement);
   } finally {
     close();
@@ -130,14 +132,15 @@ test("auto layout reserves space for expanded cards and retains saved custom siz
     services.views.update(workspace.id, view.id, {
       settings: { showFullTitles: false, showDescriptions: false },
     });
-    expect(
-      buildGraph({
-        view: services.views.get(view.id),
-        elements,
-        relationships: [],
-        records: [],
-      }).nodes.find((node) => node.id === source.id),
-    ).toMatchObject({ width: 260, height: 110 });
+    const compact = buildGraph({
+      view: services.views.get(view.id),
+      elements,
+      relationships: [],
+      records: [],
+    }).nodes.find((node) => node.id === source.id);
+    expect(compact).toMatchObject({ width: 260 });
+    expect(compact?.data.minimumHeight).toBeGreaterThan(110);
+    expect(compact?.data.minimumHeight).toBeLessThan(first.data.minimumHeight);
   } finally {
     close();
   }
