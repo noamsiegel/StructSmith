@@ -185,13 +185,42 @@ export function buildUiDemoDocument(): WorkspaceDocument {
     );
     const nativeFlowView = view(
       "native-flow",
-      { name: "01b - Native connected workflow", kind: "workflow" },
+      {
+        name: "01b - Native connected workflow",
+        kind: "workflow",
+        settings: {
+          boundaryLayer: "deployment",
+          annotations: [
+            {
+              id: "demo-native-note",
+              kind: "note",
+              text: "This Section mixes connected objects and a view-owned note. Auto layout must keep both inside the frame.",
+              x: 0,
+              y: 700,
+              width: 500,
+              height: 100,
+              sectionId: "demo-native-section",
+            },
+          ],
+          sectionFrames: {
+            "boundary:demo-native-section": { x: -40, y: -60, width: 2100, height: 920 },
+          },
+        },
+      },
       nativeFlow.map((elementId, index) => ({
         elementId,
         x: (index < 4 ? index : 7 - index) * 460,
         y: index < 4 ? 0 : 350,
       })),
     );
+    services.boundaries.create(UI_DEMO_WORKSPACE_ID, {
+      id: "demo-native-section",
+      viewId: nativeFlowView,
+      kind: "custom",
+      layer: "deployment",
+      name: "Connected workflow with local context",
+      elementIds: nativeFlow,
+    });
     for (let index = 1; index < nativeFlow.length; index++) {
       const sourceElementId = nativeFlow[index - 1];
       const targetElementId = nativeFlow[index];
