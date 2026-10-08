@@ -17,7 +17,7 @@ import {
   resolveRelationshipsForView,
   wrappedLines,
 } from "@structsmith/domain";
-import { type Edge, getNodesBounds, type Node } from "@xyflow/react";
+import type { Edge, Node } from "@xyflow/react";
 import {
   type ImplementationStatus,
   relationshipStatus,
@@ -83,28 +83,34 @@ export type FlowEdge = Edge<RelationshipEdgeData>;
 
 /** Section titles sit outside node rectangles, but must remain visible when fitting. */
 export function canvasFitBounds(nodes: readonly FlowNode[]) {
-  return getNodesBounds(
-    nodes
-      .filter((node) => !node.hidden)
-      .map((node) => {
-        const width = node.measured?.width ?? node.width ?? DEFAULT_NODE_WIDTH;
-        const height =
-          node.measured?.height ??
-          node.height ??
-          (node.type === "element" ? node.data.minimumHeight : DEFAULT_NODE_HEIGHT);
-        const titleHeight =
-          node.type === "boundary" && node.data.section
-            ? boundaryHeaderHeight(node.data.name, width, true)
-            : 0;
-        return {
-          ...node,
-          position: { ...node.position, y: node.position.y - titleHeight },
-          width,
-          height: height + titleHeight,
-          measured: { width, height: height + titleHeight },
-        };
-      }),
-  );
+  const boxes = nodes
+    .filter((node) => !node.hidden)
+    .map((node) => {
+      const width = node.measured?.width ?? node.width ?? DEFAULT_NODE_WIDTH;
+      const height =
+        node.measured?.height ??
+        node.height ??
+        (node.type === "element" ? node.data.minimumHeight : DEFAULT_NODE_HEIGHT);
+      const titleHeight =
+        node.type === "boundary" && node.data.section
+          ? boundaryHeaderHeight(node.data.name, width, true)
+          : 0;
+      return {
+        x: node.position.x,
+        y: node.position.y - titleHeight,
+        width,
+        height: height + titleHeight,
+      };
+    });
+  if (!boxes.length) return { x: 0, y: 0, width: 0, height: 0 };
+  const x = Math.min(...boxes.map((box) => box.x));
+  const y = Math.min(...boxes.map((box) => box.y));
+  return {
+    x,
+    y,
+    width: Math.max(...boxes.map((box) => box.x + box.width)) - x,
+    height: Math.max(...boxes.map((box) => box.y + box.height)) - y,
+  };
 }
 
 interface BuildInput {

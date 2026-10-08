@@ -198,11 +198,7 @@ function PreviewCanvas({
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         <Controls showInteractive={false} showFitView={false}>
-          <ControlButton
-            onClick={fit}
-            aria-label={t("topbar.fitView")}
-            title={t("topbar.fitView")}
-          >
+          <ControlButton onClick={fit} aria-label={t("topbar.fitView")} title={t("topbar.fitView")}>
             <Maximize />
           </ControlButton>
         </Controls>
