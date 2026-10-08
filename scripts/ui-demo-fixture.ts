@@ -437,9 +437,22 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         kind: "outcome",
         name: `${interactionStyle} target`,
       });
-      const x = (index % 2) * 920;
-      const y = Math.floor(index / 2) * 400;
-      connectorEntries.push({ elementId: source, x, y }, { elementId: target, x: x + 450, y });
+      const x = (index % 2) * 1400;
+      const y = Math.floor(index / 2) * 800;
+      const vertical = index % 4 === 1 || index % 4 === 2;
+      const reverse = index % 4 === 2 || index % 4 === 3;
+      connectorEntries.push(
+        {
+          elementId: source,
+          x: x + (!vertical && reverse ? 600 : 0),
+          y: y + (vertical && reverse ? 500 : 0),
+        },
+        {
+          elementId: target,
+          x: x + (!vertical && !reverse ? 600 : 0),
+          y: y + (vertical && !reverse ? 500 : 0),
+        },
+      );
       const id = `demo-edge-${interactionStyle}`;
       services.relationships.create(UI_DEMO_WORKSPACE_ID, {
         id,
@@ -476,26 +489,26 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         [],
         connectorIds.map((relationshipId, index) => ({
           relationshipId,
-          labelPosition: index % 2 === 0 ? 0.5 : 0.3,
+          labelPosition: 0.5,
           presentation: {
             sourceSide: sides[index % sides.length],
             targetSide: targetSides[index % targetSides.length],
             sourceSlot: index % 3,
-            targetSlot: (index + 1) % 3,
+            targetSlot: index % 3,
             strokeStyle: index % 3 === 0 ? "solid" : index % 3 === 1 ? "dashed" : "dotted",
             strokeWidth: index === 5 ? 3 : 1.5,
             sourceArrow: index % 3 === 0 ? "none" : index % 3 === 1 ? "arrow" : "arrowclosed",
             targetArrow: index % 3 === 0 ? "arrowclosed" : index % 3 === 1 ? "arrow" : "none",
             color: index === 4 ? "#7c3aed" : null,
-            labelOffset: index === 2 ? { x: 0, y: 40 } : { x: 0, y: 0 },
+            labelOffset: index === 2 ? { x: 150, y: 40 } : { x: 0, y: 0 },
           },
           controlPoints:
             routing === "orthogonal" && index === 2
               ? [
-                  { x: 130, y: 340 },
-                  { x: 360, y: 340 },
-                  { x: 360, y: 610 },
-                  { x: 580, y: 610 },
+                  { x: 165, y: 1150 },
+                  { x: 360, y: 1150 },
+                  { x: 360, y: 1000 },
+                  { x: 165, y: 1000 },
                 ]
               : [],
         })),

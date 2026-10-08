@@ -12,6 +12,11 @@ import {
   resolveRelationshipsForView,
   validateDocument,
 } from "@structsmith/domain";
+import {
+  manualRelationshipPath,
+  orthogonalRelationshipBends,
+  slidingRelationshipLabel,
+} from "../apps/web/src/features/canvas/relationshipGeometry";
 import { buildUiDemoDocument, UI_DEMO_WORKSPACE_ID } from "../scripts/ui-demo-fixture";
 import { createTestContext } from "./helpers";
 
@@ -20,6 +25,72 @@ const byId = new Map(document.elements.map((element) => [element.id, element]));
 const byKey = new Map(document.views.map((view) => [view.key, view]));
 
 describe("UI demo fixture", () => {
+  test("places orthogonal and straight connector labels clear of every card", () => {
+    for (const key of ["demo-connectors", "demo-connectors-straight"]) {
+      const view = byKey.get(key);
+      if (!view) throw new Error(`Missing connector view ${key}`);
+      const bounds = new Map(
+        view.elements.map((entry) => [
+          entry.elementId,
+          {
+            ...entry,
+            ...estimateElementSize(byId.get(entry.elementId), view.settings, entry),
+          },
+        ]),
+      );
+      for (const placement of view.relationships) {
+        const edge = document.relationships.find(
+          (relationship) => relationship.id === placement.relationshipId,
+        );
+        if (!edge) throw new Error(`Missing relationship ${placement.relationshipId}`);
+        const sourceBounds = bounds.get(edge.sourceElementId);
+        const targetBounds = bounds.get(edge.targetElementId);
+        if (!sourceBounds || !targetBounds) throw new Error("Missing connector endpoint");
+        const sourceSide = placement.presentation?.sourceSide ?? "right";
+        const targetSide = placement.presentation?.targetSide ?? "left";
+        const handle = (rect: typeof sourceBounds, side: typeof sourceSide, slot: number) => {
+          const offset = (slot + 1) / 4;
+          return side === "top" || side === "bottom"
+            ? { x: rect.x + rect.width * offset, y: rect.y + (side === "bottom" ? rect.height : 0) }
+            : { x: rect.x + (side === "right" ? rect.width : 0), y: rect.y + rect.height * offset };
+        };
+        const source = handle(sourceBounds, sourceSide, placement.presentation?.sourceSlot ?? 1);
+        const target = handle(targetBounds, targetSide, placement.presentation?.targetSlot ?? 1);
+        const bends = placement.controlPoints.length
+          ? placement.controlPoints
+          : key === "demo-connectors"
+            ? orthogonalRelationshipBends(
+                source,
+                target,
+                sourceSide as Parameters<typeof orthogonalRelationshipBends>[2],
+                targetSide as Parameters<typeof orthogonalRelationshipBends>[3],
+              )
+            : [];
+        const [, x, y] = manualRelationshipPath(
+          source,
+          target,
+          bends,
+          placement.labelPosition ?? 0.5,
+        );
+        const point = slidingRelationshipLabel(
+          [source, ...bends, target],
+          { x, y },
+          placement.presentation?.labelOffset?.x ?? 0,
+          false,
+          placement.presentation?.labelOffset?.y ?? 0,
+        );
+        const obscuredBy = [...bounds.values()].filter(
+          (rect) =>
+            point.x - 85 < rect.x + rect.width &&
+            point.x + 85 > rect.x &&
+            point.y - 32 < rect.y + rect.height &&
+            point.y + 32 > rect.y,
+        );
+        expect(obscuredBy.map((rect) => `${key}:${edge.id}:${rect.elementId}`)).toEqual([]);
+      }
+    }
+  });
+
   test("reserves non-overlapping card bounds in every saved view", () => {
     for (const view of document.views) {
       const bounds = view.elements
