@@ -14,7 +14,12 @@ import { NodeSilhouette } from "./NodeSilhouette";
 import { statusColor } from "./statusOverlay";
 
 /** Custom node (spec §33) — icon, name, technology and a small kind/role badge. */
-function ElementNodeComponent({ data, selected, width }: NodeProps & { data: ElementNodeData }) {
+function ElementNodeComponent({
+  data,
+  selected,
+  width,
+  height,
+}: NodeProps & { data: ElementNodeData }) {
   const { t } = useTranslation();
   const { element, severity, locked, showDescriptions, minimumHeight } = data;
   const Icon = iconFor(element.kind, element.role);
@@ -58,7 +63,7 @@ function ElementNodeComponent({ data, selected, width }: NodeProps & { data: Ele
       <NodeSilhouette
         shape={shape}
         width={width ?? DEFAULT_NODE_WIDTH}
-        height={minimumHeight}
+        height={height ?? minimumHeight}
         fill={fill}
         stroke={stroke}
         selected={selected}
