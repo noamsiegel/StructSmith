@@ -163,6 +163,47 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         external: role === "externalApi",
       }),
     );
+    const nativeFlow = (
+      ["start", "fork", "action", "join", "data", "document", "merge", "end"] as const
+    ).map((kind, index) =>
+      add({
+        id: `demo-native-${kind}`,
+        kind,
+        name:
+          [
+            "Begin capture",
+            "Run in parallel",
+            "Read ledger",
+            "Wait for captures",
+            "Ledger data",
+            "Capture report",
+            "Combine paths",
+            "Ready to publish",
+          ][index] ?? kind,
+        description: `Native ${kind}: select, recolor, connect and reload.`,
+      }),
+    );
+    view(
+      "native-flow",
+      { name: "01b - Native connected workflow", kind: "workflow" },
+      nativeFlow.map((elementId, index) => ({
+        elementId,
+        x: (index < 4 ? index : 7 - index) * 460,
+        y: index < 4 ? 0 : 350,
+      })),
+    );
+    for (let index = 1; index < nativeFlow.length; index++) {
+      const sourceElementId = nativeFlow[index - 1];
+      const targetElementId = nativeFlow[index];
+      if (!sourceElementId || !targetElementId) throw new Error("Missing native flow endpoint");
+      services.relationships.create(UI_DEMO_WORKSPACE_ID, {
+        id: `demo-native-edge-${index}`,
+        sourceElementId,
+        targetElementId,
+        description: `Continue ${index}`,
+        interactionStyle: "sync",
+      });
+    }
     const annotationView = view(
       "annotations",
       {
