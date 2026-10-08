@@ -74,6 +74,19 @@ is a remaining saved-layout readability issue. Mobile acceptance and exports
 were not exercised. Hot reload produced React DevTools/createRoot and node-type
 warnings; the final production container is checked separately.
 
+The final image runs at port 8090. The actual portal preview supported drill-down,
+Back, Escape and an unchanged overview transform. The long-text fixture's initial
+and bottom-button fits retained its entire Section heading, with zero measured
+text overflows. Zoom changed its viewport; outside-click dismissed its dialog.
+After reloading the final build, `tab.dev.logs({levels:['error','warn']})` returned
+no new entries. All 15 workspace documents matched the pre-restart REST capture.
+`/health` returned database/MCP `ok`; the served `index-BuMuEsbG.js` matched the
+local build. `bun run test` recorded 283 passing tests and 1,625 assertions;
+the final bounds-only regression run recorded six passing tests. Biome,
+typecheck, web/site/launcher/Docker builds and the compiled local-helper smoke
+completed successfully. Remaining build notices are the existing Biome schema
+version, bundle-size and Docker `AUTH_MODE` naming warnings.
+
 ## Historical verification evidence
 
 The earlier exploration build `e7ff50c` recorded `bun run typecheck` exit 0 and
