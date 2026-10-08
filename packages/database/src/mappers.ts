@@ -14,6 +14,7 @@ import type {
   InteractionStyle,
   RecordKind,
   RecordStatus,
+  RelationshipPresentation,
   Severity,
   ViewElement,
   ViewKind,
@@ -258,6 +259,7 @@ export function toViewRelationship(row: Row<typeof viewRelationships>): ViewRela
     hidden: toBool(row.hidden),
     labelPosition: row.labelPosition,
     controlPoints: parseJson<{ x: number; y: number }[]>(row.controlPointsJson, []),
+    presentation: parseJson<RelationshipPresentation | null>(row.presentationJson ?? "null", null),
   };
 }
 
@@ -268,6 +270,7 @@ export function fromViewRelationship(entry: ViewRelationship): Row<typeof viewRe
     hidden: fromBool(entry.hidden),
     labelPosition: entry.labelPosition,
     controlPointsJson: JSON.stringify(entry.controlPoints),
+    presentationJson: entry.presentation ? JSON.stringify(entry.presentation) : null,
   };
 }
 

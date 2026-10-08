@@ -4,6 +4,7 @@ import type {
   ArchitectureRecord,
   ArchitectureRelationship,
   ViewDetail,
+  ViewRelationshipPatch,
 } from "@structsmith/contracts";
 import {
   applyEdgeChanges,
@@ -51,6 +52,7 @@ import {
 } from "./graph";
 import { type ContextMenuItem, NodeContextMenu } from "./NodeContextMenu";
 import { RelationshipEdge } from "./RelationshipEdge";
+import { sideFromHandle } from "./relationshipGeometry";
 
 /** An implied edge carries a derived id, so always resolve the real one. */
 const relationshipIdOf = (edge: { id: string; data?: Record<string, unknown> }): string =>
@@ -924,6 +926,45 @@ export function Canvas({
     selection,
   ]);
 
+  const changeRelationshipPresentation = useCallback(
+    (relationshipId: string, patch: ViewRelationshipPatch) => {
+      return applyOperations
+        .mutateAsync({
+          label: t("relationshipPresentation.updated"),
+          operations: [
+            {
+              op: "setViewRelationships",
+              viewId: view.id,
+              relationships: [{ ...patch, relationshipId }],
+            },
+          ],
+        })
+        .then(() => undefined);
+    },
+    [applyOperations, t, view.id],
+  );
+
+  const editableEdges = useMemo(
+    () =>
+      edges.map((edge) => ({
+        ...edge,
+        data: edge.data
+          ? {
+              ...edge.data,
+              onLabelOffsetChange: (
+                relationshipId: string,
+                labelOffset: { x: number; y: number },
+              ) =>
+                changeRelationshipPresentation(relationshipId, {
+                  relationshipId,
+                  presentation: { labelOffset },
+                }),
+            }
+          : undefined,
+      })),
+    [edges, changeRelationshipPresentation],
+  );
+
   return (
     <div
       className="relative h-full w-full"
@@ -935,7 +976,7 @@ export function Canvas({
     >
       <ReactFlow
         nodes={allNodes}
-        edges={edges}
+        edges={editableEdges}
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
@@ -943,6 +984,17 @@ export function Canvas({
         onNodeDragStop={onNodeDragStop}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onReconnect={(edge, connection) => {
+          if (connection.source !== edge.source || connection.target !== edge.target) return;
+          const relationshipId = relationshipIdOf(edge);
+          void changeRelationshipPresentation(relationshipId, {
+            relationshipId,
+            presentation: {
+              sourceSide: sideFromHandle(connection.sourceHandle, "source"),
+              targetSide: sideFromHandle(connection.targetHandle, "target"),
+            },
+          }).catch(() => undefined);
+        }}
         onSelectionChange={onSelectionChange}
         onNodeClick={onNodeClick}
         onNodeDoubleClick={(event, node) => {

@@ -254,17 +254,36 @@ export const ViewElementSchema = z.object({
 export type ViewElement = z.infer<typeof ViewElementSchema>;
 
 export const ControlPointSchema = z.object({
-  x: z.number().describe("Canvas x coordinate."),
-  y: z.number().describe("Canvas y coordinate."),
+  x: z.number().finite().describe("Canvas x coordinate."),
+  y: z.number().finite().describe("Canvas y coordinate."),
 });
 export type ControlPoint = z.infer<typeof ControlPointSchema>;
+
+/** Presentation belongs to a view; omitted fields inherit the view/relationship defaults. */
+export const RelationshipPresentationSchema = z
+  .object({
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .optional(),
+    strokeWidth: z.number().finite().min(0.5).max(12).optional(),
+    strokeStyle: z.enum(["solid", "dashed", "dotted"]).optional(),
+    sourceArrow: z.enum(["none", "arrow", "arrowclosed"]).optional(),
+    targetArrow: z.enum(["none", "arrow", "arrowclosed"]).optional(),
+    sourceSide: z.enum(["left", "right", "top", "bottom"]).nullable().optional(),
+    targetSide: z.enum(["left", "right", "top", "bottom"]).nullable().optional(),
+    labelOffset: ControlPointSchema.optional(),
+  })
+  .strict();
+export type RelationshipPresentation = z.infer<typeof RelationshipPresentationSchema>;
 
 export const ViewRelationshipSchema = z.object({
   viewId: IdSchema,
   relationshipId: IdSchema,
   hidden: z.boolean(),
-  labelPosition: z.number().nullable(),
+  labelPosition: z.number().finite().min(0).max(1).nullable(),
   controlPoints: z.array(ControlPointSchema),
+  presentation: RelationshipPresentationSchema.nullable().optional(),
 });
 export type ViewRelationship = z.infer<typeof ViewRelationshipSchema>;
 
@@ -340,6 +359,9 @@ export const ViewRelationshipPatchSchema = z.object({
   hidden: z.boolean().optional().describe("Hide this relationship only on this view."),
   labelPosition: z
     .number()
+    .finite()
+    .min(0)
+    .max(1)
     .nullable()
     .optional()
     .describe("Optional normalized label position along the relationship path."),
@@ -347,6 +369,11 @@ export const ViewRelationshipPatchSchema = z.object({
     .array(ControlPointSchema)
     .optional()
     .describe("Saved manual bend points for this relationship on the view."),
+  presentation: RelationshipPresentationSchema.nullable()
+    .optional()
+    .describe(
+      "Merge supplied visual overrides on this view; null resets all presentation overrides.",
+    ),
 });
 export type ViewRelationshipPatch = z.infer<typeof ViewRelationshipPatchSchema>;
 

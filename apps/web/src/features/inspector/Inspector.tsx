@@ -35,6 +35,7 @@ import { iconFor } from "../icons";
 import { DetailViewAction } from "../navigation/DetailNavigation";
 import { CopyReferenceButton } from "../reference/CopyReferenceButton";
 import { PropertyEditor } from "./PropertyEditor";
+import { RelationshipPresentationEditor } from "./RelationshipPresentationEditor";
 import { TagEditor } from "./TagEditor";
 
 interface InspectorProps {
@@ -162,6 +163,25 @@ export function Inspector({
                 applyOperations.mutate({
                   label,
                   operations: [{ op: "updateRelationship", relationshipId: relationship.id, data }],
+                })
+              }
+            />
+          )}
+
+          {relationship && view && (
+            <RelationshipPresentationEditor
+              key={`${view.id}:${relationship.id}`}
+              placement={view.relationships.find(
+                (entry) => entry.relationshipId === relationship.id,
+              )}
+              relationshipId={relationship.id}
+              interactionStyle={relationship.interactionStyle}
+              onPatch={(patch) =>
+                applyOperations.mutate({
+                  label: t("relationshipPresentation.updated"),
+                  operations: [
+                    { op: "setViewRelationships", viewId: view.id, relationships: [patch] },
+                  ],
                 })
               }
             />

@@ -647,6 +647,14 @@ export function setViewRelationships(
   );
 
   for (const patch of patches) {
+    const relationship = repos.relationships.findById(patch.relationshipId);
+    if (!relationship || relationship.workspaceId !== workspace.id) {
+      throw new DomainError(
+        ERROR_CODES.RELATIONSHIP_NOT_FOUND,
+        `Relationship "${patch.relationshipId}" does not exist.`,
+        404,
+      );
+    }
     const base: ViewRelationship = current.get(patch.relationshipId) ?? {
       viewId,
       relationshipId: patch.relationshipId,
@@ -654,12 +662,20 @@ export function setViewRelationships(
       labelPosition: null,
       controlPoints: [],
     };
-    repos.views.upsertRelationship({
+    const next: ViewRelationship = {
       ...base,
       hidden: patch.hidden ?? base.hidden,
       labelPosition: patch.labelPosition !== undefined ? patch.labelPosition : base.labelPosition,
       controlPoints: patch.controlPoints ?? base.controlPoints,
-    });
+      presentation:
+        patch.presentation === null
+          ? null
+          : patch.presentation === undefined
+            ? base.presentation
+            : { ...base.presentation, ...patch.presentation },
+    };
+    repos.views.upsertRelationship(next);
+    current.set(patch.relationshipId, next);
   }
 
   return repos.views.listRelationships(viewId);

@@ -3,7 +3,9 @@ import type {
   ArchitectureElement,
   ArchitectureRecord,
   ArchitectureRelationship,
+  ControlPoint,
   ViewDetail,
+  ViewRelationship,
 } from "@structsmith/contracts";
 import {
   DEFAULT_NODE_HEIGHT,
@@ -46,6 +48,8 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
   count: number;
   routing: ViewDetail["settings"]["relationshipRouting"];
   showLabel: boolean;
+  placement?: ViewRelationship;
+  onLabelOffsetChange?: (relationshipId: string, offset: ControlPoint) => Promise<void>;
 }
 
 export type FlowNode = Node<ElementNodeData, "element"> | Node<BoundaryNodeData, "boundary">;
@@ -118,6 +122,9 @@ export function buildGraph({ view, elements, relationships, records }: BuildInpu
     });
   }
 
+  const relationshipPlacements = new Map(
+    view.relationships.map((entry) => [entry.relationshipId, entry]),
+  );
   const hiddenRelationships = new Set(
     view.relationships.filter((entry) => entry.hidden).map((entry) => entry.relationshipId),
   );
@@ -138,13 +145,21 @@ export function buildGraph({ view, elements, relationships, records }: BuildInpu
       type: "relationship",
       source: edge.sourceElementId,
       target: edge.targetElementId,
-      sourceHandle: view.settings.autoLayoutDirection === "TB" ? "b" : undefined,
-      targetHandle: view.settings.autoLayoutDirection === "TB" ? "t" : undefined,
+      sourceHandle: sourceHandleFor(
+        relationshipPlacements.get(first.id)?.presentation?.sourceSide,
+        view.settings.autoLayoutDirection,
+      ),
+      targetHandle: targetHandleFor(
+        relationshipPlacements.get(first.id)?.presentation?.targetSide,
+        view.settings.autoLayoutDirection,
+      ),
       selectable: unambiguous,
       deletable: unambiguous,
+      reconnectable: unambiguous,
       zIndex: 10,
       data: {
         relationship: first,
+        placement: unambiguous ? relationshipPlacements.get(first.id) : undefined,
         implied: edge.implied,
         label,
         count: edge.relationships.length,
@@ -155,6 +170,16 @@ export function buildGraph({ view, elements, relationships, records }: BuildInpu
   });
 
   return { nodes, edges, hiddenCount: placements.length - visible.length };
+}
+
+export function sourceHandleFor(side: string | null | undefined, direction: "LR" | "TB") {
+  if (!side) return direction === "TB" ? "b" : undefined;
+  return { left: "source-l", top: "source-t", bottom: "b", right: undefined }[side];
+}
+
+export function targetHandleFor(side: string | null | undefined, direction: "LR" | "TB") {
+  if (!side) return direction === "TB" ? "t" : undefined;
+  return { right: "target-r", bottom: "target-b", top: "t", left: undefined }[side];
 }
 
 export interface BoundarySource {
