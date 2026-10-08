@@ -3,6 +3,7 @@ import type {
   ArchitectureElement,
   ArchitectureRecord,
   ArchitectureRelationship,
+  SectionFrame,
   ViewDetail,
   ViewElement,
   ViewRelationshipPatch,
@@ -48,6 +49,7 @@ import { BoundaryNode } from "./BoundaryNode";
 import { CanvasComments } from "./CanvasComments";
 import { CreationToolbar } from "./CreationToolbar";
 import { buildPasteOperations, createDiagramClipboard, type DiagramCopyMode } from "./clipboard";
+import { commandWheelViewport } from "./commandWheel";
 import { ElementNode } from "./ElementNode";
 import {
   boundaryElementId,
@@ -66,6 +68,11 @@ import { inlineFrames } from "./inlineFrames";
 import { type ContextMenuItem, NodeContextMenu } from "./NodeContextMenu";
 import { RelationshipEdge } from "./RelationshipEdge";
 import { sideFromHandle, slotFromHandle } from "./relationshipGeometry";
+import {
+  sectionFrameEntries,
+  sectionMembershipOperations,
+  translateSectionFrames,
+} from "./sections";
 import type { StatusOverlay } from "./statusOverlay";
 import { focusGraphByTag } from "./tagFocus";
 
@@ -185,12 +192,17 @@ export function Canvas({
   const dragOrigins = useRef(new Map<string, { x: number; y: number }>());
   const layoutSaveQueue = useRef<Promise<void>>(Promise.resolve());
   const ignoreDetailsUntil = useRef(0);
+  const [sectionFrames, setSectionFrames] = useState(view.settings.sectionFrames);
+  const dragSectionNodes = useRef<FlowNode[]>([]);
+  useEffect(() => setSectionFrames(view.settings.sectionFrames), [view.settings.sectionFrames]);
   const boundaryDrag = useRef<{
     id: string;
     position: { x: number; y: number };
     members: Set<string>;
     placements: ViewElement[];
     revision: number;
+    frames: Record<string, SectionFrame>;
+    nestedFrameIds: Set<string>;
   } | null>(null);
 
   // A rebuild happens after every mutation; carry the current selection over so
@@ -223,6 +235,28 @@ export function Canvas({
    * screen would otherwise land on an unfitted canvas.
    */
   const canvasRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const onCommandWheel = (event: WheelEvent) => {
+      if (!event.metaKey || event.ctrlKey) return;
+      if (!(event.target instanceof Element) || !event.target.closest(".react-flow")) return;
+      if (event.target.closest(".nowheel, .nopan, button, input, textarea, [role=dialog]")) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const bounds = canvas.getBoundingClientRect();
+      void flow.setViewport(
+        commandWheelViewport(
+          flow.getViewport(),
+          { x: event.clientX - bounds.left, y: event.clientY - bounds.top },
+          event.deltaY,
+          event.deltaMode,
+        ),
+      );
+    };
+    canvas.addEventListener("wheel", onCommandWheel, { passive: false, capture: true });
+    return () => canvas.removeEventListener("wheel", onCommandWheel, true);
+  }, [flow]);
   const renderedNodes = useNodes<FlowNode>();
   // Boundary frames have no handles; only cards need measurement before fitting.
   const nodesInitialized = graph.nodes.every((node) => {
@@ -407,6 +441,11 @@ export function Canvas({
       flushLayout();
       dragOrigins.current.clear();
       boundaryDrag.current = null;
+      dragSectionNodes.current = flow
+        .getNodes()
+        .filter((item) => item.type === "boundary" && item.data.section) as FlowNode[];
+      const frames = { ...sectionFrames, ...sectionFrameEntries(dragSectionNodes.current) };
+      setSectionFrames(frames);
       if (node.type === "boundary") {
         const workspace = queryClient.getQueryData<Workspace>(queryKeys.workspace(workspaceId));
         if (!workspace) return;
@@ -423,6 +462,37 @@ export function Canvas({
           members,
           placements: view.elements.map((entry) => ({ ...entry, ...current.get(entry.elementId) })),
           revision: workspace.revision,
+          frames,
+          nestedFrameIds: new Set(
+            dragSectionNodes.current
+              .filter((candidate) => {
+                const candidateMembers = boundaryMemberIds(
+                  {
+                    boundaryId: candidate.data.boundaryId as string | undefined,
+                    elementId: candidate.data.elementId as string | undefined,
+                  },
+                  elementsById,
+                  boundaries,
+                  view.settings.boundaryLayer,
+                );
+                if (
+                  candidateMembers.size > 0 &&
+                  [...candidateMembers].every((elementId) => members.has(elementId))
+                )
+                  return true;
+                let parent = candidate.data.boundaryId
+                  ? boundaries.find((item) => item.id === candidate.data.boundaryId)
+                  : undefined;
+                const visited = new Set<string>();
+                while (parent && !visited.has(parent.id)) {
+                  if (parent.parentBoundaryId === node.data.boundaryId) return true;
+                  visited.add(parent.id);
+                  parent = boundaries.find((item) => item.id === parent?.parentBoundaryId);
+                }
+                return false;
+              })
+              .map((candidate) => candidate.id),
+          ),
         };
         return;
       }
@@ -434,7 +504,7 @@ export function Canvas({
         });
       }
     },
-    [flushLayout, workspaceId, elementsById, boundaries, view, nodes],
+    [flushLayout, workspaceId, elementsById, boundaries, view, nodes, flow, sectionFrames],
   );
 
   const onNodeDrag = useCallback<OnNodeDrag<FlowNode>>((_event, node) => {
@@ -444,6 +514,17 @@ export function Canvas({
       x: node.position.x - drag.position.x,
       y: node.position.y - drag.position.y,
     });
+    setSectionFrames(
+      translateSectionFrames(
+        drag.frames,
+        drag.id,
+        {
+          x: node.position.x - drag.position.x,
+          y: node.position.y - drag.position.y,
+        },
+        drag.nestedFrameIds,
+      ),
+    );
     const positions = new Map(
       entries.map((entry) => [entry.elementId, { x: entry.x, y: entry.y }]),
     );
@@ -464,6 +545,8 @@ export function Canvas({
         });
         const previous = new Map(drag.placements.map((entry) => [entry.elementId, entry]));
         if (
+          node.position.x === drag.position.x &&
+          node.position.y === drag.position.y &&
           entries.every(
             (entry) =>
               entry.x === previous.get(entry.elementId)?.x &&
@@ -476,7 +559,26 @@ export function Canvas({
           api.applyOperations(workspaceId, {
             expectedRevision: drag.revision,
             label: t("toast.layoutSaved"),
-            operations: [{ op: "setLayout", viewId: view.id, entries }],
+            operations: [
+              { op: "setLayout", viewId: view.id, entries },
+              {
+                op: "updateView",
+                viewId: view.id,
+                data: {
+                  settings: {
+                    sectionFrames: translateSectionFrames(
+                      drag.frames,
+                      drag.id,
+                      {
+                        x: node.position.x - drag.position.x,
+                        y: node.position.y - drag.position.y,
+                      },
+                      drag.nestedFrameIds,
+                    ),
+                  },
+                },
+              },
+            ],
           }),
         );
         layoutSaveQueue.current = request.then(
@@ -494,6 +596,7 @@ export function Canvas({
             invalidateWorkspace(workspaceId);
           })
           .catch((error) => {
+            setSectionFrames(drag.frames);
             const previous = new Map(
               drag.placements
                 .filter((entry) => drag.members.has(entry.elementId))
@@ -526,12 +629,58 @@ export function Canvas({
         return [{ elementId: dragged.id, before, after }];
       });
       dragOrigins.current.clear();
+      const membership = sectionMembershipOperations(
+        moved,
+        dragSectionNodes.current,
+        elementsById,
+        boundaries.filter(
+          (boundary) =>
+            boundary.viewId === view.id && boundary.layer === view.settings.boundaryLayer,
+        ),
+      );
+      if (dragSectionNodes.current.length > 0 && changes.length > 0) {
+        applyOperations.mutate(
+          {
+            label: t("sections.membershipChanged"),
+            operations: [
+              {
+                op: "setLayout",
+                viewId: view.id,
+                entries: changes.map(({ elementId, after }) => ({ elementId, ...after })),
+              },
+              { op: "updateView", viewId: view.id, data: { settings: { sectionFrames } } },
+              ...membership,
+            ],
+          },
+          {
+            onError: () => {
+              setSectionFrames(view.settings.sectionFrames);
+              invalidateWorkspace(workspaceId);
+            },
+          },
+        );
+        return;
+      }
       persistLayout(
         changes.map(({ elementId, after }) => ({ elementId, ...after })),
         changes.map(({ elementId, before }) => ({ elementId, ...before })),
       );
     },
-    [persistLayout, onNodeDrag, beginSave, endSave, onError, pushHistory, t, view.id, workspaceId],
+    [
+      persistLayout,
+      onNodeDrag,
+      beginSave,
+      endSave,
+      onError,
+      pushHistory,
+      t,
+      view,
+      workspaceId,
+      elementsById,
+      boundaries,
+      applyOperations,
+      sectionFrames,
+    ],
   );
 
   const onEdgesChange = useCallback(
@@ -1111,6 +1260,7 @@ export function Canvas({
       boundaries,
       view.settings.boundaryLayer,
       view.settings.showBoundaries,
+      sectionFrames,
     );
     // A parent shown as a boundary has no entry in `nodes`, so mirror the
     // selection onto it here.
@@ -1135,7 +1285,55 @@ export function Canvas({
       const placements = view.elements.filter((entry) => members.has(entry.elementId));
       return {
         ...boundary,
-        draggable: placements.length > 0 && !placements.some((entry) => entry.locked),
+        draggable:
+          (placements.length > 0 || boundary.data.section === true) &&
+          !placements.some((entry) => entry.locked),
+        data: {
+          ...boundary.data,
+          onRename: boundary.data.section
+            ? (name: string) =>
+                applyOperations.mutate({
+                  label: t("sections.updated"),
+                  operations: [
+                    boundary.data.boundaryId
+                      ? {
+                          op: "updateBoundary",
+                          boundaryId: boundary.data.boundaryId,
+                          data: { name },
+                        }
+                      : {
+                          op: "updateElement",
+                          elementId: String(boundary.data.elementId),
+                          data: { name },
+                        },
+                  ],
+                })
+            : undefined,
+          onResizePreview: boundary.data.section
+            ? (frame: SectionFrame) =>
+                setSectionFrames((current) => ({ ...current, [boundary.id]: frame }))
+            : undefined,
+          onResize:
+            boundary.data.section && !placements.some((entry) => entry.locked)
+              ? (frame: SectionFrame) => {
+                  const next = { ...sectionFrames, [boundary.id]: frame };
+                  setSectionFrames(next);
+                  applyOperations.mutate(
+                    {
+                      label: t("sections.updated"),
+                      operations: [
+                        {
+                          op: "updateView",
+                          viewId: view.id,
+                          data: { settings: { sectionFrames: next } },
+                        },
+                      ],
+                    },
+                    { onError: () => setSectionFrames(view.settings.sectionFrames) },
+                  );
+                }
+              : undefined,
+        },
       };
     });
     const expandedFrames = inlineFrames(sources, elementsById, expansion.expandedElementIds).map(
@@ -1159,6 +1357,11 @@ export function Canvas({
     view.settings.showBoundaries,
     view.settings.boundaryLayer,
     view.elements,
+    sectionFrames,
+    applyOperations.mutate,
+    t,
+    view.id,
+    view.settings.sectionFrames,
     selection,
     expansion.expandedElementIds,
     scenarioStep,
@@ -1371,6 +1574,81 @@ export function Canvas({
         <CreationToolbar
           workspaceId={workspaceId}
           view={view}
+          onCreateSection={() => {
+            const bounds = canvasRef.current?.getBoundingClientRect();
+            const point = bounds
+              ? flow.screenToFlowPosition({
+                  x: bounds.left + bounds.width / 2 - 180,
+                  y: bounds.top + bounds.height / 2 - 120,
+                })
+              : { x: 0, y: 0 };
+            const id = `section-${crypto.randomUUID().slice(0, 12)}`;
+            const selectedIds =
+              selection.type === "elements"
+                ? selection.ids
+                : selection.type === "element"
+                  ? [selection.id]
+                  : [];
+            const selectedNodes = nodes.filter((node) => selectedIds.includes(node.id));
+            const x = selectedNodes.length
+              ? Math.min(...selectedNodes.map((node) => node.position.x)) - 28
+              : point.x;
+            const y = selectedNodes.length
+              ? Math.min(...selectedNodes.map((node) => node.position.y)) - 64
+              : point.y;
+            const width = selectedNodes.length
+              ? Math.max(
+                  ...selectedNodes.map(
+                    (node) => node.position.x + (node.measured?.width ?? NODE_WIDTH),
+                  ),
+                ) -
+                x +
+                28
+              : 420;
+            const height = selectedNodes.length
+              ? Math.max(
+                  ...selectedNodes.map(
+                    (node) => node.position.y + (node.measured?.height ?? NODE_HEIGHT),
+                  ),
+                ) -
+                y +
+                28
+              : 280;
+            applyOperations.mutate(
+              {
+                label: t("sections.add"),
+                operations: [
+                  {
+                    op: "createBoundary",
+                    data: {
+                      id,
+                      viewId: view.id,
+                      kind: "custom",
+                      layer: view.settings.boundaryLayer,
+                      name: t("sections.newName"),
+                      elementIds: selectedIds.filter((elementId) =>
+                        view.elements.some((entry) => entry.elementId === elementId),
+                      ),
+                    },
+                  },
+                  {
+                    op: "updateView",
+                    viewId: view.id,
+                    data: {
+                      settings: {
+                        showBoundaries: true,
+                        sectionFrames: {
+                          ...sectionFrames,
+                          [`boundary:${id}`]: { x, y, width, height },
+                        },
+                      },
+                    },
+                  },
+                ],
+              },
+              { onSuccess: () => select({ type: "boundary", id }) },
+            );
+          }}
           getCreationPoint={() => {
             const bounds = canvasRef.current?.getBoundingClientRect();
             return bounds

@@ -503,6 +503,14 @@
     "conflict": "Someone else changed this workspace — reloading the latest version.",
     "layoutSaved": "Layout saved"
   },
+  "sections": {
+    "title": "Section",
+    "newName": "New section",
+    "add": "Add section",
+    "rename": "Rename section",
+    "updated": "Updated section",
+    "membershipChanged": "Moved objects between sections"
+  },
   "boundaries": {
     "title": "Boundaries",
     "moveGroupHint": "Drag to move this group and its members",
@@ -530,7 +538,7 @@
       "networkZone": "Network zone",
       "trustZone": "Trust zone",
       "complianceScope": "Compliance scope",
-      "custom": "Custom"
+      "custom": "Section"
     },
     "classification": {
       "public": "Public",

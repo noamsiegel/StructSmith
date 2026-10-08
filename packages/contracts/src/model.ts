@@ -246,7 +246,24 @@ export const ViewScenarioSchema = z.object({
 });
 export type ViewScenario = z.infer<typeof ViewScenarioSchema>;
 
+export const SectionFrameSchema = z.object({
+  x: z.number().finite(),
+  y: z.number().finite(),
+  width: z.number().finite().min(120),
+  height: z.number().finite().min(80),
+});
+export type SectionFrame = z.infer<typeof SectionFrameSchema>;
+
 export const ViewSettingsSchema = z.object({
+  sectionFrames: z
+    .record(
+      z
+        .string()
+        .regex(/^boundary:/)
+        .max(80),
+      SectionFrameSchema,
+    )
+    .default({}),
   preferredDetailViews: z.record(IdSchema, IdSchema).default({}),
   scenarios: z
     .array(ViewScenarioSchema)
@@ -303,6 +320,7 @@ export type ViewSettings = z.infer<typeof ViewSettingsSchema>;
 // Zod 4 applies defaults even inside optional fields. A patch must only carry
 // explicitly supplied settings, otherwise it resets the other stored values.
 const ViewSettingsPatchSchema = z.object({
+  sectionFrames: ViewSettingsSchema.shape.sectionFrames.unwrap().optional(),
   preferredDetailViews: ViewSettingsSchema.shape.preferredDetailViews.unwrap().optional(),
   scenarios: ViewSettingsSchema.shape.scenarios.unwrap().optional(),
   commentPins: ViewSettingsSchema.shape.commentPins.unwrap().optional(),

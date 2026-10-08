@@ -319,7 +319,9 @@ function BoundaryInspector({
     <div className="space-y-4">
       <div>
         <div className="flex items-center gap-2">
-          <Badge variant="outline">{t("boundaries.title")}</Badge>
+          <Badge variant="outline">
+            {t(boundary.kind === "custom" ? "sections.title" : "boundaries.title")}
+          </Badge>
           <CopyReferenceButton
             className="ml-auto"
             reference={{

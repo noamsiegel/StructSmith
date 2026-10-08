@@ -187,6 +187,7 @@ const defaultSettings: ViewSettings = {
   commentPins: [],
   preferredDetailViews: {},
   scenarios: [],
+  sectionFrames: {},
   showBoundaries: true,
   snapToGrid: false,
   autoLayoutDirection: "LR",

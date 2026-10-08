@@ -102,6 +102,12 @@ export class ImportService {
             scopeElementId: view.scopeElementId ? mapId(view.scopeElementId) : null,
             settings: {
               ...view.settings,
+              sectionFrames: Object.fromEntries(
+                Object.entries(view.settings.sectionFrames).map(([key, frame]) => [
+                  `boundary:${mapId(key.slice("boundary:".length))}`,
+                  frame,
+                ]),
+              ),
               preferredDetailViews: Object.fromEntries(
                 Object.entries(view.settings.preferredDetailViews).map(([elementId, detailId]) => [
                   mapId(elementId),

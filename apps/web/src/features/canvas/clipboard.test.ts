@@ -46,6 +46,7 @@ const view: ViewDetail = {
   kind: "container",
   scopeElementId: null,
   settings: {
+    sectionFrames: {},
     showBoundaries: true,
     snapToGrid: false,
     autoLayoutDirection: "LR",

@@ -4,6 +4,7 @@ import type {
   ArchitectureRecord,
   ArchitectureRelationship,
   ControlPoint,
+  SectionFrame,
   ViewDetail,
   ViewElement,
   ViewRelationship,
@@ -45,6 +46,10 @@ export interface BoundaryNodeData extends Record<string, unknown> {
   classification: "public" | "restricted" | "private" | null;
   boundaryId?: string;
   elementId?: string;
+  section?: boolean;
+  onRename?: (name: string) => void;
+  onResize?: (frame: SectionFrame) => void;
+  onResizePreview?: (frame: SectionFrame) => void;
 }
 
 export interface RelationshipEdgeData extends Record<string, unknown> {
@@ -277,6 +282,7 @@ export function computeBoundaries(
   elementsById: ReadonlyMap<string, ArchitectureElement>,
   enabled: boolean,
   nestedBoundaries: readonly NestedBoundarySource[] = [],
+  sectionFrames: Readonly<Record<string, SectionFrame>> = {},
 ): FlowNode[] {
   if (!enabled) return [];
 
@@ -313,25 +319,43 @@ export function computeBoundaries(
     }
   }
 
+  for (const frameId of Object.keys(sectionFrames)) {
+    const parentId = frameId.slice("boundary:".length);
+    if (
+      elementsById.get(parentId)?.kind === "custom" &&
+      !present.has(parentId) &&
+      !groups.has(parentId)
+    )
+      groups.set(parentId, []);
+  }
   const nodes: FlowNode[] = [];
   for (const [parentId, children] of groups) {
     const parent = elementsById.get(parentId);
-    if (!parent || children.length === 0) continue;
+    if (!parent || (children.length === 0 && !sectionFrames[`boundary:${parentId}`])) continue;
 
     const minX = Math.min(...children.map((child) => child.x));
     const minY = Math.min(...children.map((child) => child.y));
     const maxX = Math.max(...children.map((child) => child.x + child.width));
     const maxY = Math.max(...children.map((child) => child.y + child.height));
 
+    const saved = parent.kind === "custom" ? sectionFrames[`boundary:${parentId}`] : undefined;
+    const frame = saved ?? {
+      x: minX - BOUNDARY_PADDING,
+      y: minY - BOUNDARY_PADDING - BOUNDARY_HEADER,
+      width: maxX - minX + BOUNDARY_PADDING * 2,
+      height: maxY - minY + BOUNDARY_PADDING * 2 + BOUNDARY_HEADER,
+    };
     nodes.push({
       id: `boundary:${parentId}`,
       type: "boundary",
-      position: { x: minX - BOUNDARY_PADDING, y: minY - BOUNDARY_PADDING - BOUNDARY_HEADER },
-      width: maxX - minX + BOUNDARY_PADDING * 2,
-      height: maxY - minY + BOUNDARY_PADDING * 2 + BOUNDARY_HEADER,
+      position: { x: frame.x, y: frame.y },
+      width: frame.width,
+      height: frame.height,
+      measured: { width: frame.width, height: frame.height },
       data: {
         name: parent.name,
         kind: parent.kind,
+        section: parent.kind === "custom",
         classification: parent.external ? "public" : null,
         elementId: parent.id,
       },
@@ -342,11 +366,7 @@ export function computeBoundaries(
       connectable: false,
       deletable: false,
       zIndex: 0,
-      style: boundaryStyle(
-        parent.external ? "public" : null,
-        maxX - minX + BOUNDARY_PADDING * 2,
-        maxY - minY + BOUNDARY_PADDING * 2 + BOUNDARY_HEADER,
-      ),
+      style: boundaryStyle(parent.external ? "public" : null, frame.width, frame.height),
     });
   }
   return nodes;
@@ -358,6 +378,7 @@ export function computeSemanticBoundaries(
   boundaries: readonly ArchitectureBoundary[],
   layer: ArchitectureBoundary["layer"],
   enabled: boolean,
+  sectionFrames: Readonly<Record<string, SectionFrame>> = {},
 ): FlowNode[] {
   if (!enabled) return [];
   const active = boundaries.filter((boundary) => boundary.layer === layer);
@@ -373,6 +394,13 @@ export function computeSemanticBoundaries(
     if (cached) return cached;
     if (visiting.has(boundary.id)) return null;
     visiting.add(boundary.id);
+    const saved = boundary.kind === "custom" ? sectionFrames[`boundary:${boundary.id}`] : undefined;
+    if (saved) {
+      const box = { id: boundary.id, ...saved };
+      boxes.set(boundary.id, box);
+      visiting.delete(boundary.id);
+      return box;
+    }
     const contents: BoundarySource[] = boundary.elementIds
       .map((id) => sourceById.get(id))
       .filter((source): source is BoundarySource => Boolean(source));
@@ -419,11 +447,13 @@ export function computeSemanticBoundaries(
         position: { x: box.x, y: box.y },
         width: box.width,
         height: box.height,
+        measured: { width: box.width, height: box.height },
         data: {
           name: boundary.name,
           layer: boundary.layer,
           classification: boundary.classification,
           boundaryId: boundary.id,
+          section: boundary.kind === "custom",
         },
         draggable: false,
         // Boundary boxes are view-owned containers, not blocks in a group
@@ -447,8 +477,15 @@ export function computeCanvasBoundaries(
   boundaries: readonly ArchitectureBoundary[],
   layer: ArchitectureBoundary["layer"],
   enabled: boolean,
+  sectionFrames: Readonly<Record<string, SectionFrame>> = {},
 ): { parentBoundaries: FlowNode[]; semanticBoundaries: FlowNode[] } {
-  const semanticBoundaries = computeSemanticBoundaries(sources, boundaries, layer, enabled);
+  const semanticBoundaries = computeSemanticBoundaries(
+    sources,
+    boundaries,
+    layer,
+    enabled,
+    sectionFrames,
+  );
   if (!enabled) return { parentBoundaries: [], semanticBoundaries };
 
   const nestedBoundaries = semanticBoundaries.flatMap((node): NestedBoundarySource[] => {
@@ -469,7 +506,13 @@ export function computeCanvasBoundaries(
   });
 
   return {
-    parentBoundaries: computeBoundaries(sources, elementsById, enabled, nestedBoundaries),
+    parentBoundaries: computeBoundaries(
+      sources,
+      elementsById,
+      enabled,
+      nestedBoundaries,
+      sectionFrames,
+    ),
     semanticBoundaries,
   };
 }

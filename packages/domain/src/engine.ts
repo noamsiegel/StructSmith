@@ -48,6 +48,7 @@ import { validateViewScenarios } from "./scenarios";
 /* ------------------------------------------------------------------ */
 
 export const defaultViewSettings: ViewSettings = {
+  sectionFrames: {},
   preferredDetailViews: {},
   scenarios: [],
   commentPins: [],
@@ -217,6 +218,7 @@ export function deleteElement(
   const removed = new Set(targets.map((target) => target.id));
   for (const view of repos.views.listByWorkspace(workspace.id))
     detachViewComments(repos, view.id, removed);
+  pruneSectionFrames(repos, workspace, removed);
 
   for (const target of targets) {
     for (const relationshipId of repos.relationships.deleteByElement(target.id)) {
@@ -401,6 +403,7 @@ export function deleteBoundary(
       });
     }
   }
+  pruneSectionFrames(repos, workspace, new Set(targets.map((target) => target.id)));
   for (const target of [...targets].reverse()) repos.boundaries.delete(target.id);
   return targets.map((target) => target.id);
 }
@@ -520,6 +523,26 @@ function prunePreferredDetailViews(repos: Repositories, workspace: Workspace): v
   }
 }
 
+function pruneSectionFrames(
+  repos: Repositories,
+  workspace: Workspace,
+  removed: ReadonlySet<string>,
+): void {
+  for (const view of repos.views.listByWorkspace(workspace.id)) {
+    const sectionFrames = Object.fromEntries(
+      Object.entries(view.settings.sectionFrames).filter(
+        ([key]) => !removed.has(key.slice("boundary:".length)),
+      ),
+    );
+    if (Object.keys(sectionFrames).length !== Object.keys(view.settings.sectionFrames).length)
+      repos.views.update({
+        ...view,
+        settings: { ...view.settings, sectionFrames },
+        updatedAt: nowIso(),
+      });
+  }
+}
+
 function validateExplorationSettings(
   repos: Repositories,
   workspace: Workspace,
@@ -527,6 +550,38 @@ function validateExplorationSettings(
   settings: UpdateViewInput["settings"],
   elementIds: readonly string[],
 ): void {
+  if (settings?.sectionFrames) {
+    for (const key of Object.keys(settings.sectionFrames)) {
+      const id = key.slice("boundary:".length);
+      const boundary = repos.boundaries.findById(id);
+      if (
+        boundary?.workspaceId === workspace.id &&
+        boundary.viewId === view.id &&
+        boundary.kind === "custom"
+      )
+        continue;
+      const element = repos.elements.findById(id);
+      const isParentOnView = elementIds.some((elementId) => {
+        let current = repos.elements.findById(elementId);
+        const visited = new Set<string>();
+        while (current && !visited.has(current.id)) {
+          if (current.parentId === id) return true;
+          visited.add(current.id);
+          current = current.parentId ? repos.elements.findById(current.parentId) : undefined;
+        }
+        return false;
+      });
+      if (
+        !element ||
+        element.workspaceId !== workspace.id ||
+        element.kind !== "custom" ||
+        (!isParentOnView && !repos.views.findById(view.id)?.settings.sectionFrames[key])
+      )
+        throw ruleViolation(
+          "Section geometry must refer to a custom section in this workspace and view.",
+        );
+    }
+  }
   if (settings?.preferredDetailViews) {
     const views = repos.views.listByWorkspace(workspace.id);
     for (const [elementId, detailId] of Object.entries(settings.preferredDetailViews)) {
@@ -1048,6 +1103,27 @@ export function autoLayoutView(
     });
   }
 
+  const sectionFrames = Object.fromEntries(
+    Object.entries(view.settings.sectionFrames).filter(([key]) => {
+      const id = key.slice("boundary:".length);
+      const boundary = repos.boundaries.findById(id);
+      if (boundary) {
+        if (boundary.layer !== view.settings.boundaryLayer) return true;
+        const nested = [boundary];
+        for (let index = 0; index < nested.length; index += 1)
+          nested.push(
+            ...activeBoundaries.filter(
+              (candidate) => candidate.parentBoundaryId === nested[index]?.id,
+            ),
+          );
+        return !nested.some((candidate) =>
+          candidate.elementIds.some((elementId) => visible.has(elementId)),
+        );
+      }
+      return !descendantsOf(id, allElements).some((element) => visible.has(element.id));
+    }),
+  );
+  updateView(repos, workspace, viewId, { settings: { sectionFrames } });
   return repos.views.listElements(viewId);
 }
 

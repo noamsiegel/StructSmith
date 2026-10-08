@@ -1,6 +1,6 @@
 import type { ViewDetail } from "@structsmith/contracts";
 import { presets } from "@structsmith/domain";
-import { Keyboard, Plus } from "lucide-react";
+import { Keyboard, Plus, SquareDashed } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -18,10 +18,12 @@ export function CreationToolbar({
   workspaceId,
   view,
   getCreationPoint,
+  onCreateSection,
 }: {
   workspaceId: string;
   view: ViewDetail;
   getCreationPoint: () => { x: number; y: number };
+  onCreateSection: () => void;
 }) {
   const { t } = useTranslation();
   const creation = useCreatePreset(workspaceId);
@@ -54,6 +56,21 @@ export function CreationToolbar({
         buttons[next]?.focus();
       }}
     >
+      <Tooltip label={t("sections.add")} side="top">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-12 min-w-16 shrink-0 flex-col gap-1 px-2 text-[11px] leading-4"
+          aria-label={t("sections.add")}
+          disabled={creation.disabled}
+          tabIndex={focused === 0 ? 0 : -1}
+          onFocus={() => setFocused(0)}
+          onClick={onCreateSection}
+        >
+          <SquareDashed className="h-4 w-4" aria-hidden="true" />
+          <span>{t("sections.title")}</span>
+        </Button>
+      </Tooltip>
       {quickPresets.map((preset, index) => {
         const Icon = iconFor(preset.kind, preset.role);
         const label = t(`presets.${preset.id}`);
@@ -65,8 +82,8 @@ export function CreationToolbar({
               className="h-12 min-w-16 shrink-0 flex-col gap-1 px-2 text-[11px] leading-4"
               aria-label={t("creationToolbar.add", { name: label })}
               disabled={creation.disabled}
-              tabIndex={focused === index ? 0 : -1}
-              onFocus={() => setFocused(index)}
+              tabIndex={focused === index + 1 ? 0 : -1}
+              onFocus={() => setFocused(index + 1)}
               onClick={() => creation.add(preset, view.id, null, getCreationPoint())}
             >
               <Icon className="h-4 w-4" aria-hidden="true" />
@@ -82,8 +99,8 @@ export function CreationToolbar({
           variant="ghost"
           className="h-12 min-w-16 shrink-0 flex-col gap-1 px-2 text-[11px] leading-4"
           aria-label={t("creationToolbar.moreHint")}
-          tabIndex={focused === 4 || (creation.disabled && focused < 4) ? 0 : -1}
-          onFocus={() => setFocused(4)}
+          tabIndex={focused === 5 || (creation.disabled && focused < 5) ? 0 : -1}
+          onFocus={() => setFocused(5)}
           onClick={() => openPalette()}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
@@ -96,8 +113,8 @@ export function CreationToolbar({
           variant="ghost"
           size="icon"
           aria-label={t("shortcuts.title")}
-          tabIndex={focused === 5 ? 0 : -1}
-          onFocus={() => setFocused(5)}
+          tabIndex={focused === 6 ? 0 : -1}
+          onFocus={() => setFocused(6)}
           onClick={() => setShortcutsOpen(true)}
         >
           <Keyboard className="h-4 w-4" aria-hidden="true" />
