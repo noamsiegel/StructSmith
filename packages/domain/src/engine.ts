@@ -1,5 +1,6 @@
 import type {
   AddViewCommentInput,
+  AddViewCommentReplyInput,
   ArchitectureBoundary,
   ArchitectureElement,
   ArchitectureRecord,
@@ -17,7 +18,9 @@ import type {
   UpdateElementInput,
   UpdateRecordInput,
   UpdateRelationshipInput,
+  UpdateViewCommentInput,
   UpdateViewInput,
+  ViewComment,
   ViewElement,
   ViewRelationship,
   ViewRelationshipPatch,
@@ -25,7 +28,12 @@ import type {
   Workspace,
   WorkspaceMode,
 } from "@structsmith/contracts";
-import { AddViewCommentSchema, ERROR_CODES } from "@structsmith/contracts";
+import {
+  AddViewCommentReplySchema,
+  AddViewCommentSchema,
+  ERROR_CODES,
+  UpdateViewCommentSchema,
+} from "@structsmith/contracts";
 import { badRequest, DomainError, ruleViolation } from "./errors";
 import { createId, nowIso, uniqueKey } from "./ids";
 import { edgeLabel, resolveRelationshipsForView } from "./implied";
@@ -548,9 +556,118 @@ export function addViewComment(
   input: AddViewCommentInput,
 ): ArchitectureView {
   const current = requireView(repos, viewId, workspace.id);
-  const pin = { ...AddViewCommentSchema.parse(input), id: createId("comment") };
+  const pin = {
+    ...AddViewCommentSchema.parse(input),
+    id: createId("comment"),
+    resolved: false,
+    replies: [],
+  };
   return updateView(repos, workspace, viewId, {
     settings: { commentPins: [...current.settings.commentPins, pin] },
+  });
+}
+
+function requireViewComment(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+) {
+  const view = requireView(repos, viewId, workspace.id);
+  const comment = view.settings.commentPins.find((pin) => pin.id === commentId);
+  if (!comment) throw badRequest(`Comment "${commentId}" does not exist on this view.`);
+  return { view, comment };
+}
+
+function replaceViewComment(
+  repos: Repositories,
+  workspace: Workspace,
+  view: ArchitectureView,
+  comment: ViewComment,
+) {
+  return updateView(repos, workspace, view.id, {
+    settings: {
+      commentPins: view.settings.commentPins.map((pin) => (pin.id === comment.id ? comment : pin)),
+    },
+  });
+}
+
+export function updateViewComment(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+  input: UpdateViewCommentInput,
+): ArchitectureView {
+  const { view, comment } = requireViewComment(repos, workspace, viewId, commentId);
+  return replaceViewComment(repos, workspace, view, {
+    ...comment,
+    ...UpdateViewCommentSchema.parse(input),
+  });
+}
+
+export function deleteViewComment(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+): ArchitectureView {
+  const { view } = requireViewComment(repos, workspace, viewId, commentId);
+  return updateView(repos, workspace, viewId, {
+    settings: { commentPins: view.settings.commentPins.filter((pin) => pin.id !== commentId) },
+  });
+}
+
+export function addViewCommentReply(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+  input: AddViewCommentReplyInput,
+): ArchitectureView {
+  const { view, comment } = requireViewComment(repos, workspace, viewId, commentId);
+  return replaceViewComment(repos, workspace, view, {
+    ...comment,
+    replies: [
+      ...comment.replies,
+      { ...AddViewCommentReplySchema.parse(input), id: createId("reply") },
+    ],
+  });
+}
+
+export function updateViewCommentReply(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+  replyId: string,
+  input: AddViewCommentReplyInput,
+): ArchitectureView {
+  const { view, comment } = requireViewComment(repos, workspace, viewId, commentId);
+  if (!comment.replies.some((reply) => reply.id === replyId))
+    throw badRequest(`Reply "${replyId}" does not exist on this comment.`);
+  const patch = AddViewCommentReplySchema.parse(input);
+  return replaceViewComment(repos, workspace, view, {
+    ...comment,
+    replies: comment.replies.map((reply) =>
+      reply.id === replyId ? { ...reply, ...patch } : reply,
+    ),
+  });
+}
+
+export function deleteViewCommentReply(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  commentId: string,
+  replyId: string,
+): ArchitectureView {
+  const { view, comment } = requireViewComment(repos, workspace, viewId, commentId);
+  if (!comment.replies.some((reply) => reply.id === replyId))
+    throw badRequest(`Reply "${replyId}" does not exist on this comment.`);
+  return replaceViewComment(repos, workspace, view, {
+    ...comment,
+    replies: comment.replies.filter((reply) => reply.id !== replyId),
   });
 }
 

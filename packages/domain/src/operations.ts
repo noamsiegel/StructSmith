@@ -182,6 +182,61 @@ export function applyOperations(
         applied.push({ op: operation.op, id: view.id });
         break;
       }
+      case "updateViewComment": {
+        const view = engine.updateViewComment(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.commentId,
+          operation.data,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "deleteViewComment": {
+        const view = engine.deleteViewComment(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.commentId,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "addViewCommentReply": {
+        const view = engine.addViewCommentReply(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.commentId,
+          operation.data,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "updateViewCommentReply": {
+        const view = engine.updateViewCommentReply(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.commentId,
+          operation.replyId,
+          operation.data,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "deleteViewCommentReply": {
+        const view = engine.deleteViewCommentReply(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.commentId,
+          operation.replyId,
+        );
+        applied.push({ op: operation.op, id: view.id });
+        break;
+      }
       case "deleteView": {
         const id = refs.resolve(operation.viewId);
         engine.deleteView(repos, workspace, id);

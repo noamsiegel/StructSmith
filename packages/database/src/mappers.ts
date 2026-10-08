@@ -23,6 +23,7 @@ import type {
   Workspace,
   WorkspaceMode,
 } from "@structsmith/contracts";
+import { ViewSettingsSchema } from "@structsmith/contracts";
 import type {
   activity,
   boundaries,
@@ -196,6 +197,10 @@ const defaultSettings: ViewSettings = {
 };
 
 export function toView(row: Row<typeof views>): ArchitectureView {
+  const settings = {
+    ...defaultSettings,
+    ...parseJson<Partial<ViewSettings>>(row.settingsJson, {}),
+  };
   return {
     id: row.id,
     workspaceId: row.workspaceId,
@@ -204,7 +209,10 @@ export function toView(row: Row<typeof views>): ArchitectureView {
     description: row.description,
     kind: row.kind as ViewKind,
     scopeElementId: row.scopeElementId,
-    settings: { ...defaultSettings, ...parseJson<Partial<ViewSettings>>(row.settingsJson, {}) },
+    settings: {
+      ...settings,
+      commentPins: ViewSettingsSchema.shape.commentPins.parse(settings.commentPins),
+    },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

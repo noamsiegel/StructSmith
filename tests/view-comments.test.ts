@@ -1,6 +1,14 @@
 import { expect, test } from "bun:test";
-import { AddViewCommentOpSchema, ViewSettingsSchema } from "@structsmith/contracts";
+import {
+  AddViewCommentOpSchema,
+  AddViewCommentReplySchema,
+  ApplyOperationsRequestSchema,
+  type ArchitectureOperationInput,
+  UpdateViewCommentSchema,
+  ViewSettingsSchema,
+} from "@structsmith/contracts";
 import { isCommentShortcut } from "../apps/web/src/features/canvas/CanvasComments";
+import { fromView, toView } from "../packages/database/src/mappers";
 import { createTestContext, createWorkspace } from "./helpers";
 
 test("comments append on their view, survive settings edits and restore through snapshots", () => {
@@ -118,4 +126,169 @@ test("C opens comment mode only outside editors and without copy or other modifi
     expect(isCommentShortcut({ ...key, [modifier]: true }, false)).toBe(false);
   }
   expect(isCommentShortcut({ ...key, key: "v" }, false)).toBe(false);
+});
+
+test("legacy pins gain thread defaults when imported and read from saved settings", () => {
+  const legacy = { id: "legacy", x: -15, y: 32, text: "Existing note" };
+  const expected = { ...legacy, resolved: false, replies: [] };
+  expect(ViewSettingsSchema.parse({ commentPins: [legacy] }).commentPins).toEqual([expected]);
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const view = services.views.create(workspace.id, { name: "Legacy", kind: "custom" }).result;
+    const row = fromView(view);
+    row.settingsJson = JSON.stringify({ ...view.settings, commentPins: [legacy] });
+    expect(toView(row).settings.commentPins).toEqual([expected]);
+  } finally {
+    close();
+  }
+});
+
+test("thread edits, replies, resolution and deletion preserve stable IDs and undo whole threads", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const view = services.views.create(workspace.id, { name: "Threads", kind: "custom" }).result;
+    const run = (operations: ArchitectureOperationInput[], expectedRevision?: number) =>
+      services.model.applyOperations(
+        workspace.id,
+        ApplyOperationsRequestSchema.parse({ operations, expectedRevision }),
+        "ui",
+      );
+    run([
+      { op: "addViewComment", viewId: view.id, data: { x: 1, y: 2, text: "Original" } },
+      { op: "addViewComment", viewId: view.id, data: { x: 30, y: 40, text: "Unrelated" } },
+    ]);
+    const original = services.views.get(view.id).settings.commentPins;
+    const comment = original[0];
+    const unrelated = original[1];
+    if (!comment || !unrelated) throw new Error("Missing threads");
+    const commentId = comment.id;
+    run([
+      {
+        op: "updateViewComment",
+        viewId: view.id,
+        commentId,
+        data: { text: " Edited ", x: -50, y: 60, resolved: true },
+      },
+    ]);
+    run([
+      { op: "addViewCommentReply", viewId: view.id, commentId, data: { text: " First reply " } },
+      { op: "addViewCommentReply", viewId: view.id, commentId, data: { text: "Second reply" } },
+    ]);
+    const current = () => services.views.get(view.id).settings.commentPins;
+    const replies = current()[0]?.replies;
+    if (!replies?.[0] || !replies[1]) throw new Error("Missing replies");
+    expect(new Set(replies.map((reply) => reply.id)).size).toBe(2);
+    run([
+      {
+        op: "updateViewCommentReply",
+        viewId: view.id,
+        commentId,
+        replyId: replies[0].id,
+        data: { text: " Updated reply " },
+      },
+    ]);
+    expect(current()).toEqual([
+      {
+        id: commentId,
+        x: -50,
+        y: 60,
+        text: "Edited",
+        resolved: true,
+        replies: [
+          { id: replies[0].id, text: "Updated reply" },
+          { id: replies[1].id, text: "Second reply" },
+        ],
+      },
+      unrelated,
+    ]);
+    run([{ op: "updateViewComment", viewId: view.id, commentId, data: { resolved: false } }]);
+    const reopened = current();
+    expect(reopened[0]?.resolved).toBe(false);
+    const deletedReply = run([
+      { op: "deleteViewCommentReply", viewId: view.id, commentId, replyId: replies[0].id },
+    ]);
+    expect(current()[0]?.replies).toEqual([{ id: replies[1].id, text: "Second reply" }]);
+    if (!deletedReply.snapshotId) throw new Error("Missing reply undo snapshot");
+    services.snapshots.restore(deletedReply.snapshotId);
+    expect(current()).toEqual(reopened);
+    const deletedThread = run([{ op: "deleteViewComment", viewId: view.id, commentId }]);
+    expect(current()).toEqual([unrelated]);
+    if (!deletedThread.snapshotId) throw new Error("Missing thread undo snapshot");
+    services.snapshots.restore(deletedThread.snapshotId);
+    expect(current()).toEqual(reopened);
+    expect(() =>
+      run(
+        [{ op: "addViewCommentReply", viewId: view.id, commentId, data: { text: "Stale" } }],
+        deletedThread.revision,
+      ),
+    ).toThrow("Workspace was modified by someone else");
+    expect(current()).toEqual(reopened);
+  } finally {
+    close();
+  }
+});
+
+test("missing thread or reply IDs fail and roll back the entire command", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const view = services.views.create(workspace.id, { name: "Atomic", kind: "custom" }).result;
+    const run = (operations: ArchitectureOperationInput[]) =>
+      services.model.applyOperations(
+        workspace.id,
+        ApplyOperationsRequestSchema.parse({ operations }),
+        "ui",
+      );
+    run([{ op: "addViewComment", viewId: view.id, data: { x: 1, y: 2, text: "Saved" } }]);
+    const original = services.views.get(view.id).settings.commentPins;
+    const commentId = original[0]?.id;
+    if (!commentId) throw new Error("Missing comment");
+    const missingComment = { viewId: view.id, commentId: "missing" };
+    const missingReply = { viewId: view.id, commentId, replyId: "missing" };
+    const invalid: ArchitectureOperationInput[] = [
+      { op: "updateViewComment", ...missingComment, data: { text: "Wrong" } },
+      { op: "deleteViewComment", ...missingComment },
+      { op: "addViewCommentReply", ...missingComment, data: { text: "Wrong" } },
+      { op: "updateViewCommentReply", ...missingReply, data: { text: "Wrong" } },
+      { op: "deleteViewCommentReply", ...missingReply },
+    ];
+    for (const operation of invalid) {
+      const revision = services.workspaces.get(workspace.id).revision;
+      expect(() =>
+        run([
+          {
+            op: "updateViewComment",
+            viewId: view.id,
+            commentId,
+            data: { text: "Should roll back" },
+          },
+          operation,
+        ]),
+      ).toThrow("does not exist");
+      expect({
+        pins: services.views.get(view.id).settings.commentPins,
+        revision: services.workspaces.get(workspace.id).revision,
+      }).toEqual({ pins: original, revision });
+    }
+  } finally {
+    close();
+  }
+});
+
+test("thread patches have no defaults and reject invalid text, points or duplicate replies", () => {
+  expect(UpdateViewCommentSchema.parse({ text: " Changed " })).toEqual({ text: "Changed" });
+  for (const text of ["   ", "x".repeat(4001)]) {
+    expect(AddViewCommentReplySchema.safeParse({ text }).success).toBe(false);
+    expect(UpdateViewCommentSchema.safeParse({ text }).success).toBe(false);
+  }
+  expect(UpdateViewCommentSchema.safeParse({ x: Number.POSITIVE_INFINITY }).success).toBe(false);
+  expect(UpdateViewCommentSchema.safeParse({ y: Number.NaN }).success).toBe(false);
+  const reply = { id: "same", text: "Reply" };
+  expect(
+    ViewSettingsSchema.safeParse({
+      commentPins: [{ id: "thread", x: 0, y: 0, text: "Thread", replies: [reply, reply] }],
+    }).success,
+  ).toBe(false);
 });

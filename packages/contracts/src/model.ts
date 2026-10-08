@@ -188,15 +188,38 @@ export type UpdateRelationshipInput = z.infer<typeof UpdateRelationshipSchema>;
 /* Views                                                               */
 /* ------------------------------------------------------------------ */
 
+export const ViewCommentReplySchema = z.object({
+  id: IdSchema,
+  text: z.string().trim().min(1).max(4000),
+});
+export type ViewCommentReply = z.infer<typeof ViewCommentReplySchema>;
+export const AddViewCommentReplySchema = ViewCommentReplySchema.omit({ id: true });
+export type AddViewCommentReplyInput = z.infer<typeof AddViewCommentReplySchema>;
+
 export const ViewCommentSchema = z.object({
   id: IdSchema,
   x: z.number().finite(),
   y: z.number().finite(),
-  text: z.string().trim().min(1).max(4000),
+  text: ViewCommentReplySchema.shape.text,
+  resolved: z.boolean().default(false),
+  replies: z
+    .array(ViewCommentReplySchema)
+    .refine(
+      (replies) => new Set(replies.map((reply) => reply.id)).size === replies.length,
+      "Reply IDs must be unique within a comment.",
+    )
+    .default([]),
 });
 export type ViewComment = z.infer<typeof ViewCommentSchema>;
-export const AddViewCommentSchema = ViewCommentSchema.omit({ id: true });
+export const AddViewCommentSchema = ViewCommentSchema.pick({ x: true, y: true, text: true });
 export type AddViewCommentInput = z.infer<typeof AddViewCommentSchema>;
+export const UpdateViewCommentSchema = z.object({
+  x: ViewCommentSchema.shape.x.optional(),
+  y: ViewCommentSchema.shape.y.optional(),
+  text: ViewCommentSchema.shape.text.optional(),
+  resolved: z.boolean().optional(),
+});
+export type UpdateViewCommentInput = z.infer<typeof UpdateViewCommentSchema>;
 
 export const ViewSettingsSchema = z.object({
   commentPins: z
