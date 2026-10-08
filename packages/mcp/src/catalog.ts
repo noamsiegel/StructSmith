@@ -105,6 +105,48 @@ export const MCP_TOOLS: readonly McpToolInfo[] = [
   },
   { name: "view_delete", description: "Delete a view (the model is untouched).", mutating: true },
   {
+    name: "comment_list",
+    description: "Read all comment threads on a view, including resolved threads and replies.",
+    mutating: false,
+  },
+  {
+    name: "comment_get",
+    description: "Read one comment thread and its replies by view and comment id.",
+    mutating: false,
+  },
+  {
+    name: "comment_create",
+    description:
+      "Create a view-owned comment at canvas x/y coordinates. Returns revision, undo snapshot and threads with generated ids.",
+    mutating: true,
+  },
+  {
+    name: "comment_update",
+    description:
+      "Edit comment text or position, or resolve/reopen with data.resolved. Preserves replies.",
+    mutating: true,
+  },
+  {
+    name: "comment_delete",
+    description: "Delete a whole comment thread, including all replies. Returns an undo snapshot.",
+    mutating: true,
+  },
+  {
+    name: "comment_reply_create",
+    description: "Append a reply to a comment thread. Returns threads with generated reply ids.",
+    mutating: true,
+  },
+  {
+    name: "comment_reply_update",
+    description: "Edit one reply without replacing the thread or other replies.",
+    mutating: true,
+  },
+  {
+    name: "comment_reply_delete",
+    description: "Delete one reply while retaining the parent comment and other replies.",
+    mutating: true,
+  },
+  {
     name: "view_set_elements",
     description:
       "Add or remove reusable model elements on a view; removing one also clears its boundary memberships in that view.",
