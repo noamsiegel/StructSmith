@@ -43,6 +43,9 @@ export function createDiagramClipboard(
       const elementIds = boundary.elementIds.filter((elementId) => selected.has(elementId));
       return elementIds.length > 0 ? [{ boundaryId: boundary.id, elementIds }] : [];
     }),
+    nodeColors: Object.fromEntries(
+      Object.entries(view.settings.nodeColors).filter(([id]) => selected.has(id)),
+    ),
     pasteCount: 0,
   };
 }
@@ -50,8 +53,9 @@ export function createDiagramClipboard(
 export function buildPasteOperations(
   clipboard: DiagramClipboard,
   workspaceId: string,
-  viewId: string,
+  view: ViewDetail,
 ): ArchitectureOperationInput[] {
+  const viewId = view.id;
   const offset = 40 * (clipboard.pasteCount + 1);
   const elementRefs = new Map(
     clipboard.elements.map((element, index) => [element.id, `copy-element-${index}`] as const),
@@ -117,6 +121,23 @@ export function buildPasteOperations(
       };
     }),
   });
+
+  if (Object.keys(clipboard.nodeColors).length > 0) {
+    operations.push({
+      op: "updateView",
+      viewId,
+      data: {
+        settings: {
+          nodeColors: {
+            ...view.settings.nodeColors,
+            ...Object.fromEntries(
+              Object.entries(clipboard.nodeColors).map(([id, color]) => [referenceTo(id), color]),
+            ),
+          },
+        },
+      },
+    });
+  }
 
   for (const relationship of relationshipsToPaste) {
     operations.push({

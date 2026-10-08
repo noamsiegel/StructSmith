@@ -255,6 +255,10 @@ export const SectionFrameSchema = z.object({
 export type SectionFrame = z.infer<typeof SectionFrameSchema>;
 
 export const ViewSettingsSchema = z.object({
+  nodeColors: z
+    .record(z.string().min(1).max(80), z.string().regex(/^#[0-9a-fA-F]{6}$/))
+    .describe("Per-view colors keyed by element ID or boundary:<ID> for a section/frame.")
+    .default({}),
   sectionFrames: z
     .record(
       z
@@ -320,6 +324,7 @@ export type ViewSettings = z.infer<typeof ViewSettingsSchema>;
 // Zod 4 applies defaults even inside optional fields. A patch must only carry
 // explicitly supplied settings, otherwise it resets the other stored values.
 const ViewSettingsPatchSchema = z.object({
+  nodeColors: ViewSettingsSchema.shape.nodeColors.unwrap().optional(),
   sectionFrames: ViewSettingsSchema.shape.sectionFrames.unwrap().optional(),
   preferredDetailViews: ViewSettingsSchema.shape.preferredDetailViews.unwrap().optional(),
   scenarios: ViewSettingsSchema.shape.scenarios.unwrap().optional(),
@@ -360,6 +365,7 @@ export const RelationshipPresentationSchema = z
     color: z
       .string()
       .regex(/^#[0-9a-fA-F]{6}$/)
+      .nullable()
       .optional(),
     strokeWidth: z.number().finite().min(0.5).max(12).optional(),
     strokeStyle: z.enum(["solid", "dashed", "dotted"]).optional(),

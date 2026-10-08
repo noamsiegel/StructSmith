@@ -1,7 +1,7 @@
 import { Handle, Position } from "@xyflow/react";
 import { sourceHandleFor, targetHandleFor } from "./graph";
 
-export function ConnectionHandles() {
+export function ConnectionHandles({ diamond = false }: { diamond?: boolean }) {
   return (
     <>
       {(["target", "source"] as const).flatMap((type) =>
@@ -28,7 +28,17 @@ export function ConnectionHandles() {
                     ? sourceHandleFor(side, "LR", slot)
                     : targetHandleFor(side, "LR", slot)
                 }
-                style={horizontal ? { left: `${25 + slot * 25}%` } : { top: `${25 + slot * 25}%` }}
+                style={
+                  horizontal
+                    ? {
+                        left: `${25 + slot * 25}%`,
+                        ...(diamond ? { [side]: slot === 1 ? 0 : "25%" } : {}),
+                      }
+                    : {
+                        top: `${25 + slot * 25}%`,
+                        ...(diamond ? { [side]: slot === 1 ? 0 : "25%" } : {}),
+                      }
+                }
               />
             );
           }),

@@ -4,7 +4,12 @@ import type {
   ArchitectureOperation,
   SectionFrame,
 } from "@structsmith/contracts";
-import type { BoundaryNodeData, FlowNode } from "./graph";
+import {
+  BOUNDARY_PADDING,
+  type BoundaryNodeData,
+  type BoundarySource,
+  type FlowNode,
+} from "./graph";
 
 export function sectionFrameEntries(nodes: readonly FlowNode[]): Record<string, SectionFrame> {
   return Object.fromEntries(
@@ -106,4 +111,35 @@ export function sectionMembershipOperations(
       operations.push({ op: "updateElement", elementId: node.id, data: { parentId: null } });
   }
   return operations;
+}
+
+export function fitSectionFrame(
+  sources: readonly BoundarySource[],
+  members: ReadonlySet<string>,
+): SectionFrame | null {
+  const contents = sources.filter((source) => members.has(source.id));
+  if (
+    contents.length === 0 ||
+    contents.some(
+      (source) =>
+        ![source.x, source.y, source.width, source.height].every(Number.isFinite) ||
+        source.width <= 0 ||
+        source.height <= 0,
+    )
+  )
+    return null;
+  const x = Math.min(...contents.map((source) => source.x)) - BOUNDARY_PADDING;
+  const y = Math.min(...contents.map((source) => source.y)) - BOUNDARY_PADDING;
+  return {
+    x,
+    y,
+    width: Math.max(
+      120,
+      Math.max(...contents.map((source) => source.x + source.width)) - x + BOUNDARY_PADDING,
+    ),
+    height: Math.max(
+      80,
+      Math.max(...contents.map((source) => source.y + source.height)) - y + BOUNDARY_PADDING,
+    ),
+  };
 }

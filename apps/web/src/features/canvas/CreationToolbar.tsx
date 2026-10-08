@@ -35,7 +35,7 @@ export function CreationToolbar({
     <div
       role="toolbar"
       aria-label={t("creationToolbar.title")}
-      className="nodrag nopan absolute bottom-4 left-1/2 z-30 flex max-w-[calc(100%-2rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-lg bg-card p-1.5 shadow-lg ring-1 ring-border"
+      className="nodrag nopan absolute bottom-4 left-1/2 z-30 flex max-w-[calc(100%-6rem)] -translate-x-1/2 items-center gap-1 overflow-x-auto rounded-lg bg-card p-1.5 shadow-lg ring-1 ring-border"
       onClick={(event) => event.stopPropagation()}
       onPointerDown={(event) => event.stopPropagation()}
       onWheel={(event) => event.stopPropagation()}

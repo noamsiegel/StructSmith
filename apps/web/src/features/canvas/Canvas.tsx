@@ -10,7 +10,7 @@ import type {
   ViewScenarioStep,
   Workspace,
 } from "@structsmith/contracts";
-import { deriveExpandedView } from "@structsmith/domain";
+import { deriveExpandedView, estimateElementSize } from "@structsmith/domain";
 import {
   applyEdgeChanges,
   applyNodeChanges,
@@ -51,11 +51,13 @@ import { CreationToolbar } from "./CreationToolbar";
 import { buildPasteOperations, createDiagramClipboard, type DiagramCopyMode } from "./clipboard";
 import { commandWheelViewport } from "./commandWheel";
 import { ElementNode } from "./ElementNode";
+import { ElementTypePicker } from "./ElementTypePicker";
 import {
   boundaryElementId,
   boundaryMemberIds,
   boundaryMoveEntries,
   buildGraph,
+  CANVAS_FIT_PADDING,
   computeCanvasBoundaries,
   type FlowEdge,
   type FlowNode,
@@ -68,11 +70,14 @@ import { inlineFrames } from "./inlineFrames";
 import { type ContextMenuItem, NodeContextMenu } from "./NodeContextMenu";
 import { RelationshipEdge } from "./RelationshipEdge";
 import { sideFromHandle, slotFromHandle } from "./relationshipGeometry";
+import { SelectionColorToolbar } from "./SelectionColorToolbar";
 import {
+  fitSectionFrame,
   sectionFrameEntries,
   sectionMembershipOperations,
   translateSectionFrames,
 } from "./sections";
+import { applyNodeColors } from "./selectionColors";
 import type { StatusOverlay } from "./statusOverlay";
 import { focusGraphByTag } from "./tagFocus";
 
@@ -272,7 +277,8 @@ export function Canvas({
     if (fittedViewId.current === view.id) return;
     fittedViewId.current = view.id;
     if (initialViewport.current) void flow.setViewport(initialViewport.current);
-    else if (nodes.length > 0) void flow.fitView({ padding: 0.25, maxZoom: 1, duration: 250 });
+    else if (nodes.length > 0)
+      void flow.fitView({ padding: CANVAS_FIT_PADDING, maxZoom: 1, duration: 250 });
     if (restoredSelection.current) select(restoredSelection.current);
   }, [nodesInitialized, nodes.length, view.id, flow, select]);
 
@@ -291,7 +297,14 @@ export function Canvas({
       return;
     fittedLayoutRequest.current = layoutFitRequest;
     void flow.setViewport(
-      getViewportForBounds(flow.getNodesBounds(graph.nodes), width, height, 0.1, 1, 0.2),
+      getViewportForBounds(
+        flow.getNodesBounds(graph.nodes),
+        width,
+        height,
+        0.1,
+        1,
+        CANVAS_FIT_PADDING,
+      ),
       { duration: 300 },
     );
   }, [layoutFitRequest, nodesInitialized, renderedNodes, graph.nodes, flow]);
@@ -306,7 +319,13 @@ export function Canvas({
     const { elementId } = focusRequest;
 
     const node = flow.getNode(elementId);
-    if (node) void flow.fitView({ nodes: [{ id: node.id }], duration: 350, maxZoom: 1.2 });
+    if (node)
+      void flow.fitView({
+        nodes: [{ id: node.id }],
+        duration: 350,
+        maxZoom: 1.2,
+        padding: CANVAS_FIT_PADDING,
+      });
 
     setNodes((current) =>
       current.map((candidate) => {
@@ -780,6 +799,14 @@ export function Canvas({
   const onNodeClick = useCallback<NodeMouseHandler>(
     (_event, node) => {
       if (node.type === "boundary") {
+        setNodes((current) =>
+          current.map((candidate) =>
+            candidate.selected ? { ...candidate, selected: false } : candidate,
+          ),
+        );
+        setEdges((current) =>
+          current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+        );
         if (node.data?.boundaryId) {
           select({ type: "boundary", id: String(node.data.boundaryId) });
         } else if (node.data?.elementId) {
@@ -886,37 +913,21 @@ export function Canvas({
     (elementId: string) => {
       const element = elementsById.get(elementId);
       if (!element) return;
-      const placement = view.elements.find((entry) => entry.elementId === elementId);
+      const copied = createDiagramClipboard(
+        workspaceId,
+        view,
+        elements,
+        relationships,
+        [elementId],
+        "elements-only",
+      );
+      if (!copied) return;
       applyOperations.mutate({
         label: `Duplicated ${element.name}`,
-        operations: [
-          {
-            op: "createElement",
-            ref: "copy",
-            data: {
-              kind: element.kind,
-              role: element.role,
-              parentId: element.parentId,
-              name: `${element.name} (copy)`,
-              description: element.description,
-              technology: element.technology,
-              external: element.external,
-              tags: element.tags,
-              properties: element.properties,
-            },
-          },
-          { op: "setViewElements", viewId: view.id, elementIds: ["@copy"], mode: "add" },
-          {
-            op: "setLayout",
-            viewId: view.id,
-            entries: [
-              { elementId: "@copy", x: (placement?.x ?? 0) + 40, y: (placement?.y ?? 0) + 40 },
-            ],
-          },
-        ],
+        operations: buildPasteOperations(copied, workspaceId, view),
       });
     },
-    [applyOperations, elementsById, view.elements, view.id],
+    [applyOperations, elementsById, workspaceId, view, elements, relationships],
   );
 
   const copyElementsToClipboard = useCallback(
@@ -1217,7 +1228,7 @@ export function Canvas({
         event.preventDefault();
         applyOperations.mutate({
           label: t("canvas.pastedElements", { count: clipboard.elements.length }),
-          operations: buildPasteOperations(clipboard, workspaceId, view.id),
+          operations: buildPasteOperations(clipboard, workspaceId, view),
         });
         setClipboard({ ...clipboard, pasteCount: clipboard.pasteCount + 1 });
       }
@@ -1237,6 +1248,13 @@ export function Canvas({
     view,
     workspaceId,
   ]);
+
+  const typeElement =
+    selection.type === "element"
+      ? elementsById.get(selection.id)
+      : selection.type === "elements" && selection.ids.length === 1
+        ? elementsById.get(selection.ids[0] as string)
+        : undefined;
 
   /* --------------------------------- render --------------------------------- */
 
@@ -1283,6 +1301,25 @@ export function Canvas({
         view.settings.boundaryLayer,
       );
       const placements = view.elements.filter((entry) => members.has(entry.elementId));
+      const fitSources = [
+        ...sources,
+        ...placements
+          .filter((entry) => !sources.some((source) => source.id === entry.elementId))
+          .map((entry) => ({
+            id: entry.elementId,
+            x: entry.x,
+            y: entry.y,
+            ...estimateElementSize(
+              elementsById.get(entry.elementId),
+              {
+                showFullTitles: view.settings.showFullTitles,
+                showDescriptions: view.settings.showDescriptions,
+              },
+              entry,
+            ),
+          })),
+      ];
+      const fittedFrame = boundary.data.section ? fitSectionFrame(fitSources, members) : null;
       return {
         ...boundary,
         draggable:
@@ -1290,6 +1327,26 @@ export function Canvas({
           !placements.some((entry) => entry.locked),
         data: {
           ...boundary.data,
+          onFit:
+            fittedFrame && !placements.some((entry) => entry.locked)
+              ? () => {
+                  const next = { ...sectionFrames, [boundary.id]: fittedFrame };
+                  setSectionFrames(next);
+                  applyOperations.mutate(
+                    {
+                      label: t("sections.fit"),
+                      operations: [
+                        {
+                          op: "updateView",
+                          viewId: view.id,
+                          data: { settings: { sectionFrames: next } },
+                        },
+                      ],
+                    },
+                    { onError: () => setSectionFrames(view.settings.sectionFrames) },
+                  );
+                }
+              : undefined,
           onRename: boundary.data.section
             ? (name: string) =>
                 applyOperations.mutate({
@@ -1343,12 +1400,15 @@ export function Canvas({
       }),
     );
     const transformed = new Set(expandedFrames.map((frame) => frame.id));
-    return [...frames, ...expandedFrames, ...nodes.filter((node) => !transformed.has(node.id))].map(
-      (node) => ({
-        ...node,
-        className:
-          scenarioStep?.elementId === node.id ? "ring-2 ring-primary rounded-lg" : undefined,
-      }),
+    return applyNodeColors(
+      [...frames, ...expandedFrames, ...nodes.filter((node) => !transformed.has(node.id))].map(
+        (node) => ({
+          ...node,
+          className:
+            scenarioStep?.elementId === node.id ? "ring-2 ring-primary rounded-lg" : undefined,
+        }),
+      ),
+      view.settings.nodeColors,
     );
   }, [
     nodes,
@@ -1362,6 +1422,9 @@ export function Canvas({
     t,
     view.id,
     view.settings.sectionFrames,
+    view.settings.nodeColors,
+    view.settings.showFullTitles,
+    view.settings.showDescriptions,
     selection,
     expansion.expandedElementIds,
     scenarioStep,
@@ -1432,7 +1495,7 @@ export function Canvas({
   useEffect(() => {
     if (expansionFit.current === expandedIds || !nodesInitialized) return;
     expansionFit.current = expandedIds;
-    void flow.fitView({ padding: 0.2, duration: 250, maxZoom: 1 });
+    void flow.fitView({ padding: CANVAS_FIT_PADDING, duration: 250, maxZoom: 1 });
   }, [expandedIds, nodesInitialized, flow]);
 
   return (
@@ -1534,7 +1597,7 @@ export function Canvas({
           panOnScroll
           zoomOnScroll={false}
           zoomActivationKeyCode={["Meta", "Control"]}
-          fitViewOptions={{ padding: 0.25, maxZoom: 1 }}
+          fitViewOptions={{ padding: CANVAS_FIT_PADDING, maxZoom: 1 }}
           proOptions={{ hideAttribution: false }}
           deleteKeyCode={["Delete", "Backspace"]}
         >
@@ -1560,7 +1623,11 @@ export function Canvas({
             size={1}
             color="var(--canvas-dot)"
           />
-          <Controls showInteractive={false} position="bottom-left" />
+          <Controls
+            showInteractive={false}
+            position="bottom-left"
+            fitViewOptions={{ padding: CANVAS_FIT_PADDING }}
+          />
           <MiniMap
             pannable
             zoomable
@@ -1571,6 +1638,26 @@ export function Canvas({
           />
         </ReactFlow>
 
+        <SelectionColorToolbar
+          workspaceId={workspaceId}
+          view={view}
+          nodes={allNodes}
+          edges={editableEdges}
+        >
+          {typeElement && (
+            <ElementTypePicker
+              element={typeElement}
+              elements={elements}
+              disabled={applyOperations.isPending}
+              onChange={(data) =>
+                applyOperations.mutate({
+                  label: t("elementTypes.changed"),
+                  operations: [{ op: "updateElement", elementId: typeElement.id, data }],
+                })
+              }
+            />
+          )}
+        </SelectionColorToolbar>
         <CreationToolbar
           workspaceId={workspaceId}
           view={view}

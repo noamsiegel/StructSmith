@@ -22,6 +22,7 @@ export interface DiagramClipboard {
   relationships: ArchitectureRelationship[];
   placements: ViewElement[];
   relationshipPlacements: ViewRelationship[];
+  nodeColors: Record<string, string>;
   boundaryMemberships: { boundaryId: string; elementIds: string[] }[];
   pasteCount: number;
 }

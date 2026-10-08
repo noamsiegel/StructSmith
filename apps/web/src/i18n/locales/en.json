@@ -503,7 +503,13 @@
     "conflict": "Someone else changed this workspace — reloading the latest version.",
     "layoutSaved": "Layout saved"
   },
+  "elementTypes": {
+    "title": "Change type",
+    "changed": "Change element type",
+    "invalid": "This type is incompatible with the element's parent or contents."
+  },
   "sections": {
+    "fit": "Fit section to contents",
     "title": "Section",
     "newName": "New section",
     "add": "Add section",
@@ -824,5 +830,18 @@
     "outcome": "Outcome",
     "more": "More",
     "moreHint": "More elements"
+  },
+  "selectionColors": {
+    "toolbar": "Selection formatting",
+    "change": "Change color",
+    "color": "Color",
+    "mixed": "Mixed colors",
+    "palette": "Color palette",
+    "use": "Use {{color}}",
+    "custom": "Hex color",
+    "customPicker": "Choose custom color",
+    "apply": "Apply",
+    "reset": "Reset color",
+    "updated": "Update selection color"
   }
 }

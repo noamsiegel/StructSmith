@@ -14,6 +14,7 @@ describe("Zod view settings", () => {
       CreateViewSchema.parse({ name: "Context", kind: "systemContext", settings: {} }),
     ).toMatchObject({ settings: {} });
     expect(ViewSettingsSchema.parse({})).toEqual({
+      nodeColors: {},
       sectionFrames: {},
       showBoundaries: true,
       snapToGrid: false,
@@ -38,6 +39,7 @@ describe("Zod view settings", () => {
         name: "Context",
         kind: "systemContext",
         settings: {
+          nodeColors: {},
           sectionFrames: {},
           showBoundaries: false,
           snapToGrid: false,
@@ -56,6 +58,7 @@ describe("Zod view settings", () => {
         UpdateViewSchema.parse({ settings: { snapToGrid: true } }),
       );
       expect(services.views.get(view.id).settings).toEqual({
+        nodeColors: {},
         sectionFrames: {},
         showBoundaries: false,
         snapToGrid: true,

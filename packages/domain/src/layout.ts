@@ -5,6 +5,7 @@ import type {
   LayoutDirection,
   ViewSettings,
 } from "@structsmith/contracts";
+import { elementShape } from "./node-shapes";
 
 export const DEFAULT_NODE_WIDTH = 220;
 export const DEFAULT_NODE_HEIGHT = 96;
@@ -35,26 +36,45 @@ function wrappedLines(text: string, width: number, characterWidth: number): numb
  * can grow beyond this estimate for font differences; saved sizes stay intact.
  */
 export function estimateElementSize(
-  element: Pick<ArchitectureElement, "name" | "description" | "technology"> | undefined,
+  element:
+    | Pick<ArchitectureElement, "name" | "description" | "technology" | "kind" | "role">
+    | undefined,
   settings: Pick<ViewSettings, "showFullTitles" | "showDescriptions">,
   size: { width?: number | null; height?: number | null; locked?: boolean } = {},
 ): { width: number; height: number } {
-  const width = size.width ?? DEFAULT_NODE_WIDTH;
+  const shape = element ? elementShape(element) : "rectangle";
+  const diamond = shape === "diamond";
+  const width = diamond
+    ? Math.max(size.width ?? 0, DEFAULT_NODE_WIDTH * 2)
+    : (size.width ?? DEFAULT_NODE_WIDTH);
   const minimumHeight = size.height ?? DEFAULT_NODE_HEIGHT;
+  const contentWidth = diamond ? width / 2 : width;
+  const verticalInset = shape === "cylinder" ? 24 : shape === "terminal" ? 8 : 0;
   if (!element || (!settings.showFullTitles && !settings.showDescriptions)) {
-    return { width, height: minimumHeight };
+    return {
+      width,
+      height: diamond
+        ? Math.max(minimumHeight, DEFAULT_NODE_HEIGHT * 2)
+        : Math.max(minimumHeight, DEFAULT_NODE_HEIGHT + verticalInset),
+    };
   }
 
   // Horizontal padding, ownership stripe, icon and space for status indicators.
-  const titleWidth = width - 82 - (size.locked ? 20 : 0);
+  const titleWidth = contentWidth - 82 - (size.locked ? 20 : 0);
   const titleLines = settings.showFullTitles
     ? wrappedLines(element.name.replace(/\s+/g, " "), titleWidth, 7.5)
     : 1;
   const headerHeight = Math.max(24, titleLines * 16 + (element.technology ? 16 : 0));
   const description = settings.showDescriptions ? element.description?.trim() : null;
-  const descriptionHeight = description ? 8 + wrappedLines(description, width - 30, 6) * 16 : 0;
+  const descriptionHeight = description
+    ? 8 + wrappedLines(description, contentWidth - 30, 6) * 16
+    : 0;
   // Vertical padding/borders (22), footer gap (8) and ownership badge (20).
-  return { width, height: Math.max(minimumHeight, 50 + headerHeight + descriptionHeight) };
+  const contentHeight = 50 + headerHeight + descriptionHeight;
+  return {
+    width,
+    height: Math.max(minimumHeight, diamond ? contentHeight * 2 : contentHeight + verticalInset),
+  };
 }
 
 /** Must match the edge label chip in the web UI. */

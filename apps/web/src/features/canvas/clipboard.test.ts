@@ -46,6 +46,7 @@ const view: ViewDetail = {
   kind: "container",
   scopeElementId: null,
   settings: {
+    nodeColors: {},
     sectionFrames: {},
     showBoundaries: true,
     snapToGrid: false,
@@ -129,7 +130,7 @@ describe("diagram clipboard", () => {
     );
     if (!clipboard) throw new Error("Expected clipboard data");
 
-    const operations = buildPasteOperations(clipboard, "workspace", "view");
+    const operations = buildPasteOperations(clipboard, "workspace", view);
     expect(operations.map((operation) => operation.op)).toEqual([
       "createElement",
       "createElement",
@@ -167,7 +168,7 @@ describe("diagram clipboard", () => {
     );
     if (!clipboard) throw new Error("Expected clipboard data");
 
-    const operations = buildPasteOperations(clipboard, "workspace", "view");
+    const operations = buildPasteOperations(clipboard, "workspace", view);
     expect(operations.at(-1)).toMatchObject({
       op: "createRelationship",
       data: {

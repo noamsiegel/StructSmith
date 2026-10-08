@@ -1,3 +1,4 @@
+import { DEFAULT_NODE_WIDTH, elementShape } from "@structsmith/domain";
 import type { NodeProps } from "@xyflow/react";
 import { AlertTriangle, Lock } from "lucide-react";
 import { memo } from "react";
@@ -9,14 +10,25 @@ import { DetailViewAction } from "../navigation/DetailNavigation";
 import { InlineExpansionAction } from "../navigation/InlineExpansion";
 import { ConnectionHandles } from "./ConnectionHandles";
 import type { ElementNodeData } from "./graph";
+import { NodeSilhouette } from "./NodeSilhouette";
 import { statusColor } from "./statusOverlay";
 
 /** Custom node (spec §33) — icon, name, technology and a small kind/role badge. */
-function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNodeData }) {
+function ElementNodeComponent({ data, selected, width }: NodeProps & { data: ElementNodeData }) {
   const { t } = useTranslation();
   const { element, severity, locked, showFullTitles, showDescriptions, minimumHeight } = data;
   const Icon = iconFor(element.kind, element.role);
   const workflow = ["workflowGroup", "action", "decision", "outcome"].includes(element.kind);
+  const shape = elementShape(element);
+  const diamond = shape === "diamond";
+  const stroke =
+    data.color ??
+    (data.status
+      ? statusColor(data.status)
+      : `var(--node-${element.external ? "external" : "internal"}-border)`);
+  const fill = data.color
+    ? `color-mix(in srgb, ${data.color} 16%, var(--card))`
+    : `var(--node-${element.external ? "external" : "internal"})`;
 
   const badge = [t(`kinds.${element.kind}`), element.role ? t(`roles.${element.role}`) : null]
     .filter(Boolean)
@@ -26,29 +38,47 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
     <div
       style={{
         minHeight: minimumHeight,
-        borderColor: data.status ? statusColor(data.status) : undefined,
+        outline: "none",
       }}
-      className={cn(
-        "as-node group relative flex h-full w-full overflow-visible rounded-md border shadow-sm transition-[border-color,background-color,box-shadow]",
-        element.kind === "workflowGroup" && "border-double border-4",
-        element.kind === "decision" && "rounded-none border-2",
-        element.kind === "outcome" && "rounded-3xl border-2",
-        element.external
-          ? "border-dashed border-node-external-border bg-node-external shadow-ownership-external/5"
-          : "border-node-internal-border bg-node-internal shadow-ownership-internal/5",
-        selected && "shadow-md",
-      )}
+      className="as-node group relative flex h-full w-full overflow-visible"
     >
-      <span
-        aria-hidden="true"
-        className={cn(
-          "w-1 shrink-0 rounded-l-[5px]",
-          element.external ? "bg-ownership-external" : "bg-ownership-internal",
-        )}
+      <NodeSilhouette
+        shape={shape}
+        width={width ?? DEFAULT_NODE_WIDTH}
+        height={minimumHeight}
+        fill={fill}
+        stroke={stroke}
+        selected={selected}
+        external={element.external}
       />
-      <ConnectionHandles />
+      <ConnectionHandles diamond={diamond} />
 
-      <div className="flex min-w-0 flex-1 flex-col justify-between px-3 py-2.5">
+      <div
+        className="relative flex min-w-0 flex-1 flex-col justify-between"
+        style={{
+          paddingInline: diamond
+            ? "calc(25% + 12px)"
+            : shape === "terminal"
+              ? 20
+              : shape === "subprocess"
+                ? 16
+                : 12,
+          paddingTop: diamond
+            ? minimumHeight / 4
+            : shape === "cylinder"
+              ? 24
+              : shape === "terminal"
+                ? 14
+                : 10,
+          paddingBottom: diamond
+            ? minimumHeight / 4
+            : shape === "cylinder"
+              ? 16
+              : shape === "terminal"
+                ? 14
+                : 10,
+        }}
+      >
         <div className="flex items-start gap-2">
           <span
             className={cn(

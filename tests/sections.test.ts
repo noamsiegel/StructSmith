@@ -2,6 +2,7 @@ import { expect, test } from "bun:test";
 import { ViewSettingsSchema } from "@structsmith/contracts";
 import { computeCanvasBoundaries, type FlowNode } from "../apps/web/src/features/canvas/graph";
 import {
+  fitSectionFrame,
   sectionMembershipOperations,
   translateSectionFrames,
 } from "../apps/web/src/features/canvas/sections";
@@ -370,4 +371,31 @@ test("deleting a legacy section prunes only its view geometry and permits later 
   } finally {
     close();
   }
+});
+
+test("fit section wraps only its member bounds without moving objects or reserving an inside title band", () => {
+  const sources = [
+    { id: "first", x: 100, y: 50, width: 220, height: 96 },
+    { id: "second", x: 450, y: 210, width: 300, height: 180 },
+    { id: "neighbor", x: -500, y: -900, width: 5000, height: 9000 },
+  ];
+  const before = structuredClone(sources);
+  expect(fitSectionFrame(sources, new Set(["first", "second"]))).toEqual({
+    x: 72,
+    y: 22,
+    width: 706,
+    height: 396,
+  });
+  expect(sources).toEqual(before);
+  expect(fitSectionFrame(sources, new Set(["missing"]))).toBeNull();
+  expect(fitSectionFrame([], new Set())).toBeNull();
+  expect(
+    fitSectionFrame([{ id: "small", x: -200, y: -40, width: 1, height: 1 }], new Set(["small"])),
+  ).toEqual({ x: -228, y: -68, width: 120, height: 80 });
+  expect(
+    fitSectionFrame(
+      [{ id: "first", x: Number.NaN, y: 50, width: 220, height: 96 }],
+      new Set(["first"]),
+    ),
+  ).toBeNull();
 });

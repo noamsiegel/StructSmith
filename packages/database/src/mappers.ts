@@ -184,6 +184,7 @@ export function fromRelationship(
 }
 
 const defaultSettings: ViewSettings = {
+  nodeColors: {},
   commentPins: [],
   preferredDetailViews: {},
   scenarios: [],

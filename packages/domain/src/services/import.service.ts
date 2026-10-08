@@ -102,6 +102,14 @@ export class ImportService {
             scopeElementId: view.scopeElementId ? mapId(view.scopeElementId) : null,
             settings: {
               ...view.settings,
+              nodeColors: Object.fromEntries(
+                Object.entries(view.settings.nodeColors).map(([key, color]) => [
+                  key.startsWith("boundary:")
+                    ? `boundary:${mapId(key.slice("boundary:".length))}`
+                    : mapId(key),
+                  color,
+                ]),
+              ),
               sectionFrames: Object.fromEntries(
                 Object.entries(view.settings.sectionFrames).map(([key, frame]) => [
                   `boundary:${mapId(key.slice("boundary:".length))}`,

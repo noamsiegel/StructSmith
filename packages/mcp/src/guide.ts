@@ -108,6 +108,10 @@ export function modelingGuide() {
       boundaryBehavior:
         "Each view owns its boundary tree. The view boundaryLayer selects which layer is rendered and used by boundary-aware layout; showBoundaries controls rendering without deleting boundaries or memberships. Add elements to the view before assigning them to a boundary. Elements with no boundary in the active layer remain ordinary items in the view; 'Items in view' is a UI grouping, not a boundary object.",
       settings: {
+        nodeColors:
+          "Per-view #RRGGBB colors keyed by element ID or boundary:ID for group frames. Existing workspace elements and this view's boundaries are valid targets. Replace the map to remove a node color; connector colors use relationship presentation. Explicit colors override status outlines without changing tags.",
+        sectionFrames:
+          "View-owned custom Section rectangles keyed by boundary:ID, with finite x/y and width >= 120, height >= 80. Membership uses existing boundaries/custom parents. Move or fit frames with updateView, without moving semantic endpoints.",
         commentPins:
           "View-owned threads ({id,x,y,text,resolved,replies:[{id,text}]}); comment_list/comment_get read threads. comment_create/update/delete and comment_reply_create/update/delete share model_apply_operations revision guards and undo snapshots. Updating data.resolved resolves/reopens a thread. Deleting a parent removes all replies; deleting a reply leaves the parent. No per-person ownership, mentions or notifications.",
         showFullTitles: "Wrap full element titles instead of truncating them.",

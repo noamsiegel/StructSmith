@@ -113,7 +113,7 @@ test("relationship overrides survive DB, native JSON, paste and snapshots withou
       [source.id, target.id],
     );
     if (!clipboard) throw new Error("Missing clipboard");
-    const paste = buildPasteOperations(clipboard, workspace.id, otherView.id);
+    const paste = buildPasteOperations(clipboard, workspace.id, otherView);
     const layoutOp = paste.find((operation) => operation.op === "setViewRelationships");
     if (layoutOp?.op !== "setViewRelationships") throw new Error("Missing paste presentation");
     expect(layoutOp.relationships[0]).toMatchObject({

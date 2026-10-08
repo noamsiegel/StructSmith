@@ -48,6 +48,7 @@ import { validateViewScenarios } from "./scenarios";
 /* ------------------------------------------------------------------ */
 
 export const defaultViewSettings: ViewSettings = {
+  nodeColors: {},
   sectionFrames: {},
   preferredDetailViews: {},
   scenarios: [],
@@ -218,7 +219,7 @@ export function deleteElement(
   const removed = new Set(targets.map((target) => target.id));
   for (const view of repos.views.listByWorkspace(workspace.id))
     detachViewComments(repos, view.id, removed);
-  pruneSectionFrames(repos, workspace, removed);
+  pruneRemovedNodeSettings(repos, workspace, removed);
 
   for (const target of targets) {
     for (const relationshipId of repos.relationships.deleteByElement(target.id)) {
@@ -403,7 +404,7 @@ export function deleteBoundary(
       });
     }
   }
-  pruneSectionFrames(repos, workspace, new Set(targets.map((target) => target.id)));
+  pruneRemovedNodeSettings(repos, workspace, new Set(targets.map((target) => target.id)));
   for (const target of [...targets].reverse()) repos.boundaries.delete(target.id);
   return targets.map((target) => target.id);
 }
@@ -523,7 +524,7 @@ function prunePreferredDetailViews(repos: Repositories, workspace: Workspace): v
   }
 }
 
-function pruneSectionFrames(
+function pruneRemovedNodeSettings(
   repos: Repositories,
   workspace: Workspace,
   removed: ReadonlySet<string>,
@@ -534,10 +535,18 @@ function pruneSectionFrames(
         ([key]) => !removed.has(key.slice("boundary:".length)),
       ),
     );
-    if (Object.keys(sectionFrames).length !== Object.keys(view.settings.sectionFrames).length)
+    const nodeColors = Object.fromEntries(
+      Object.entries(view.settings.nodeColors).filter(
+        ([key]) => !removed.has(key.startsWith("boundary:") ? key.slice("boundary:".length) : key),
+      ),
+    );
+    if (
+      Object.keys(sectionFrames).length !== Object.keys(view.settings.sectionFrames).length ||
+      Object.keys(nodeColors).length !== Object.keys(view.settings.nodeColors).length
+    )
       repos.views.update({
         ...view,
-        settings: { ...view.settings, sectionFrames },
+        settings: { ...view.settings, sectionFrames, nodeColors },
         updatedAt: nowIso(),
       });
   }
@@ -550,6 +559,21 @@ function validateExplorationSettings(
   settings: UpdateViewInput["settings"],
   elementIds: readonly string[],
 ): void {
+  if (settings?.nodeColors) {
+    for (const key of Object.keys(settings.nodeColors)) {
+      const id = key.startsWith("boundary:") ? key.slice("boundary:".length) : key;
+      const element = repos.elements.findById(id);
+      const boundary = key.startsWith("boundary:") ? repos.boundaries.findById(id) : undefined;
+      if (
+        element?.workspaceId === workspace.id ||
+        (boundary?.workspaceId === workspace.id && boundary.viewId === view.id)
+      )
+        continue;
+      throw ruleViolation(
+        "Colors must refer to an element in this workspace or a boundary in this view.",
+      );
+    }
+  }
   if (settings?.sectionFrames) {
     for (const key of Object.keys(settings.sectionFrames)) {
       const id = key.slice("boundary:".length);

@@ -8,6 +8,7 @@ export * from "./export";
 export * from "./ids";
 export * from "./implied";
 export * from "./layout";
+export * from "./node-shapes";
 export * from "./operations";
 export * from "./ports";
 export * from "./presets";

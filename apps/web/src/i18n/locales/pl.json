@@ -513,6 +513,7 @@
     "conflict": "Ktoś inny zmienił tę przestrzeń — wczytuję najnowszą wersję.",
     "layoutSaved": "Układ zapisany"
   },
+  "sections": { "fit": "Dopasuj sekcję do zawartości" },
   "boundaries": {
     "title": "Strefy",
     "moveGroupHint": "Przeciągnij, aby przenieść grupę wraz z jej elementami",
@@ -826,5 +827,18 @@
     "outcome": "Outcome",
     "more": "More",
     "moreHint": "More elements"
+  },
+  "selectionColors": {
+    "toolbar": "Formatowanie zaznaczenia",
+    "change": "Zmień kolor",
+    "color": "Kolor",
+    "mixed": "Różne kolory",
+    "palette": "Paleta kolorów",
+    "use": "Użyj {{color}}",
+    "custom": "Kolor szesnastkowy",
+    "customPicker": "Wybierz kolor niestandardowy",
+    "apply": "Zastosuj",
+    "reset": "Przywróć kolor",
+    "updated": "Zmień kolor zaznaczenia"
   }
 }

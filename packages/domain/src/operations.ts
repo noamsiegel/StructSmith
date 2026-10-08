@@ -168,6 +168,21 @@ export function applyOperations(
         const view = engine.updateView(repos, workspace, refs.resolve(operation.viewId), {
           ...operation.data,
           scopeElementId: refs.resolve(operation.data.scopeElementId),
+          settings: operation.data.settings
+            ? {
+                ...operation.data.settings,
+                ...(operation.data.settings.nodeColors
+                  ? {
+                      nodeColors: Object.fromEntries(
+                        Object.entries(operation.data.settings.nodeColors).map(([id, color]) => [
+                          refs.resolve(id),
+                          color,
+                        ]),
+                      ),
+                    }
+                  : {}),
+              }
+            : undefined,
         });
         applied.push({ op: operation.op, id: view.id });
         break;

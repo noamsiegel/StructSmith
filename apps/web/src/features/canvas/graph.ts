@@ -24,12 +24,14 @@ import {
   statusFromTags,
 } from "./statusOverlay";
 
+export const CANVAS_FIT_PADDING = { top: "48px", bottom: "96px", x: 0.2 } as const;
 export const NODE_WIDTH = DEFAULT_NODE_WIDTH;
 export const NODE_HEIGHT = DEFAULT_NODE_HEIGHT;
 export const BOUNDARY_PADDING = 28;
 export const BOUNDARY_HEADER = 36;
 
 export interface ElementNodeData extends Record<string, unknown> {
+  color?: string;
   element: ArchitectureElement;
   severity: "high" | "critical" | null;
   locked: boolean;
@@ -40,6 +42,7 @@ export interface ElementNodeData extends Record<string, unknown> {
 }
 
 export interface BoundaryNodeData extends Record<string, unknown> {
+  color?: string;
   name: string;
   layer?: ArchitectureBoundary["layer"];
   kind?: ArchitectureElement["kind"];
@@ -48,6 +51,7 @@ export interface BoundaryNodeData extends Record<string, unknown> {
   elementId?: string;
   section?: boolean;
   onRename?: (name: string) => void;
+  onFit?: () => void;
   onResize?: (frame: SectionFrame) => void;
   onResizePreview?: (frame: SectionFrame) => void;
 }

@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Canvas } from "@/features/canvas/Canvas";
+import { CANVAS_FIT_PADDING } from "@/features/canvas/graph";
 import type { StatusOverlay } from "@/features/canvas/statusOverlay";
 import { useChatStore } from "@/features/chat/store";
 import { CommandPalette } from "@/features/command/CommandPalette";
@@ -302,7 +303,7 @@ function StudioContent({
     );
   };
 
-  const fitView = (): void => void flow.fitView({ duration: 300, padding: 0.2 });
+  const fitView = (): void => void flow.fitView({ duration: 300, padding: CANVAS_FIT_PADDING });
 
   /* ------------------------------- shortcuts ------------------------------- */
 

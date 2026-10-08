@@ -1,5 +1,5 @@
 import { type NodeProps, NodeResizer } from "@xyflow/react";
-import { GripVertical } from "lucide-react";
+import { GripVertical, Scan } from "lucide-react";
 import { memo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -27,14 +27,27 @@ function BoundaryNodeComponent({
     setEditing(false);
   };
   const accent =
-    data.classification === "public"
+    data.color ??
+    (data.classification === "public"
       ? "var(--ownership-external)"
       : data.classification === "private"
         ? "var(--ownership-internal)"
-        : "var(--boundary)";
+        : "var(--boundary)");
 
   return (
     <div
+      onDoubleClick={(event) => {
+        if (!data.section) return;
+        event.stopPropagation();
+        if (
+          (event.target as HTMLElement).closest(
+            "button, input, [role='button'], .react-flow__handle",
+          )
+        )
+          return;
+        event.preventDefault();
+        data.onFit?.();
+      }}
       className={cn(
         "as-node h-full w-full rounded-lg",
         selected && "ring-2 ring-primary ring-offset-2 ring-offset-canvas",
@@ -132,6 +145,23 @@ function BoundaryNodeComponent({
                 ? t(`kinds.${data.kind}`)
                 : t(`boundaries.layer.${data.layer}`)}
         </span>
+        {data.section && selected && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="iconSm"
+            className="nodrag nopan shrink-0"
+            title={t("sections.fit")}
+            aria-label={t("sections.fit")}
+            disabled={!data.onFit}
+            onClick={(event) => {
+              event.stopPropagation();
+              data.onFit?.();
+            }}
+          >
+            <Scan className="h-3.5 w-3.5" aria-hidden="true" />
+          </Button>
+        )}
         {data.elementId && <InlineExpansionAction elementId={data.elementId} compact />}
         {data.elementId && <DetailViewAction elementId={data.elementId} compact />}
       </div>
