@@ -201,12 +201,7 @@ export function RelationshipPresentationEditor({
         <NumberField
           label={t("relationshipPresentation.labelOffsetX")}
           value={offset.x}
-          onChange={(x) => patch({ labelOffset: { ...offset, x } })}
-        />
-        <NumberField
-          label={t("relationshipPresentation.labelOffsetY")}
-          value={offset.y}
-          onChange={(y) => patch({ labelOffset: { ...offset, y } })}
+          onChange={(x) => patch({ labelOffset: { x, y: 0 } })}
         />
       </div>
       <Button

@@ -1,7 +1,7 @@
-import type { ViewComment, ViewDetail } from "@structsmith/contracts";
+import type { ArchitectureOperationInput, ViewDetail } from "@structsmith/contracts";
 import { Panel, useReactFlow, useViewport, ViewportPortal } from "@xyflow/react";
-import { MessageSquare } from "lucide-react";
-import { type RefObject, useEffect, useRef, useState } from "react";
+import { Check, Ellipsis, MessageSquare, Pencil, RotateCcw, Trash2, X } from "lucide-react";
+import { type RefObject, useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import {
@@ -12,7 +12,18 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Popover, PopoverAnchor, PopoverContent } from "@/components/ui/popover";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip } from "@/components/ui/tooltip";
 import { useApplyOperations, useWorkspace } from "@/hooks/useApi";
 
 export function isCommentShortcut(
@@ -51,16 +62,37 @@ export function CanvasComments({
     revision: number;
     text: string;
   } | null>(null);
-  const [opened, setOpened] = useState<ViewComment | null>(null);
+  const [openedId, setOpenedId] = useState<string | null>(null);
+  const opened = view.settings.commentPins.find((pin) => pin.id === openedId);
+  const [showResolved, setShowResolved] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState<number | null>(null);
+  const [messageDraft, setMessageDraft] = useState<{
+    kind: "comment" | "reply" | "newReply";
+    replyId?: string;
+    text: string;
+    revision: number;
+  } | null>(null);
   const postButton = useRef<HTMLButtonElement>(null);
+  const draftInput = useRef<HTMLTextAreaElement>(null);
+  const threadTitleId = useId();
+  const threadDescriptionId = useId();
+  const anchor = flow.flowToScreenPosition(draft ?? opened ?? { x: 0, y: 0 });
+  const dirty = Boolean(draft?.text.trim() || messageDraft?.text.trim());
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
       if (event.key === "Escape") {
         setMode(false);
+        if (!command.isPending && confirmDelete !== null) {
+          setConfirmDelete(null);
+          return;
+        }
         if (!command.isPending) {
           setDraft(null);
-          setOpened(null);
+          setOpenedId(null);
+          setMessageDraft(null);
+          setConfirmDelete(null);
         }
         return;
       }
@@ -83,14 +115,23 @@ export function CanvasComments({
         }
         return;
       }
-      if (isCommentShortcut(event, editing)) {
+      if (isCommentShortcut(event, editing) && !draft && !messageDraft?.text.trim()) {
         event.preventDefault();
         setMode(true);
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [command.isPending, mode, workspace.data, canvasRef, flow]);
+  }, [
+    command.isPending,
+    confirmDelete,
+    draft,
+    messageDraft,
+    mode,
+    workspace.data,
+    canvasRef,
+    flow,
+  ]);
 
   useEffect(() => {
     if (!mode || !workspace.data) return;
@@ -106,7 +147,9 @@ export function CanvasComments({
       const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
       setDraft({ ...point, revision, text: "" });
       setMode(false);
-      setOpened(null);
+      setOpenedId(null);
+      setMessageDraft(null);
+      setConfirmDelete(null);
     };
     // Capture before React Flow starts a card drag while placing a comment.
     canvas?.addEventListener("pointerdown", capture, true);
@@ -120,71 +163,449 @@ export function CanvasComments({
   const close = () => {
     if (command.isPending) return;
     setDraft(null);
-    setOpened(null);
+    setOpenedId(null);
+    setMessageDraft(null);
+    setConfirmDelete(null);
   };
-  const post = async () => {
-    if (!draft?.text.trim() || command.isPending) return;
+  const apply = async (operation: ArchitectureOperationInput, revision: number, label: string) => {
+    if (command.isPending) return false;
     try {
-      await command.mutateAsync({
-        expectedRevision: draft.revision,
-        label: t("comments.added"),
-        operations: [
-          {
-            op: "addViewComment",
-            viewId: view.id,
-            data: { x: draft.x, y: draft.y, text: draft.text.trim() },
-          },
-        ],
-      });
-      setDraft(null);
+      await command.mutateAsync({ expectedRevision: revision, label, operations: [operation] });
+      return true;
     } catch {
-      // Keep the draft available after the command's error notification.
+      // A changed thread needs a fresh deletion confirmation; keep text drafts.
+      setConfirmDelete(null);
       const latest = await workspace.refetch();
-      if (latest.data)
-        setDraft((current) => current && { ...current, revision: latest.data.revision });
+      if (latest.data) {
+        const revision = latest.data.revision;
+        setDraft((current) => current && { ...current, revision });
+        setMessageDraft((current) => current && { ...current, revision });
+      }
+      return false;
     }
   };
+  const post = async () => {
+    if (!draft?.text.trim()) return;
+    if (
+      await apply(
+        {
+          op: "addViewComment",
+          viewId: view.id,
+          data: { x: draft.x, y: draft.y, text: draft.text.trim() },
+        },
+        draft.revision,
+        t("comments.added"),
+      )
+    )
+      setDraft(null);
+  };
+  const saveMessage = async () => {
+    if (!opened || !messageDraft?.text.trim()) return;
+    const { kind, replyId, text, revision } = messageDraft;
+    let operation: ArchitectureOperationInput;
+    if (kind === "comment")
+      operation = {
+        op: "updateViewComment",
+        viewId: view.id,
+        commentId: opened.id,
+        data: { text: text.trim() },
+      };
+    else if (kind === "reply" && replyId)
+      operation = {
+        op: "updateViewCommentReply",
+        viewId: view.id,
+        commentId: opened.id,
+        replyId,
+        data: { text: text.trim() },
+      };
+    else
+      operation = {
+        op: "addViewCommentReply",
+        viewId: view.id,
+        commentId: opened.id,
+        data: { text: text.trim() },
+      };
+    if (
+      await apply(
+        operation,
+        revision,
+        t(kind === "newReply" ? "comments.replied" : "comments.updated"),
+      )
+    )
+      setMessageDraft(null);
+  };
+  const startMessage = (kind: "comment" | "reply" | "newReply", text = "", replyId?: string) => {
+    if (!workspace.data) return;
+    setMessageDraft({ kind, text, replyId, revision: workspace.data.revision });
+  };
+  const deleteThread = async () => {
+    if (!opened || confirmDelete === null) return;
+    if (
+      await apply(
+        { op: "deleteViewComment", viewId: view.id, commentId: opened.id },
+        confirmDelete,
+        t("comments.deleted"),
+      )
+    )
+      close();
+  };
+
+  const messageEditor = () =>
+    messageDraft && (
+      <div className="space-y-2">
+        <Textarea
+          autoFocus
+          aria-label={t(
+            messageDraft.kind === "comment" ? "comments.textLabel" : "comments.editReplyText",
+          )}
+          className="min-h-20 text-sm"
+          maxLength={4000}
+          value={messageDraft.text}
+          disabled={command.isPending}
+          onChange={(event) => setMessageDraft({ ...messageDraft, text: event.target.value })}
+        />
+        <div className="flex justify-end gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={command.isPending}
+            onClick={() => setMessageDraft(null)}
+          >
+            {t("common.cancel")}
+          </Button>
+          <Button
+            size="sm"
+            disabled={!messageDraft.text.trim() || command.isPending}
+            onClick={() => void saveMessage()}
+          >
+            {t("comments.save")}
+          </Button>
+        </div>
+      </div>
+    );
+  const messageMenu = (reply?: { id: string; text: string }, number?: number) => (
+    <DropdownMenu modal={false}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          className="shrink-0 text-muted-foreground"
+          disabled={command.isPending || Boolean(messageDraft)}
+          aria-label={t(reply ? "comments.replyActions" : "comments.threadActions", { number })}
+        >
+          <Ellipsis className="h-4 w-4" aria-hidden="true" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent data-comment-control align="end">
+        <DropdownMenuItem
+          onSelect={() =>
+            startMessage(reply ? "reply" : "comment", reply?.text ?? opened?.text ?? "", reply?.id)
+          }
+        >
+          <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("comments.edit")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          destructive
+          onSelect={() => {
+            if (!opened || !workspace.data) return;
+            if (!reply) setConfirmDelete(workspace.data.revision);
+            else
+              void apply(
+                {
+                  op: "deleteViewCommentReply",
+                  viewId: view.id,
+                  commentId: opened.id,
+                  replyId: reply.id,
+                },
+                workspace.data.revision,
+                t("comments.replyDeleted"),
+              );
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+          {t(reply ? "comments.delete" : "comments.deleteThread")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
 
   return (
     <>
-      <Panel position="bottom-center" data-comment-control>
+      <Panel position="bottom-center" data-comment-control className="flex items-center gap-3">
         <Button
           ref={postButton}
           variant={mode ? "default" : "outline"}
           onClick={() => setMode((value) => !value)}
           aria-pressed={mode}
-          disabled={!workspace.data}
+          disabled={!workspace.data || dirty || command.isPending}
         >
           <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
           {t(mode ? "comments.placeHint" : "comments.add")}
         </Button>
+        <Label className="flex items-center gap-2 rounded bg-background/90 p-2 text-xs">
+          <Switch
+            checked={showResolved}
+            onCheckedChange={setShowResolved}
+            aria-label={t("comments.showResolved")}
+          />
+          {t("comments.showResolved")}
+        </Label>
       </Panel>
       <ViewportPortal>
-        {view.settings.commentPins.map((pin, index) => (
-          <Button
-            key={pin.id}
-            data-comment-control
-            size="icon"
-            className="nodrag nopan pointer-events-auto absolute z-50 rounded-full shadow-md"
-            style={{
-              left: pin.x,
-              top: pin.y,
-              transform: `translate(-50%, -50%) scale(${1 / zoom})`,
-            }}
-            aria-label={t("comments.openPin", { number: index + 1 })}
-            onClick={() => {
-              setMode(false);
-              setOpened(pin);
-            }}
-          >
-            {index + 1}
-          </Button>
-        ))}
+        {view.settings.commentPins.map((pin, index) =>
+          !pin.resolved || showResolved ? (
+            <Button
+              key={pin.id}
+              data-comment-control
+              size="icon"
+              variant={pin.resolved ? "outline" : "default"}
+              disabled={command.isPending || dirty}
+              className="nodrag nopan pointer-events-auto absolute z-50 rounded-full shadow-md"
+              style={{
+                left: pin.x,
+                top: pin.y,
+                transform: `translate(-50%, -50%) scale(${1 / zoom})`,
+              }}
+              aria-label={t(pin.resolved ? "comments.openResolvedPin" : "comments.openPin", {
+                number: index + 1,
+              })}
+              aria-pressed={openedId === pin.id}
+              onClick={() => {
+                setMode(false);
+                setOpenedId(pin.id);
+                setMessageDraft(null);
+                setConfirmDelete(null);
+              }}
+            >
+              {index + 1}
+            </Button>
+          ) : null,
+        )}
       </ViewportPortal>
-      <Dialog
+      <Popover
+        modal={false}
         open={Boolean(draft || opened)}
         onOpenChange={(open) => {
           if (!open) close();
+        }}
+      >
+        <PopoverAnchor asChild>
+          <span
+            className="pointer-events-none fixed h-8 w-8"
+            aria-hidden="true"
+            style={{ left: anchor.x - 16, top: anchor.y - 16 }}
+          />
+        </PopoverAnchor>
+        <PopoverContent
+          data-comment-control
+          side="right"
+          align="start"
+          collisionPadding={12}
+          className="flex max-h-[min(520px,var(--radix-popover-content-available-height))] w-[320px] max-w-[calc(100vw-24px)] flex-col overflow-hidden"
+          aria-labelledby={threadTitleId}
+          aria-describedby={threadDescriptionId}
+          onOpenAutoFocus={(event) => {
+            if (draft) {
+              event.preventDefault();
+              draftInput.current?.focus();
+            }
+          }}
+          onEscapeKeyDown={(event) => {
+            if (command.isPending || confirmDelete !== null) event.preventDefault();
+          }}
+          onInteractOutside={(event) => {
+            const target = event.target instanceof Element ? event.target : null;
+            if (
+              dirty ||
+              command.isPending ||
+              confirmDelete !== null ||
+              target?.closest("[data-comment-control]")
+            )
+              event.preventDefault();
+          }}
+          onCloseAutoFocus={(event) => {
+            event.preventDefault();
+            postButton.current?.focus();
+          }}
+        >
+          <div className="flex items-center gap-2 border-b border-border px-3 py-2">
+            <MessageSquare className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+            <h2 id={threadTitleId} className="flex-1 text-sm font-semibold">
+              {t(
+                draft
+                  ? "comments.addTitle"
+                  : opened?.resolved
+                    ? "comments.resolved"
+                    : "comments.title",
+              )}
+            </h2>
+            {opened && (
+              <Tooltip label={t(opened.resolved ? "comments.reopen" : "comments.resolve")}>
+                <Button
+                  variant="ghost"
+                  size="iconSm"
+                  disabled={command.isPending || Boolean(messageDraft)}
+                  aria-label={t(opened.resolved ? "comments.reopen" : "comments.resolve")}
+                  onClick={() => {
+                    if (!workspace.data) return;
+                    void apply(
+                      {
+                        op: "updateViewComment",
+                        viewId: view.id,
+                        commentId: opened.id,
+                        data: { resolved: !opened.resolved },
+                      },
+                      workspace.data.revision,
+                      t(opened.resolved ? "comments.reopened" : "comments.markedResolved"),
+                    );
+                  }}
+                >
+                  {opened.resolved ? (
+                    <RotateCcw className="h-4 w-4" aria-hidden="true" />
+                  ) : (
+                    <Check className="h-4 w-4" aria-hidden="true" />
+                  )}
+                </Button>
+              </Tooltip>
+            )}
+            <Tooltip label={t("common.close")}>
+              <Button
+                variant="ghost"
+                size="iconSm"
+                aria-label={t("common.close")}
+                onClick={close}
+                disabled={command.isPending}
+              >
+                <X className="h-4 w-4" aria-hidden="true" />
+              </Button>
+            </Tooltip>
+          </div>
+          <p id={threadDescriptionId} className="sr-only">
+            {t("comments.viewOwned")}
+          </p>
+          {draft ? (
+            <div className="space-y-3 p-3">
+              <Textarea
+                ref={draftInput}
+                aria-label={t("comments.textLabel")}
+                placeholder={t("comments.commentPlaceholder")}
+                className="min-h-24 text-sm"
+                maxLength={4000}
+                value={draft.text}
+                disabled={command.isPending}
+                onChange={(event) => setDraft({ ...draft, text: event.target.value })}
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="ghost" size="sm" onClick={close} disabled={command.isPending}>
+                  {t("common.cancel")}
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={() => void post()}
+                  disabled={!draft.text.trim() || command.isPending}
+                >
+                  {t("comments.post")}
+                </Button>
+              </div>
+            </div>
+          ) : opened ? (
+            <>
+              <div className="min-h-0 overflow-y-auto">
+                <div className="p-3">
+                  {messageDraft?.kind === "comment" ? (
+                    messageEditor()
+                  ) : (
+                    <div className="flex items-start gap-2">
+                      <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
+                        {opened.text}
+                      </p>
+                      {messageMenu()}
+                    </div>
+                  )}
+                </div>
+                {opened.replies.length > 0 && (
+                  <ol className="border-t border-border" aria-label={t("comments.replies")}>
+                    {opened.replies.map((reply, index) => (
+                      <li
+                        key={reply.id}
+                        className="border-b border-border px-3 py-3 last:border-b-0"
+                      >
+                        {messageDraft?.kind === "reply" && messageDraft.replyId === reply.id ? (
+                          messageEditor()
+                        ) : (
+                          <div className="flex items-start gap-2">
+                            <p className="min-w-0 flex-1 whitespace-pre-wrap break-words text-sm leading-relaxed">
+                              {reply.text}
+                            </p>
+                            {messageMenu(reply, index + 1)}
+                          </div>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                )}
+              </div>
+              <div className="shrink-0 space-y-2 border-t border-border bg-muted/30 p-3">
+                <Textarea
+                  aria-label={t("comments.replyText")}
+                  placeholder={t("comments.replyPlaceholder")}
+                  className="min-h-16 text-sm"
+                  maxLength={4000}
+                  value={messageDraft?.kind === "newReply" ? messageDraft.text : ""}
+                  disabled={
+                    command.isPending || Boolean(messageDraft && messageDraft.kind !== "newReply")
+                  }
+                  onChange={(event) => {
+                    if (!workspace.data) return;
+                    const text = event.target.value;
+                    setMessageDraft(
+                      text
+                        ? {
+                            kind: "newReply",
+                            text,
+                            revision:
+                              messageDraft?.kind === "newReply"
+                                ? messageDraft.revision
+                                : workspace.data.revision,
+                          }
+                        : null,
+                    );
+                  }}
+                />
+                <div className="flex justify-end gap-2">
+                  {messageDraft?.kind === "newReply" && messageDraft.text && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={command.isPending}
+                      onClick={() => setMessageDraft(null)}
+                    >
+                      {t("common.cancel")}
+                    </Button>
+                  )}
+                  <Button
+                    size="sm"
+                    disabled={
+                      command.isPending ||
+                      messageDraft?.kind !== "newReply" ||
+                      !messageDraft.text.trim()
+                    }
+                    onClick={() => void saveMessage()}
+                  >
+                    {t("comments.postReply")}
+                  </Button>
+                </div>
+              </div>
+            </>
+          ) : null}
+        </PopoverContent>
+      </Popover>
+      <Dialog
+        open={confirmDelete !== null && Boolean(opened)}
+        onOpenChange={(open) => {
+          if (!open && !command.isPending) setConfirmDelete(null);
         }}
       >
         <DialogContent
@@ -192,39 +613,28 @@ export function CanvasComments({
           onEscapeKeyDown={(event) => {
             if (command.isPending) event.preventDefault();
           }}
-          onCloseAutoFocus={(event) => {
-            event.preventDefault();
-            postButton.current?.focus();
-          }}
         >
           <DialogHeader>
-            <DialogTitle>{t(draft ? "comments.addTitle" : "comments.title")}</DialogTitle>
-            <DialogDescription>{t("comments.viewOwned")}</DialogDescription>
+            <DialogTitle>{t("comments.deleteTitle")}</DialogTitle>
+            <DialogDescription>
+              {t("comments.deleteWarning", { count: opened?.replies.length ?? 0 })}
+            </DialogDescription>
           </DialogHeader>
-          {draft ? (
-            <Textarea
-              autoFocus
-              aria-label={t("comments.textLabel")}
-              maxLength={4000}
-              value={draft.text}
-              disabled={command.isPending}
-              onChange={(event) => setDraft({ ...draft, text: event.target.value })}
-            />
-          ) : (
-            <p className="whitespace-pre-wrap break-words text-sm">{opened?.text}</p>
-          )}
           <DialogFooter>
-            <Button variant="outline" onClick={close} disabled={command.isPending}>
-              {t(draft ? "common.cancel" : "common.close")}
+            <Button
+              variant="outline"
+              disabled={command.isPending}
+              onClick={() => setConfirmDelete(null)}
+            >
+              {t("common.cancel")}
             </Button>
-            {draft && (
-              <Button
-                onClick={() => void post()}
-                disabled={!draft.text.trim() || command.isPending}
-              >
-                {t("comments.post")}
-              </Button>
-            )}
+            <Button
+              variant="destructive"
+              disabled={command.isPending}
+              onClick={() => void deleteThread()}
+            >
+              {t("comments.deleteThread")}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

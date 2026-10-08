@@ -33,7 +33,6 @@ test("sidebar and dialog view forms have unique field IDs and accessible control
     for (const key of [
       "inspector.showBoundaries",
       "inspector.snapToGrid",
-      "inspector.showRelationshipLabels",
       "inspector.layoutDirection",
       "inspector.layoutAlgorithm",
       "boundaries.layerLabel",

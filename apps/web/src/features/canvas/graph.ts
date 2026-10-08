@@ -58,6 +58,8 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
   showLabel: boolean;
   placement?: ViewRelationship;
   status: ImplementationStatus | null;
+  relationshipIds?: string[];
+  onControlPointsChange?: (points: ControlPoint[]) => Promise<void>;
   onLabelOffsetChange?: (relationshipId: string, offset: ControlPoint) => Promise<void>;
 }
 
@@ -167,10 +169,19 @@ export function buildGraph({
   ).map((edge) => {
     const first = edge.relationships[0] as ArchitectureRelationship;
     const label = edgeLabel(edge);
-    // An implied edge that stands for exactly one relationship is still
-    // unambiguous, so it stays selectable and editable; only a merged edge
-    // (several relationships behind one line) is not.
+    // Merged lines share visual routes; endpoint and semantic edits require one relationship.
     const unambiguous = edge.relationships.length === 1;
+    const firstPlacement = relationshipPlacements.get(first.id);
+    const commonRoute = edge.relationships.every(
+      (item) =>
+        JSON.stringify(relationshipPlacements.get(item.id)?.controlPoints ?? []) ===
+        JSON.stringify(firstPlacement?.controlPoints ?? []),
+    );
+    const placement = unambiguous
+      ? firstPlacement
+      : firstPlacement
+        ? { ...firstPlacement, controlPoints: commonRoute ? firstPlacement.controlPoints : [] }
+        : undefined;
     const statuses = new Set(edge.relationships.map((item) => relationshipStatus(item, byId)));
     const status =
       statusOverlay === "off" ? null : statuses.size > 1 ? "conflict" : ([...statuses][0] ?? null);
@@ -187,13 +198,14 @@ export function buildGraph({
         relationshipPlacements.get(first.id)?.presentation?.targetSide,
         view.settings.autoLayoutDirection,
       ),
-      selectable: unambiguous,
+      selectable: true,
       deletable: unambiguous,
       reconnectable: unambiguous,
       zIndex: 10,
       data: {
         relationship: first,
-        placement: unambiguous ? relationshipPlacements.get(first.id) : undefined,
+        placement,
+        relationshipIds: edge.relationships.map((item) => item.id),
         implied: edge.implied,
         label,
         count: edge.relationships.length,

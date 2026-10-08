@@ -8,13 +8,20 @@ import {
   getStraightPath,
   useReactFlow,
 } from "@xyflow/react";
-import { memo, useId, useLayoutEffect, useRef, useState } from "react";
+import { memo, type PointerEvent, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/store/editor";
 import type { RelationshipEdgeData } from "./graph";
-import { manualRelationshipPath, relationshipDash } from "./relationshipGeometry";
+import {
+  closestRelationshipSegment,
+  manualRelationshipPath,
+  moveRelationshipSegment,
+  orthogonalRelationshipBends,
+  relationshipDash,
+  slidingRelationshipLabel,
+} from "./relationshipGeometry";
 import { statusColor, statusStroke } from "./statusOverlay";
 
 export type RelationshipFocus = "normal" | "connected" | "dimmed";
@@ -62,7 +69,18 @@ function RelationshipEdgeComponent({
   const sourceArrow = presentation?.sourceArrow ?? "none";
   const targetArrow = presentation?.targetArrow ?? "arrowclosed";
   const pathOptions = { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
-  const bends = data?.placement?.controlPoints ?? [];
+  const savedBends = data?.placement?.controlPoints ?? [];
+  const [routePreview, setRoutePreview] = useState<ControlPoint[] | null>(null);
+  const [routeSaving, setRouteSaving] = useState(false);
+  const routeDrag = useRef<{
+    points: ControlPoint[];
+    index: number;
+    start: ControlPoint;
+    delta: ControlPoint;
+    current: ControlPoint[];
+    keyboard: boolean;
+  } | null>(null);
+  const bends = routePreview ?? savedBends;
   const labelPosition = data?.placement?.labelPosition ?? 0.5;
   const [path, defaultX, defaultY] =
     bends.length > 0
@@ -77,14 +95,89 @@ function RelationshipEdgeComponent({
         : data?.routing === "curved"
           ? getBezierPath(pathOptions)
           : getSmoothStepPath({ ...pathOptions, borderRadius: 8, offset: 24 });
+  const sourcePoint = { x: sourceX, y: sourceY };
+  const targetPoint = { x: targetX, y: targetY };
+  const routePoints = [
+    sourcePoint,
+    ...(bends.length > 0
+      ? bends
+      : data?.routing === "orthogonal"
+        ? orthogonalRelationshipBends(sourcePoint, targetPoint, sourcePosition, targetPosition)
+        : []),
+    targetPoint,
+  ];
+  const routeEditable = Boolean(data?.onControlPointsChange);
+  const cancelRoute = () => {
+    routeDrag.current = null;
+    setRoutePreview(null);
+  };
+  const finishRoute = () => {
+    const gesture = routeDrag.current;
+    if (!gesture) return;
+    routeDrag.current = null;
+    if (JSON.stringify(gesture.current) === JSON.stringify(gesture.points.slice(1, -1))) {
+      setRoutePreview(null);
+      return;
+    }
+    setRouteSaving(true);
+    void data
+      ?.onControlPointsChange?.(gesture.current)
+      .catch(() => undefined)
+      .finally(() => {
+        setRoutePreview(null);
+        setRouteSaving(false);
+      });
+  };
+  const beginRoute = (event: PointerEvent<HTMLElement | SVGElement>, index: number) => {
+    if (!routeEditable || routeSaving || event.button !== 0) return;
+    event.preventDefault();
+    event.stopPropagation();
+    document.getElementById(`${markerId}-segment-${index}`)?.focus();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    routeDrag.current = {
+      points: routePoints,
+      index,
+      start: flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
+      delta: { x: 0, y: 0 },
+      current: routePoints.slice(1, -1),
+      keyboard: false,
+    };
+  };
+  const moveRoute = (event: PointerEvent<HTMLElement | SVGElement>) => {
+    const gesture = routeDrag.current;
+    if (!gesture || gesture.keyboard) return;
+    const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    gesture.delta = { x: point.x - gesture.start.x, y: point.y - gesture.start.y };
+    gesture.current = moveRelationshipSegment(gesture.points, gesture.index, gesture.delta);
+    setRoutePreview(gesture.current);
+  };
+  const endRoute = (event: PointerEvent<HTMLElement | SVGElement>) => {
+    if (!routeDrag.current || routeDrag.current.keyboard) return;
+    event.stopPropagation();
+    finishRoute();
+    if (event.currentTarget.hasPointerCapture(event.pointerId))
+      event.currentTarget.releasePointerCapture(event.pointerId);
+  };
   const geometryRef = useRef<SVGPathElement>(null);
   const [pathLabel, setPathLabel] = useState<ControlPoint | null>(null);
+  const [curveHandle, setCurveHandle] = useState<ControlPoint | null>(null);
+  const [curvePoints, setCurvePoints] = useState<ControlPoint[]>([]);
   useLayoutEffect(() => {
     const geometry = geometryRef.current;
     if (!path || !geometry || typeof geometry.getTotalLength !== "function") return;
     const point = geometry.getPointAtLength(geometry.getTotalLength() * labelPosition);
     setPathLabel({ x: point.x, y: point.y });
-  }, [path, labelPosition]);
+    if (data?.routing === "curved" && savedBends.length === 0) {
+      const handle = geometry.getPointAtLength(geometry.getTotalLength() * 0.25);
+      setCurveHandle({ x: handle.x, y: handle.y });
+      setCurvePoints(
+        Array.from({ length: 65 }, (_, index) => {
+          const sample = geometry.getPointAtLength((geometry.getTotalLength() * index) / 64);
+          return { x: sample.x, y: sample.y };
+        }),
+      );
+    }
+  }, [path, labelPosition, data?.routing, savedBends.length]);
   const savedOffset = presentation?.labelOffset ?? { x: 0, y: 0 };
   const [dragOffset, setDragOffset] = useState<ControlPoint | null>(null);
   const pendingOffset = useRef<ControlPoint | null>(null);
@@ -92,8 +185,21 @@ function RelationshipEdgeComponent({
     null,
   );
   const offset = dragOffset ?? savedOffset;
-  const labelX = (pathLabel?.x ?? defaultX) + offset.x;
-  const labelY = (pathLabel?.y ?? defaultY) + offset.y;
+  const curved = data?.routing === "curved" && bends.length === 0;
+  const [, polylineX, polylineY] = manualRelationshipPath(
+    sourcePoint,
+    targetPoint,
+    routePoints.slice(1, -1),
+    labelPosition,
+  );
+  const labelPoint = slidingRelationshipLabel(
+    curved ? curvePoints : routePoints,
+    curved ? (pathLabel ?? { x: defaultX, y: defaultY }) : { x: polylineX, y: polylineY },
+    offset.x,
+    curved,
+  );
+  const labelX = labelPoint.x;
+  const labelY = labelPoint.y;
   const stroke =
     (data?.status ? statusColor(data.status) : presentation?.color) ??
     (selected || focus === "connected" ? "var(--primary)" : "var(--edge)");
@@ -106,10 +212,8 @@ function RelationshipEdgeComponent({
     data?.status === "conflict"
       ? `${t("statusOverlay.conflict")}${originalLabel ? ` · ${originalLabel}` : ""}`
       : originalLabel;
-  const showLabel =
-    Boolean(label || data?.status === "conflict") &&
-    (data?.showLabel !== false || selected || data?.status === "conflict");
-  const editable = (data?.count ?? 0) === 1 && Boolean(data?.onLabelOffsetChange);
+  const showLabel = Boolean(label);
+  const editable = Boolean(data?.onLabelOffsetChange);
   const labelSaves = useRef<Promise<void>>(Promise.resolve());
   const labelSaveSequence = useRef(0);
   const saveOffset = (next: ControlPoint) => {
@@ -155,21 +259,32 @@ function RelationshipEdgeComponent({
         )}
       </defs>
       <path ref={geometryRef} d={path} fill="none" stroke="none" pointerEvents="none" />
-      <BaseEdge
-        id={id}
-        path={path}
-        markerStart={sourceArrow === "none" ? undefined : `url(#${markerId}-0)`}
-        markerEnd={targetArrow === "none" ? undefined : `url(#${markerId}-1)`}
-        style={{
-          strokeWidth: width,
-          strokeDasharray: relationshipDash(data?.relationship.interactionStyle, strokeStyle),
-          strokeLinecap: strokeStyle === "dotted" ? "round" : undefined,
-          stroke,
-          opacity: focus === "dimmed" ? 0.7 : 1,
-          filter: focus === "connected" ? "drop-shadow(0 0 3px var(--primary))" : undefined,
-          transition: "stroke 150ms, stroke-width 150ms, opacity 150ms, filter 150ms",
+      <g
+        onPointerDown={(event) => {
+          if (!selected) return;
+          const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+          beginRoute(event, closestRelationshipSegment(routePoints, point));
         }}
-      />
+        onPointerMove={moveRoute}
+        onPointerUp={endRoute}
+        onPointerCancel={cancelRoute}
+      >
+        <BaseEdge
+          id={id}
+          path={path}
+          markerStart={sourceArrow === "none" ? undefined : `url(#${markerId}-0)`}
+          markerEnd={targetArrow === "none" ? undefined : `url(#${markerId}-1)`}
+          style={{
+            strokeWidth: width,
+            strokeDasharray: relationshipDash(data?.relationship.interactionStyle, strokeStyle),
+            strokeLinecap: strokeStyle === "dotted" ? "round" : undefined,
+            stroke,
+            opacity: focus === "dimmed" ? 0.7 : 1,
+            filter: focus === "connected" ? "drop-shadow(0 0 3px var(--primary))" : undefined,
+            transition: "stroke 150ms, stroke-width 150ms, opacity 150ms, filter 150ms",
+          }}
+        />
+      </g>
       {showLabel && (
         <EdgeLabelRenderer>
           <Button
@@ -197,7 +312,8 @@ function RelationshipEdgeComponent({
             onPointerDown={(event) => {
               if (!editable || !data || event.button !== 0) return;
               event.stopPropagation();
-              select({ type: "relationship", id: data.relationship.id });
+              if ((data.count ?? 0) === 1)
+                select({ type: "relationship", id: data.relationship.id });
               event.currentTarget.setPointerCapture(event.pointerId);
               drag.current = {
                 start: flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
@@ -210,7 +326,7 @@ function RelationshipEdgeComponent({
               const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
               const next = {
                 x: drag.current.offset.x + point.x - drag.current.start.x,
-                y: drag.current.offset.y + point.y - drag.current.start.y,
+                y: 0,
               };
               drag.current.current = next;
               setDragOffset(next);
@@ -230,11 +346,21 @@ function RelationshipEdgeComponent({
               setDragOffset(null);
             }}
             onKeyDown={(event) => {
+              if (event.key === "Escape" && drag.current) {
+                event.preventDefault();
+                event.stopPropagation();
+                drag.current = null;
+                setDragOffset(null);
+                return;
+              }
+              if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+                event.preventDefault();
+                event.stopPropagation();
+                return;
+              }
               const move = {
                 ArrowLeft: [-1, 0],
                 ArrowRight: [1, 0],
-                ArrowUp: [0, -1],
-                ArrowDown: [0, 1],
               }[event.key];
               if (!move || !editable) return;
               event.preventDefault();
@@ -243,7 +369,7 @@ function RelationshipEdgeComponent({
               const current = pendingOffset.current ?? offset;
               const next = {
                 x: current.x + (move[0] ?? 0) * step,
-                y: current.y + (move[1] ?? 0) * step,
+                y: 0,
               };
               setDragOffset(next);
               saveOffset(next);
@@ -251,6 +377,106 @@ function RelationshipEdgeComponent({
           >
             {label}
           </Button>
+        </EdgeLabelRenderer>
+      )}
+
+      {selected && routeEditable && (
+        <EdgeLabelRenderer>
+          {(routeDrag.current?.points ?? routePoints).slice(0, -1).map((start, index) => {
+            const end = (routeDrag.current?.points ?? routePoints)[index + 1] as ControlPoint;
+            if (
+              Math.hypot(end.x - start.x, end.y - start.y) < 1 ||
+              (routeDrag.current && routeDrag.current.index !== index)
+            )
+              return null;
+            const activePoints = [
+              sourcePoint,
+              ...(routeDrag.current?.current ?? bends),
+              targetPoint,
+            ];
+            const activeIndex =
+              index === 0 &&
+              routeDrag.current &&
+              routeDrag.current.current.length > routeDrag.current.points.length - 2
+                ? 1
+                : index;
+            const from = routeDrag.current ? (activePoints[activeIndex] as ControlPoint) : start;
+            const to = routeDrag.current ? (activePoints[activeIndex + 1] as ControlPoint) : end;
+            const point =
+              data?.routing === "curved" && bends.length === 0 && !routeDrag.current
+                ? (curveHandle ?? { x: defaultX, y: defaultY })
+                : { x: from.x + (to.x - from.x) * 0.25, y: from.y + (to.y - from.y) * 0.25 };
+            return (
+              <Button
+                // biome-ignore lint/suspicious/noArrayIndexKey: Segment identity must survive its coordinates changing during drag.
+                key={index}
+                id={`${markerId}-segment-${index}`}
+                type="button"
+                variant="outline"
+                aria-label={t("relationshipPresentation.moveSegment", { index: index + 1, label })}
+                aria-busy={routeSaving}
+                title={t("relationshipPresentation.moveSegmentHint")}
+                disabled={routeSaving}
+                className="nodrag nopan pointer-events-auto absolute h-6 w-6 cursor-grab rounded-full border-2 border-primary bg-card p-0 shadow-sm focus-visible:ring-2 focus-visible:ring-ring active:cursor-grabbing"
+                style={{
+                  transform: `translate(-50%, -50%) translate(${point.x}px, ${point.y}px)`,
+                  touchAction: "none",
+                }}
+                onClick={(event) => event.stopPropagation()}
+                onPointerDown={(event) => beginRoute(event, index)}
+                onPointerMove={moveRoute}
+                onPointerUp={endRoute}
+                onPointerCancel={cancelRoute}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape" && routeDrag.current) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    cancelRoute();
+                    return;
+                  }
+                  const move = {
+                    ArrowLeft: [-1, 0],
+                    ArrowRight: [1, 0],
+                    ArrowUp: [0, -1],
+                    ArrowDown: [0, 1],
+                  }[event.key];
+                  if (!move || routeSaving) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  routeDrag.current ??= {
+                    points: routePoints,
+                    index,
+                    start: point,
+                    delta: { x: 0, y: 0 },
+                    current: routePoints.slice(1, -1),
+                    keyboard: true,
+                  };
+                  const gesture = routeDrag.current;
+                  if (!gesture.keyboard) return;
+                  const step = event.shiftKey ? 10 : 1;
+                  gesture.delta = {
+                    x: gesture.delta.x + (move[0] ?? 0) * step,
+                    y: gesture.delta.y + (move[1] ?? 0) * step,
+                  };
+                  gesture.current = moveRelationshipSegment(
+                    gesture.points,
+                    gesture.index,
+                    gesture.delta,
+                  );
+                  setRoutePreview(gesture.current);
+                }}
+                onKeyUp={(event) => {
+                  if (!event.key.startsWith("Arrow") || !routeDrag.current?.keyboard) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  finishRoute();
+                }}
+                onBlur={() => {
+                  if (routeDrag.current?.keyboard) finishRoute();
+                }}
+              />
+            );
+          })}
         </EdgeLabelRenderer>
       )}
     </>

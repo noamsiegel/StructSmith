@@ -1056,15 +1056,6 @@ export function ViewInspector({ view, workspaceId }: { view: ViewDetail; workspa
             </SelectContent>
           </Select>
         </Field>
-
-        <div className="flex items-center justify-between">
-          <span className="text-[12.5px]">{t("inspector.showRelationshipLabels")}</span>
-          <Switch
-            aria-label={t("inspector.showRelationshipLabels")}
-            checked={view.settings.showRelationshipLabels}
-            onCheckedChange={(checked) => onPatch({ showRelationshipLabels: checked })}
-          />
-        </div>
       </div>
     </div>
   );

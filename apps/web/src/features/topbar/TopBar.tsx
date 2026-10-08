@@ -8,8 +8,6 @@ import {
   Maximize,
   Monitor,
   Moon,
-  PanelLeft,
-  PanelRight,
   Plug,
   Plus,
   Redo2,
@@ -32,7 +30,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Tooltip } from "@/components/ui/tooltip";
 import { supportedLanguages } from "@/i18n";
-import { primaryModifierKeyCode, primaryModifierLabel } from "@/lib/platform";
+import { primaryModifierLabel } from "@/lib/platform";
 import { type Theme, useTheme } from "@/lib/theme";
 import { useEditorStore } from "@/store/editor";
 import { useCopyAgentReference } from "../reference/useCopyAgentReference";
@@ -56,9 +54,7 @@ interface TopBarProps {
   onOpenMcp: () => void;
   onGoHome: () => void;
   modelPanelVisible: boolean;
-  inspectorPanelVisible: boolean;
   onToggleModelPanel: () => void;
-  onToggleInspectorPanel: () => void;
 }
 
 export function TopBar(props: TopBarProps) {
@@ -175,6 +171,7 @@ export function TopBar(props: TopBarProps) {
             variant="ghost"
             size="iconSm"
             className="rounded-r-none"
+            aria-label={t("topbar.autoLayout")}
             onClick={() => props.onAutoLayout()}
           >
             <LayoutGrid className="h-3.5 w-3.5" />
@@ -210,53 +207,41 @@ export function TopBar(props: TopBarProps) {
       </div>
 
       <Tooltip label={`${t("topbar.fitView")} (F)`}>
-        <Button variant="ghost" size="iconSm" onClick={props.onFitView}>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          aria-label={t("topbar.fitView")}
+          onClick={props.onFitView}
+        >
           <Maximize className="h-3.5 w-3.5" />
         </Button>
       </Tooltip>
 
       <Tooltip label={`${t("topbar.undo")} (${primary}Z)`}>
-        <Button variant="ghost" size="iconSm" onClick={props.onUndo} disabled={!props.canUndo}>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          aria-label={t("topbar.undo")}
+          onClick={props.onUndo}
+          disabled={!props.canUndo}
+        >
           <Undo2 className="h-3.5 w-3.5" />
         </Button>
       </Tooltip>
 
       <Tooltip label={`${t("topbar.redo")} (${primary}Shift Z)`}>
-        <Button variant="ghost" size="iconSm" onClick={props.onRedo} disabled={!props.canRedo}>
+        <Button
+          variant="ghost"
+          size="iconSm"
+          aria-label={t("topbar.redo")}
+          onClick={props.onRedo}
+          disabled={!props.canRedo}
+        >
           <Redo2 className="h-3.5 w-3.5" />
         </Button>
       </Tooltip>
 
       <span className="flex-1" />
-
-      <Tooltip label={`${t("topbar.toggleModelPanel")} (${primary} B)`}>
-        <Button
-          id="toggle-model-panel"
-          variant="ghost"
-          size="iconSm"
-          aria-label={t("topbar.toggleModelPanel")}
-          aria-expanded={props.modelPanelVisible}
-          aria-controls="model-panel"
-          aria-keyshortcuts={`${primaryModifierKeyCode()}+B`}
-          onClick={props.onToggleModelPanel}
-        >
-          <PanelLeft className="h-3.5 w-3.5" />
-        </Button>
-      </Tooltip>
-      <Tooltip label={`${t("topbar.toggleInspectorPanel")} (${primary} Alt B)`}>
-        <Button
-          id="toggle-inspector-panel"
-          variant="ghost"
-          size="iconSm"
-          aria-label={t("topbar.toggleInspectorPanel")}
-          aria-expanded={props.inspectorPanelVisible}
-          aria-controls="inspector-panel"
-          aria-keyshortcuts={`${primaryModifierKeyCode()}+Alt+B`}
-          onClick={props.onToggleInspectorPanel}
-        >
-          <PanelRight className="h-3.5 w-3.5" />
-        </Button>
-      </Tooltip>
 
       <Tooltip label={`${t("topbar.search")} (${primary}K)`}>
         <Button

@@ -16,6 +16,7 @@ import {
   type Connection,
   Controls,
   type EdgeChange,
+  getViewportForBounds,
   MiniMap,
   type NodeChange,
   type NodeMouseHandler,
@@ -23,7 +24,7 @@ import {
   type OnSelectionChangeParams,
   ReactFlow,
   SelectionMode,
-  useNodesInitialized,
+  useNodes,
   useReactFlow,
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -79,6 +80,7 @@ interface CanvasProps {
   relationships: readonly ArchitectureRelationship[];
   records: readonly ArchitectureRecord[];
   initialLocation?: ViewLocation;
+  layoutFitRequest: number;
   statusOverlay: StatusOverlay;
   onOpenDetails: (elementId: string) => void;
   canOpenDetails: (elementId: string) => boolean;
@@ -92,13 +94,13 @@ export function Canvas({
   relationships,
   records,
   initialLocation,
+  layoutFitRequest,
   statusOverlay,
   onOpenDetails,
   canOpenDetails,
 }: CanvasProps) {
   const { t } = useTranslation();
   const flow = useReactFlow();
-  const canvasRef = useRef<HTMLDivElement>(null);
   const onError = useApiErrorHandler();
   const applyOperations = useApplyOperations(workspaceId);
   const copyReference = useCopyAgentReference();
@@ -189,18 +191,45 @@ export function Canvas({
    * and before the model query resolves, so entering a workspace from the home
    * screen would otherwise land on an unfitted canvas.
    */
-  const nodesInitialized = useNodesInitialized();
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const renderedNodes = useNodes<FlowNode>();
+  // Boundary frames have no handles; only cards need measurement before fitting.
+  const nodesInitialized = graph.nodes.every((node) => {
+    const rendered = renderedNodes.find((entry) => entry.id === node.id);
+    return (rendered?.measured?.width ?? 0) > 0 && (rendered?.measured?.height ?? 0) > 0;
+  });
+  const fittedLayoutRequest = useRef(layoutFitRequest);
   const fittedViewId = useRef<string | null>(null);
   const initialViewport = useRef(initialLocation?.viewport);
 
   useEffect(() => {
-    if (!flow.viewportInitialized || (nodes.length > 0 && !nodesInitialized)) return;
+    if (!flow.viewportInitialized || nodes.length === 0 || !nodesInitialized) return;
     if (fittedViewId.current === view.id) return;
     fittedViewId.current = view.id;
     if (initialViewport.current) void flow.setViewport(initialViewport.current);
     else if (nodes.length > 0) void flow.fitView({ padding: 0.25, maxZoom: 1, duration: 250 });
     if (restoredSelection.current) select(restoredSelection.current);
   }, [nodesInitialized, nodes.length, view.id, flow, select]);
+
+  useEffect(() => {
+    if (fittedLayoutRequest.current === layoutFitRequest || !nodesInitialized) return;
+    const width = canvasRef.current?.clientWidth ?? 0;
+    const height = canvasRef.current?.clientHeight ?? 0;
+    if (width === 0 || height === 0) return;
+    const rendered = new Map(renderedNodes.map((node) => [node.id, node.position]));
+    if (
+      graph.nodes.some((node) => {
+        const position = rendered.get(node.id);
+        return !position || position.x !== node.position.x || position.y !== node.position.y;
+      })
+    )
+      return;
+    fittedLayoutRequest.current = layoutFitRequest;
+    void flow.setViewport(
+      getViewportForBounds(flow.getNodesBounds(graph.nodes), width, height, 0.1, 1, 0.2),
+      { duration: 300 },
+    );
+  }, [layoutFitRequest, nodesInitialized, renderedNodes, graph.nodes, flow]);
 
   /**
    * Selecting an element outside the canvas (model tree, command palette) has
@@ -536,6 +565,8 @@ export function Canvas({
             id: isBoundaryId(node.id) ? boundaryElementId(node.id) : node.id,
           });
         }
+      } else if (edge && Number(edge.data?.count ?? 0) > 1) {
+        clearSelection();
       } else if (edge) {
         select({ type: "relationship", id: relationshipIdOf(edge) });
       } else {
@@ -825,6 +856,12 @@ export function Canvas({
   const onEdgeContextMenu = useCallback(
     (event: React.MouseEvent, edge: FlowEdge) => {
       event.preventDefault();
+      if ((edge.data?.count ?? 0) > 1) {
+        clearSelection();
+        setMenu(null);
+        toast.message(t("relationshipPresentation.mergedRouteHint"));
+        return;
+      }
       const relationshipId = relationshipIdOf(edge);
       const relationship = relationships.find((item) => item.id === relationshipId);
       select({ type: "relationship", id: relationshipId });
@@ -867,6 +904,7 @@ export function Canvas({
     },
     [
       askAgent,
+      clearSelection,
       copyReference,
       deleteRelationships,
       elementsById,
@@ -1056,7 +1094,7 @@ export function Canvas({
   ]);
 
   const changeRelationshipPresentation = useCallback(
-    (relationshipId: string, patch: ViewRelationshipPatch) => {
+    (patches: ViewRelationshipPatch[]) => {
       return applyOperations
         .mutateAsync({
           label: t("relationshipPresentation.updated"),
@@ -1064,7 +1102,7 @@ export function Canvas({
             {
               op: "setViewRelationships",
               viewId: view.id,
-              relationships: [{ ...patch, relationshipId }],
+              relationships: patches,
             },
           ],
         })
@@ -1086,14 +1124,22 @@ export function Canvas({
         data: edge.data
           ? {
               ...edge.data,
+              onControlPointsChange: (controlPoints: { x: number; y: number }[]) =>
+                changeRelationshipPresentation(
+                  (edge.data?.relationshipIds ?? [edge.data?.relationship.id as string]).map(
+                    (relationshipId) => ({ relationshipId, controlPoints }),
+                  ),
+                ),
               onLabelOffsetChange: (
-                relationshipId: string,
+                _relationshipId: string,
                 labelOffset: { x: number; y: number },
               ) =>
-                changeRelationshipPresentation(relationshipId, {
-                  relationshipId,
-                  presentation: { labelOffset },
-                }),
+                changeRelationshipPresentation(
+                  (edge.data?.relationshipIds ?? []).map((relationshipId) => ({
+                    relationshipId,
+                    presentation: { labelOffset },
+                  })),
+                ),
             }
           : undefined,
       })),
@@ -1124,13 +1170,15 @@ export function Canvas({
         onReconnect={(edge, connection) => {
           if (connection.source !== edge.source || connection.target !== edge.target) return;
           const relationshipId = relationshipIdOf(edge);
-          void changeRelationshipPresentation(relationshipId, {
-            relationshipId,
-            presentation: {
-              sourceSide: sideFromHandle(connection.sourceHandle, "source"),
-              targetSide: sideFromHandle(connection.targetHandle, "target"),
+          void changeRelationshipPresentation([
+            {
+              relationshipId,
+              presentation: {
+                sourceSide: sideFromHandle(connection.sourceHandle, "source"),
+                targetSide: sideFromHandle(connection.targetHandle, "target"),
+              },
             },
-          }).catch(() => undefined);
+          ]).catch(() => undefined);
         }}
         onSelectionChange={onSelectionChange}
         onNodeClick={onNodeClick}

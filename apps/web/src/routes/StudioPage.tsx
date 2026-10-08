@@ -169,6 +169,7 @@ function StudioContent({
   };
   const handledReference = useRef<string | null>(null);
   const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
+  const [layoutFitRequest, setLayoutFitRequest] = useState(0);
   const [detailElementId, setDetailElementId] = useState<string | null>(null);
   const connectFrom = useEditorStore((state) => state.connectFrom);
 
@@ -251,27 +252,35 @@ function StudioContent({
     if (!view.data) return;
     const rootElementId = selection.type === "element" ? selection.id : undefined;
     const settingsChanged = algorithm !== view.data.settings.autoLayoutAlgorithm;
-    applyOperations.mutate({
-      label: t("topbar.autoLayout"),
-      operations: [
-        ...(settingsChanged
-          ? [
-              {
-                op: "updateView" as const,
-                viewId: view.data.id,
-                data: { settings: { autoLayoutAlgorithm: algorithm } },
-              },
-            ]
-          : []),
-        {
-          op: "autoLayoutView",
-          viewId: view.data.id,
-          direction: view.data.settings.autoLayoutDirection,
-          algorithm,
-          rootElementId,
+    applyOperations.mutate(
+      {
+        label: t("topbar.autoLayout"),
+        operations: [
+          ...(settingsChanged
+            ? [
+                {
+                  op: "updateView" as const,
+                  viewId: view.data.id,
+                  data: { settings: { autoLayoutAlgorithm: algorithm } },
+                },
+              ]
+            : []),
+          {
+            op: "autoLayoutView",
+            viewId: view.data.id,
+            direction: view.data.settings.autoLayoutDirection,
+            algorithm,
+            rootElementId,
+          },
+        ],
+      },
+      {
+        onSuccess: async () => {
+          await view.refetch();
+          setLayoutFitRequest((request) => request + 1);
         },
-      ],
-    });
+      },
+    );
   };
 
   const fitView = (): void => void flow.fitView({ duration: 300, padding: 0.2 });
@@ -364,9 +373,7 @@ function StudioContent({
           onOpenMcp={onOpenMcp}
           onGoHome={onGoHome}
           modelPanelVisible={modelPanelVisible}
-          inspectorPanelVisible={inspectorPanelVisible}
           onToggleModelPanel={() => toggleSidebar("model")}
-          onToggleInspectorPanel={() => toggleSidebar("inspector")}
         />
 
         <div className="min-h-0 flex-1">
@@ -398,6 +405,10 @@ function StudioContent({
             <Panel minSize="30%">
               <div className="flex h-full flex-col">
                 <ViewNavigationBar
+                  modelPanelVisible={modelPanelVisible}
+                  inspectorPanelVisible={inspectorPanelVisible}
+                  onToggleModelPanel={() => toggleSidebar("model")}
+                  onToggleInspectorPanel={() => toggleSidebar("inspector")}
                   statusOverlay={statusOverlay}
                   onStatusOverlayChange={setStatusOverlay}
                   current={activeView}
@@ -428,6 +439,7 @@ function StudioContent({
                       relationships={relationships}
                       records={recordList}
                       initialLocation={navigation.saved[view.data.id]}
+                      layoutFitRequest={layoutFitRequest}
                       onOpenDetails={openDetails}
                       canOpenDetails={canOpenDetails}
                     />
