@@ -51,6 +51,13 @@ and resets to Status on reload, without editing the model or coordinates.
 
 ## Explore without copying diagrams
 
+- **Preview** opens one centered, read-only dialog. Click a Subprocess or its
+  Open details action to explore deeper; Back and breadcrumbs navigate within
+  the same dialog. Pan and zoom stay local to the preview. Escape, Close, or
+  clicking outside returns to the unchanged overview. **Open full view** hands
+  the current object to the existing detail-view navigation for editing.
+  Saved diagrams retain their coordinates, Sections and connector presentation;
+  objects without a saved detail view get a temporary layout without model writes.
 - Expand or collapse a selected Subprocess's children in place using its existing model
   IDs. Expansion is temporary, supports at most four visible hierarchy levels and
   does not add those children to the saved view. Use scoped views for durable detail.
@@ -67,6 +74,13 @@ and resets to Status on reload, without editing the model or coordinates.
 
 ## Canvas editing
 
+- Cards keep a consistent default width and grow vertically to fit wrapped
+  titles, technology and displayed descriptions. Saved heights are minimums,
+  so a short saved card cannot clip new text. Wider saved cards remain supported.
+  Section and Subprocess frame titles wrap too; frames reserve their title space
+  without moving member coordinates. Fit includes outside Section titles.
+  Existing crowded layouts may need Auto layout after cards grow; previewing
+  never rewrites those layouts. The legacy full-title setting no longer hides text.
 - Named connection labels remain visible without clicking or selecting a card.
   Drag a label onto any connector segment, including vertical legs; text stays
   horizontal and snaps to the route. Arrow keys move along its leg; Shift moves

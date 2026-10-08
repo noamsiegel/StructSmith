@@ -50,6 +50,30 @@ host CLI, scoped MCP, streaming and Stop successfully. These gates do not imply
 mobile, native color-picker, export or identity acceptance.
 Historical suite counts below describe their stated earlier builds.
 
+## Readable cards and centered previews
+
+Chrome acceptance used `tab.playwright.getByRole(...).press('Enter')`, native
+`tab.click(...)`, `tab.pressKey(null, 'Escape')`, fresh DOM and bounding rectangles
+against Vite on port 5178 proxying the existing local service. In the actual portal
+overview, Prepare and replay opened one dialog; Prepare replay and Resolve and
+submit drilled deeper, an ancestor breadcrumb returned, and Escape restored the
+exact overview viewport transform. Full-view handoff reached the editable scoped
+diagram. Preview handles were hidden and labels remained present without selection.
+
+The disposable `qa-readable-titles-and-preview-ddz07g` exercised long titles and
+multiline descriptions in custom, action, decision, outcome and database cards.
+DOM measurements found zero text overflows beyond a two-pixel rounding allowance.
+A narrow Section reproduced initial heading clipping: title top 124.94 versus
+canvas top 168.99. After the fit/readiness correction, its initial title top was
+217.27. The editor's top Fit action also retained its entire title above the frame.
+Saved diagram coordinates were not rearranged for this acceptance.
+
+Some existing portal connector labels overlap cards in saved layouts (Prepare
+replay's `targets` and `submit replay`). Preview preserves that geometry; this
+is a remaining saved-layout readability issue. Mobile acceptance and exports
+were not exercised. Hot reload produced React DevTools/createRoot and node-type
+warnings; the final production container is checked separately.
+
 ## Historical verification evidence
 
 The earlier exploration build `e7ff50c` recorded `bun run typecheck` exit 0 and
