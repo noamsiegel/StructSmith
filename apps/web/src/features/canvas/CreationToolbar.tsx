@@ -1,6 +1,6 @@
 import type { ViewDetail } from "@structsmith/contracts";
 import { presets } from "@structsmith/domain";
-import { Keyboard, Plus, SquareDashed } from "lucide-react";
+import { Keyboard, Plus, SquareDashed, StickyNote, Table2, Type } from "lucide-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -13,17 +13,24 @@ import { iconFor } from "../icons";
 const quickPresets = presets.filter((preset) =>
   ["workflowGroup", "action", "decision", "outcome"].includes(preset.id),
 );
+const annotations = [
+  { kind: "text", Icon: Type },
+  { kind: "note", Icon: StickyNote },
+  { kind: "table", Icon: Table2 },
+] as const;
 
 export function CreationToolbar({
   workspaceId,
   view,
   getCreationPoint,
   onCreateSection,
+  onCreateAnnotation,
 }: {
   workspaceId: string;
   view: ViewDetail;
   getCreationPoint: () => { x: number; y: number };
   onCreateSection: () => void;
+  onCreateAnnotation: (kind: "text" | "note" | "table") => void;
 }) {
   const { t } = useTranslation();
   const creation = useCreatePreset(workspaceId);
@@ -71,6 +78,27 @@ export function CreationToolbar({
           <span>{t("sections.title")}</span>
         </Button>
       </Tooltip>
+      {annotations.map(({ kind, Icon }, index) => {
+        const label = t(`annotations.${kind}`);
+        return (
+          <Tooltip key={kind} label={t("annotations.add", { name: label })} side="top">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-12 min-w-16 shrink-0 flex-col gap-1 px-2 text-[11px] leading-4"
+              aria-label={t("annotations.add", { name: label })}
+              disabled={creation.disabled}
+              tabIndex={focused === index + 1 ? 0 : -1}
+              onFocus={() => setFocused(index + 1)}
+              onClick={() => onCreateAnnotation(kind)}
+            >
+              <Icon className="h-4 w-4" aria-hidden="true" />
+              <span>{label}</span>
+            </Button>
+          </Tooltip>
+        );
+      })}
+      <div className="mx-1 h-7 w-px shrink-0 bg-border" aria-hidden="true" />
       {quickPresets.map((preset, index) => {
         const Icon = iconFor(preset.kind, preset.role);
         const label = t(`presets.${preset.id}`);
@@ -82,8 +110,8 @@ export function CreationToolbar({
               className="h-12 min-w-16 shrink-0 flex-col gap-1 px-2 text-[11px] leading-4"
               aria-label={t("creationToolbar.add", { name: label })}
               disabled={creation.disabled}
-              tabIndex={focused === index + 1 ? 0 : -1}
-              onFocus={() => setFocused(index + 1)}
+              tabIndex={focused === index + annotations.length + 1 ? 0 : -1}
+              onFocus={() => setFocused(index + annotations.length + 1)}
               onClick={() => creation.add(preset, view.id, null, getCreationPoint())}
             >
               <Icon className="h-4 w-4" aria-hidden="true" />
@@ -99,8 +127,8 @@ export function CreationToolbar({
           variant="ghost"
           className="h-12 min-w-16 shrink-0 flex-col gap-1 px-2 text-[11px] leading-4"
           aria-label={t("creationToolbar.moreHint")}
-          tabIndex={focused === 5 || (creation.disabled && focused < 5) ? 0 : -1}
-          onFocus={() => setFocused(5)}
+          tabIndex={focused === 8 || (creation.disabled && focused < 8) ? 0 : -1}
+          onFocus={() => setFocused(8)}
           onClick={() => openPalette()}
         >
           <Plus className="h-4 w-4" aria-hidden="true" />
@@ -113,8 +141,8 @@ export function CreationToolbar({
           variant="ghost"
           size="icon"
           aria-label={t("shortcuts.title")}
-          tabIndex={focused === 6 ? 0 : -1}
-          onFocus={() => setFocused(6)}
+          tabIndex={focused === 9 ? 0 : -1}
+          onFocus={() => setFocused(9)}
           onClick={() => setShortcutsOpen(true)}
         >
           <Keyboard className="h-4 w-4" aria-hidden="true" />

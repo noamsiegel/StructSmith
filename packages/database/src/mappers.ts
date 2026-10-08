@@ -184,6 +184,7 @@ export function fromRelationship(
 }
 
 const defaultSettings: ViewSettings = {
+  annotations: [],
   nodeColors: {},
   commentPins: [],
   preferredDetailViews: {},
@@ -215,6 +216,7 @@ export function toView(row: Row<typeof views>): ArchitectureView {
     scopeElementId: row.scopeElementId,
     settings: {
       ...settings,
+      annotations: ViewSettingsSchema.shape.annotations.parse(settings.annotations),
       commentPins: ViewSettingsSchema.shape.commentPins.parse(settings.commentPins),
     },
     createdAt: row.createdAt,

@@ -58,7 +58,7 @@ export function previewView(
       })),
   };
   if (saved) return view;
-  view.settings = { ...view.settings, sectionFrames: {}, nodeColors: {} };
+  view.settings = { ...view.settings, sectionFrames: {}, nodeColors: {}, annotations: [] };
   const graph = buildGraph({ view, elements, relationships, records: [] });
   const layout = new Map(
     computeLayout(
