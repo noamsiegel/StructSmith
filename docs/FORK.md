@@ -89,6 +89,10 @@ and resets to Status on reload, without editing the model or coordinates.
   that segment while retaining its endpoints. Arrow keys move perpendicular to
   the segment; Shift moves ten units. Escape or pointer cancellation discards
   an in-progress drag. A completed gesture is one undoable saved change.
+  Orthogonal routing uses horizontal/vertical legs and sharp right-angle corners,
+  including saved routes after endpoint moves. Redundant collinear waypoints are
+  omitted from rendering; labels and drag handles follow the same route. Saved
+  layout data remains intact until you edit it.
 - A merged overview connector updates all represented relationships together in
   the active view. Reconnecting endpoints is only available for an unambiguous
   connection. Geometry belongs to the view and never changes semantic endpoints.

@@ -4,7 +4,6 @@ import {
   EdgeLabelRenderer,
   type EdgeProps,
   getBezierPath,
-  getSmoothStepPath,
   getStraightPath,
   useReactFlow,
 } from "@xyflow/react";
@@ -81,32 +80,28 @@ function RelationshipEdgeComponent({
     current: ControlPoint[];
     keyboard: boolean;
   } | null>(null);
-  const bends = routePreview ?? savedBends;
+  const sourcePoint = { x: sourceX, y: sourceY };
+  const targetPoint = { x: targetX, y: targetY };
+  const orthogonal = (data?.routing ?? "orthogonal") === "orthogonal";
+  const bends = orthogonal
+    ? orthogonalRelationshipBends(
+        sourcePoint,
+        targetPoint,
+        sourcePosition,
+        targetPosition,
+        routePreview ?? savedBends,
+      )
+    : (routePreview ?? savedBends);
   const labelPosition = data?.placement?.labelPosition ?? 0.5;
   const [path, defaultX, defaultY] =
-    bends.length > 0
-      ? manualRelationshipPath(
-          { x: sourceX, y: sourceY },
-          { x: targetX, y: targetY },
-          bends,
-          labelPosition,
-        )
+    bends.length > 0 || orthogonal
+      ? manualRelationshipPath(sourcePoint, targetPoint, bends, labelPosition)
       : data?.routing === "straight"
         ? getStraightPath(pathOptions)
         : data?.routing === "curved"
           ? getBezierPath(pathOptions)
-          : getSmoothStepPath({ ...pathOptions, borderRadius: 8, offset: 24 });
-  const sourcePoint = { x: sourceX, y: sourceY };
-  const targetPoint = { x: targetX, y: targetY };
-  const routePoints = [
-    sourcePoint,
-    ...(bends.length > 0
-      ? bends
-      : data?.routing === "orthogonal"
-        ? orthogonalRelationshipBends(sourcePoint, targetPoint, sourcePosition, targetPosition)
-        : []),
-    targetPoint,
-  ];
+          : manualRelationshipPath(sourcePoint, targetPoint, bends, labelPosition);
+  const routePoints = [sourcePoint, ...bends, targetPoint];
   const routeEditable = Boolean(data?.onControlPointsChange);
   const cancelRoute = () => {
     routeDrag.current = null;

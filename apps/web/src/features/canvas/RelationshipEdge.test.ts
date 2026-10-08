@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import type { ControlPoint, RelationshipRouting } from "@structsmith/contracts";
 import { Position, ReactFlowProvider } from "@xyflow/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
@@ -27,6 +28,8 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
       status: ImplementationStatus | null,
       opacity?: number,
       color: string | null = "#123456",
+      routing: RelationshipRouting = "straight",
+      controlPoints: ControlPoint[] = [{ x: 0, y: 100 }],
     ) =>
       renderToStaticMarkup(
         createElement(
@@ -52,14 +55,14 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
               implied: false,
               label: "",
               count: 1,
-              routing: "straight",
+              routing,
               showLabel: true,
               placement: {
                 viewId: "view",
                 relationshipId: relationship.id,
                 hidden: false,
                 labelPosition: 0.25,
-                controlPoints: [{ x: 0, y: 100 }],
+                controlPoints,
                 presentation: {
                   color: color ?? undefined,
                   strokeWidth: 4,
@@ -80,6 +83,12 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
     expect(html).toContain("stroke-dasharray:1 4");
     expect(html).toContain("stroke:#123456");
     expect(html).toContain('d="M 0,0 L 0,100 L 100,100"');
+    const orthogonal = render(null, undefined, null, "orthogonal", [
+      { x: 40, y: 20 },
+      { x: 40, y: 80 },
+    ]);
+    expect(orthogonal).toContain('d="M 0,0 L 40,0 L 40,100 L 100,100"');
+    expect(render(null, undefined, null, "orthogonal", [])).not.toMatch(/d="M [^"]*[QC]/);
     const live = render("live", undefined, null);
     expect(live).toContain("stroke:var(--status-live)");
     expect(live).not.toContain("stroke-dasharray");

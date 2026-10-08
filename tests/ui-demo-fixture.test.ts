@@ -56,16 +56,24 @@ describe("UI demo fixture", () => {
         };
         const source = handle(sourceBounds, sourceSide, placement.presentation?.sourceSlot ?? 1);
         const target = handle(targetBounds, targetSide, placement.presentation?.targetSlot ?? 1);
-        const bends = placement.controlPoints.length
-          ? placement.controlPoints
-          : key === "demo-connectors"
+        const bends =
+          key === "demo-connectors"
             ? orthogonalRelationshipBends(
                 source,
                 target,
                 sourceSide as Parameters<typeof orthogonalRelationshipBends>[2],
                 targetSide as Parameters<typeof orthogonalRelationshipBends>[3],
+                placement.controlPoints,
               )
-            : [];
+            : placement.controlPoints;
+        if (key === "demo-connectors") {
+          const points = [source, ...bends, target];
+          for (let i = 1; i < points.length; i++) {
+            expect(points[i - 1]?.x === points[i]?.x || points[i - 1]?.y === points[i]?.y).toBe(
+              true,
+            );
+          }
+        }
         const [, x, y] = manualRelationshipPath(
           source,
           target,

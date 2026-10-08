@@ -65,7 +65,40 @@ export function orthogonalRelationshipBends(
   target: ControlPoint,
   sourcePosition: Position,
   targetPosition: Position,
+  bends: readonly ControlPoint[] = [],
 ): ControlPoint[] {
+  if (bends.length > 0) {
+    const points = [source];
+    for (const next of [...bends, target]) {
+      const previous = points[points.length - 1] as ControlPoint;
+      if (previous.x !== next.x && previous.y !== next.y) {
+        const before = points[points.length - 2];
+        const horizontal =
+          next === target
+            ? targetPosition === "top" || targetPosition === "bottom"
+            : before
+              ? before.x === previous.x
+              : sourcePosition === "left" || sourcePosition === "right";
+        points.push(horizontal ? { x: next.x, y: previous.y } : { x: previous.x, y: next.y });
+      }
+      if (previous.x !== next.x || previous.y !== next.y) points.push(next);
+    }
+    const route: ControlPoint[] = [];
+    for (const point of points) {
+      while (route.length > 1) {
+        const before = route[route.length - 2] as ControlPoint;
+        const previous = route[route.length - 1] as ControlPoint;
+        if (
+          (before.x !== previous.x || previous.x !== point.x) &&
+          (before.y !== previous.y || previous.y !== point.y)
+        )
+          break;
+        route.pop();
+      }
+      route.push(point);
+    }
+    return route.slice(1, -1);
+  }
   const [path] = getSmoothStepPath({
     sourceX: source.x,
     sourceY: source.y,

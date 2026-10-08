@@ -11,6 +11,54 @@ import {
   slidingRelationshipLabel,
 } from "./relationshipGeometry";
 
+test("saved orthogonal routes follow moved endpoints without diagonal legs or redundant handles", () => {
+  const source = { x: 3838.5, y: 434 };
+  const target = { x: 4123.5, y: 105 };
+  const saved = [
+    { x: 3876.8619669470845, y: 485 },
+    { x: 3876.8619669470845, y: 82 },
+  ];
+  for (const sourceSide of Object.values(Position)) {
+    for (const targetSide of Object.values(Position)) {
+      const bends = orthogonalRelationshipBends(source, target, sourceSide, targetSide, saved);
+      const points = [source, ...bends, target];
+      for (let i = 1; i < points.length; i++) {
+        const previous = points[i - 1] as ControlPoint;
+        const next = points[i] as ControlPoint;
+        expect(previous.x === next.x || previous.y === next.y).toBe(true);
+        if (i > 1) {
+          const before = points[i - 2] as ControlPoint;
+          expect(
+            (before.x === previous.x && previous.x === next.x) ||
+              (before.y === previous.y && previous.y === next.y),
+          ).toBe(false);
+        }
+      }
+      expect(
+        bends[0]?.[sourceSide === Position.Left || sourceSide === Position.Right ? "y" : "x"],
+      ).toBe(source[sourceSide === Position.Left || sourceSide === Position.Right ? "y" : "x"]);
+      expect(
+        bends.at(-1)?.[targetSide === Position.Left || targetSide === Position.Right ? "y" : "x"],
+      ).toBe(target[targetSide === Position.Left || targetSide === Position.Right ? "y" : "x"]);
+      const moved = moveRelationshipSegment(points, 1, { x: 30, y: 50 });
+      const rerouted = [
+        source,
+        ...orthogonalRelationshipBends(source, target, sourceSide, targetSide, moved),
+        target,
+      ];
+      for (let i = 1; i < rerouted.length; i++) {
+        expect(rerouted[i - 1]?.x === rerouted[i]?.x || rerouted[i - 1]?.y === rerouted[i]?.y).toBe(
+          true,
+        );
+      }
+    }
+  }
+  expect(saved).toEqual([
+    { x: 3876.8619669470845, y: 485 },
+    { x: 3876.8619669470845, y: 82 },
+  ]);
+});
+
 test("labels slide horizontally on their leg and follow moved routes without vertical drift", () => {
   const points = [
     { x: 0, y: 20 },
