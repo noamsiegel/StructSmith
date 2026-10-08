@@ -40,6 +40,7 @@ suite. They validate structure; browser acceptance is still required.
 | `demo-sections`, `demo-process`, `demo-process-alternative`, `demo-validate` | Nested/empty Sections, nested Subprocesses, detail choices | Move contents, membership, resize/fit, preview depth, preferred detail and Back |
 | `demo-connectors`, `demo-connectors-curved`, `demo-connectors-straight` | Routing/stroke variants, bends, slots and label offsets | Labels visible unselected; drag segment/label, Undo/Redo and reload |
 | `demo-annotations` | Heading, long/multilingual/empty text, sticky notes, table and Section membership | Create/edit, quoted spreadsheet paste, row/column changes, resize/color, move into/out of Section, group movement/Fit, duplicate/copy/paste, delete, Undo/Redo, reload and read-only preview |
+| `demo-native-flow` | Connected data/documents, start/end, fork/join and merge; mixed model/annotation Section on the default layer | Recognizable shapes, attached connectors, readable titles, type switching, Auto layout retains all Section contents |
 | `demo-comments` | Open/resolved threads, replies, anchored/free pins | Create/edit/delete/reply, resolve/reopen, outside-click, deletion conflict |
 | `demo-states` | Live/planned/mixed tags, explicit colors, locked/hidden items, scenarios | Overlay/focus, color reset, lock refusal, scenario Next/Back/Stop |
 

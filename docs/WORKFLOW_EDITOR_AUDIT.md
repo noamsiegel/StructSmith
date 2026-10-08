@@ -19,6 +19,54 @@ this audit distinguishes actual browser observations from source-only support.
 
 ## October 8 acceptance evidence
 
+### Native elements and view annotations
+
+Text, notes and tables belong to a view. Data, documents, start/end, fork/join
+and merge belong to the shared model. The creation palette, type switching,
+domain validation and MCP use the same contracts. Mermaid imports infer native
+types and preserve explicit kind metadata; generic unconnected subgraphs become
+Sections, while connected subgraphs become Subprocesses.
+
+- `bun run check`, `bun run typecheck` and `bun run test` returned no errors;
+  the suite collected 328 tests across 62 files with 2,245 assertions. Targeted
+  mutations caught annotation, import, layout, selection and reversed-layout
+  regressions. Biome's schema-version notice is informational.
+- Browser creation/edit/save/reload covered text, notes and quoted multiline
+  spreadsheet paste. Color, resizing, Section movement, duplicate/delete/Undo
+  and read-only preview were exercised. A stopped-service note save preserved
+  its draft and retry saved it. A default-layer Section membership rejection
+  was reproduced, corrected and retried successfully. Mixed Section Auto layout
+  returned `contained:true` from rendered node/frame bounds.
+- Native `super+a`, Color palette and `Use #3DADFF` colored six annotations.
+  GET `/api/views/demo-annotations` returned that color on all six; reload
+  retained it. Keyboard copy/paste acceptance remains unverified: the browser
+  harness reported an empty virtual clipboard. Helper tests and explicit
+  duplication do not substitute for that interaction.
+- A Bun MCP SDK client connected to the live `/mcp` endpoint, created a table,
+  updated/read its cells, rejected deletion at a stale revision, deleted at the
+  current revision and asserted the original annotation list was restored.
+  The existing configured connector also returned the six demo annotations
+  through `annotation_list`; all five annotation tools are in its refreshed catalog.
+- `bun scripts/smoke-local-helper.ts structsmith-fork:native-elements` passed
+  standalone HTML, authenticated Docker REST, fake host CLI, scoped MCP writes,
+  streaming and Stop. No provider calls or credentials were needed.
+- HTTP Mermaid import and browser rendering covered native rectangles, diamonds,
+  data, documents and cylinders. Reversed mixed-size RL/BT imports overlapped
+  before the correction; POST import then GET document returned a 116px gap
+  after it. A growing cylinder's measured height now keeps its cap above the title.
+  RL/BT connections use inward-facing source/target ports instead of routing
+  through the cards. Browser inspection and persisted presentation checks cover both.
+
+The existing service kept its volume and URL. `bun scripts/verify-service-migration.ts
+http://127.0.0.1:8092 http://127.0.0.1:8090` compared all five existing workspaces,
+documents, snapshots and activity before subsequent demo edits. Rollback data
+is retained as `/data/backup-before-native-elements.sqlite` and a stopped
+`structsmith-before-native-elements` container. `bun run ui:demo --reset` restores
+the expanded baseline after destructive QA. Mobile, native OS color-dialog,
+rich text, formulas and exports are outside this acceptance.
+An exact final before/after REST comparison of 16 endpoints also retained all five
+workspace lists, documents, snapshot lists and activity after the last image update.
+
 ### Shared demo and QA cleanup
 
 The reusable [UI demo](UI_DEMO.md) now replaces disposable editor fixtures:
@@ -296,7 +344,8 @@ IcePanel and OMG UML documentation. Local evidence:
 `packages/contracts/src/enums.ts`, `packages/contracts/src/model.ts`,
 `packages/domain/src/presets.ts`, `packages/domain/src/node-shapes.ts`,
 `CreationToolbar.tsx`, `ElementPalette.tsx`, and `ScenarioPanel.tsx`.
-This is a recommended backlog, not implementation or full product parity.
+The first five additions below are now implemented, with acceptance above.
+Code blocks remain a backlog item; this is not full product parity.
 
 | Priority | Native addition | Purpose and ownership |
 | --- | --- | --- |
@@ -312,8 +361,8 @@ REST/MCP, and avoid adding decorative headings or tables to the architecture
 hierarchy. Connected data objects should follow shared model ownership. Use
 existing roles before adding architecture kinds. Custom stays an escape hatch;
 imports and the creation palette should offer native equivalents for routine work.
-Mermaid import currently assigns Custom to every node and ignores its shape.
-Native shape/type preservation in import is also needed to make Custom rare.
+Mermaid import now infers native shapes and preserves explicit type metadata.
+The earlier all-Custom import behavior was reproduced before this implementation.
 
 **FigJam:** confirmed absent canvas objects include text, tables, sticky notes,
 code blocks, images/video/GIF, drawing/highlighter and link previews. Extra
