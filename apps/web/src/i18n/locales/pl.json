@@ -89,7 +89,14 @@
     "rememberDetails": "Remember for this diagram",
     "expandInline": "Expand in place",
     "collapseInline": "Collapse in place",
-    "expansionLimit": "Four visible levels maximum. Open details to continue."
+    "expansionLimit": "Four visible levels maximum. Open details to continue.",
+    "preview": "Podgląd",
+    "previewDescription": "Tylko do odczytu. Przesuwaj, powiększaj i otwieraj szczegóły. Otwórz pełny widok, aby edytować.",
+    "previewBreadcrumbs": "Nawigacja podglądu",
+    "openFullView": "Otwórz pełny widok",
+    "previewEmpty": "Ten podproces nie zawiera jeszcze elementów.",
+    "previewError": "Nie można wczytać podglądu. Spróbuj ponownie.",
+    "previewRetry": "Ponów"
   },
   "common": {
     "add": "Dodaj",

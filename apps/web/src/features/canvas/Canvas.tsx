@@ -41,6 +41,7 @@ import { hasPrimaryModifier, primaryModifierKeyCode } from "@/lib/platform";
 import { invalidateWorkspace, queryClient, queryKeys } from "@/lib/query";
 import { useEditorStore } from "@/store/editor";
 import { useHistoryStore } from "@/store/history";
+import { ExplorationPreview } from "../navigation/ExplorationPreview";
 import type { ViewLocation } from "../navigation/history";
 import { InlineExpansionContext } from "../navigation/InlineExpansion";
 import { useCopyAgentReference } from "../reference/useCopyAgentReference";
@@ -88,6 +89,7 @@ const relationshipIdOf = (edge: { id: string; data?: Record<string, unknown> }):
 const nodeTypes = { element: ElementNode, boundary: BoundaryNode };
 const edgeTypes = { relationship: RelationshipEdge };
 const LAYOUT_DEBOUNCE_MS = 500;
+const NO_INLINE_EXPANSIONS = new Set<string>();
 
 export const DRAG_MIME = "application/x-architecture-element";
 
@@ -139,11 +141,11 @@ export function Canvas({
   const clipboard = useEditorStore((state) => state.clipboard);
   const setClipboard = useEditorStore((state) => state.setClipboard);
 
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const [previewElementId, setPreviewElementId] = useState<string | null>(null);
   const [scenarioStep, setScenarioStep] = useState<ViewScenarioStep | null>(null);
   const expansion = useMemo(
-    () => deriveExpandedView(view, elements, expandedIds),
-    [view, elements, expandedIds],
+    () => deriveExpandedView(view, elements, NO_INLINE_EXPANSIONS),
+    [view, elements],
   );
   const graph = useMemo(() => {
     const built = buildGraph({
@@ -1547,27 +1549,12 @@ export function Canvas({
     [edges, changeRelationshipPresentation, scenarioStep],
   );
 
-  const expansionFit = useRef(expandedIds);
-  useEffect(() => {
-    if (expansionFit.current === expandedIds || !nodesInitialized) return;
-    expansionFit.current = expandedIds;
-    void flow.fitView({ padding: CANVAS_FIT_PADDING, duration: 250, maxZoom: 1 });
-  }, [expandedIds, nodesInitialized, flow]);
-
   return (
     <InlineExpansionContext.Provider
       value={{
         elements,
-        expandedElementIds: expansion.expandedElementIds,
-        depths: expansion.depths,
         enabled: !connectFrom,
-        toggle: (elementId) =>
-          setExpandedIds((current) => {
-            const next = new Set(current);
-            if (next.has(elementId)) next.delete(elementId);
-            else next.add(elementId);
-            return next;
-          }),
+        open: setPreviewElementId,
       }}
     >
       <div
@@ -1838,6 +1825,19 @@ export function Canvas({
 
         {menu && <NodeContextMenu {...menu} onClose={() => setMenu(null)} />}
       </div>
+      {previewElementId && (
+        <ExplorationPreview
+          workspaceId={workspaceId}
+          elementId={previewElementId}
+          sourceView={view}
+          elements={elements}
+          relationships={relationships}
+          records={records}
+          statusOverlay={statusOverlay}
+          onClose={() => setPreviewElementId(null)}
+          onOpenDetails={onOpenDetails}
+        />
+      )}
     </InlineExpansionContext.Provider>
   );
 }
