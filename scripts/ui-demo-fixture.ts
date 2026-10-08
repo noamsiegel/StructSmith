@@ -50,7 +50,7 @@ export function buildUiDemoDocument(): WorkspaceDocument {
       services.views.saveLayout(UI_DEMO_WORKSPACE_ID, id, entries);
       return id;
     };
-    const grid = (ids: string[], columns = 3, xGap = 400, yGap = 290): LayoutEntry[] =>
+    const grid = (ids: string[], columns = 3, xGap = 540, yGap = 290): LayoutEntry[] =>
       ids.map((elementId, index) => ({
         elementId,
         x: (index % columns) * xGap,
@@ -151,7 +151,7 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         scopeElementId: "demo-nav-catalog",
         settings: { preferredDetailViews: { [rolesNav]: "demo-roles" } },
       },
-      grid([...kinds, rolesNav], 4, 390, 300),
+      grid([...kinds, rolesNav], 4, 540, 300),
     );
     const roles = elementRoles.map((role) =>
       add({
@@ -216,7 +216,7 @@ export function buildUiDemoDocument(): WorkspaceDocument {
     view(
       "typography",
       { name: "02 - Text and sizing", kind: "workflow", scopeElementId: "demo-nav-typography" },
-      grid(textIds, 3, 570, 600),
+      grid(textIds, 3, 570, 800),
     );
     const multilineDescription = Array.from(
       { length: 12 },
@@ -248,7 +248,7 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         kind: "workflow",
         scopeElementId: "demo-nav-typography",
       },
-      [...grid(stressIds, 3, 610, 1200), { elementId: tall, x: 1220, y: 1200, height: 1000 }],
+      [...grid(stressIds, 3, 610, 1700), { elementId: tall, x: 1220, y: 1700, height: 1000 }],
     );
 
     const sectionItems = [
@@ -286,13 +286,13 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         settings: {
           preferredDetailViews: { "demo-section-process": "demo-process" },
           sectionFrames: {
-            "boundary:demo-section-outer": { x: -60, y: -70, width: 1730, height: 570 },
-            "boundary:demo-section-inner": { x: -25, y: -20, width: 815, height: 390 },
-            "boundary:demo-section-empty": { x: 1720, y: 0, width: 160, height: 160 },
+            "boundary:demo-section-outer": { x: -60, y: -70, width: 2130, height: 570 },
+            "boundary:demo-section-inner": { x: -25, y: -20, width: 1060, height: 390 },
+            "boundary:demo-section-empty": { x: 2200, y: 0, width: 160, height: 160 },
           },
         },
       },
-      grid(sectionItems, 4, 420, 310),
+      grid(sectionItems, 4, 540, 310),
     );
     services.boundaries.create(UI_DEMO_WORKSPACE_ID, {
       id: "demo-section-outer",
@@ -651,7 +651,7 @@ export function buildUiDemoDocument(): WorkspaceDocument {
           ],
         },
       },
-      grid(stateIds, 3, 430, 330).map((entry) => ({
+      grid(stateIds, 3, 540, 600).map((entry) => ({
         ...entry,
         locked: entry.elementId === "demo-state-locked",
         hidden: entry.elementId === "demo-state-hidden",
