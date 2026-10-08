@@ -8,6 +8,7 @@ import { canOpenElementDetails } from "@structsmith/domain";
 import {
   Background,
   BackgroundVariant,
+  ControlButton,
   Controls,
   getViewportForBounds,
   ReactFlow,
@@ -15,7 +16,7 @@ import {
   useNodesState,
   useReactFlow,
 } from "@xyflow/react";
-import { ArrowLeft, ArrowUpRight, ChevronRight, X } from "lucide-react";
+import { ArrowLeft, ArrowUpRight, ChevronRight, Maximize, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
@@ -196,7 +197,15 @@ function PreviewCanvas({
         }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        <Controls showInteractive={false} onFitView={fit} />
+        <Controls showInteractive={false} showFitView={false}>
+          <ControlButton
+            onClick={fit}
+            aria-label={t("topbar.fitView")}
+            title={t("topbar.fitView")}
+          >
+            <Maximize />
+          </ControlButton>
+        </Controls>
       </ReactFlow>
       {!graph.nodes.length && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-sm text-muted-foreground">

@@ -17,6 +17,7 @@ import {
   Background,
   BackgroundVariant,
   type Connection,
+  ControlButton,
   Controls,
   type EdgeChange,
   getViewportForBounds,
@@ -31,6 +32,7 @@ import {
   useNodes,
   useReactFlow,
 } from "@xyflow/react";
+import { Maximize } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { toast } from "sonner";
@@ -1681,12 +1683,15 @@ export function Canvas({
             size={1}
             color="var(--canvas-dot)"
           />
-          <Controls
-            showInteractive={false}
-            position="bottom-left"
-            fitViewOptions={{ padding: CANVAS_FIT_PADDING }}
-            onFitView={fit}
-          />
+          <Controls showInteractive={false} position="bottom-left" showFitView={false}>
+            <ControlButton
+              onClick={fit}
+              aria-label={t("topbar.fitView")}
+              title={t("topbar.fitView")}
+            >
+              <Maximize />
+            </ControlButton>
+          </Controls>
           <MiniMap
             pannable
             zoomable
