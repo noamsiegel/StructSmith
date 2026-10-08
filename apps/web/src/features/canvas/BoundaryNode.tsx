@@ -126,7 +126,7 @@ function BoundaryNodeComponent({
               }
             }}
           />
-        ) : data.section ? (
+        ) : data.section && data.onRename ? (
           <Button
             variant="ghost"
             className="nodrag nopan h-7 min-w-0 truncate px-1 normal-case tracking-normal"
