@@ -108,6 +108,8 @@ export function modelingGuide() {
       boundaryBehavior:
         "Each view owns its boundary tree. The view boundaryLayer selects which layer is rendered and used by boundary-aware layout; showBoundaries controls rendering without deleting boundaries or memberships. Add elements to the view before assigning them to a boundary. Elements with no boundary in the active layer remain ordinary items in the view; 'Items in view' is a UI grouping, not a boundary object.",
       settings: {
+        commentPins:
+          "View-owned threads ({id,x,y,text,resolved,replies:[{id,text}]}); comment_list/comment_get read threads. comment_create/update/delete and comment_reply_create/update/delete share model_apply_operations revision guards and undo snapshots. Updating data.resolved resolves/reopens a thread. Deleting a parent removes all replies; deleting a reply leaves the parent. No per-person ownership, mentions or notifications.",
         showFullTitles: "Wrap full element titles instead of truncating them.",
         showDescriptions:
           "Show element descriptions inside cards; automatic layout reserves the additional height.",
@@ -116,14 +118,15 @@ export function modelingGuide() {
         boundaryLayer:
           "Select the deployment, security, compliance, ownership or custom layer rendered on the view.",
         relationshipRouting: "Draw connectors as orthogonal, curved or straight paths.",
-        showRelationshipLabels: "Show or hide relationship labels on this view.",
+        showRelationshipLabels:
+          "Legacy export preference; named connector labels are always visible on the canvas.",
         snapToGrid: "Snap manual element movement to the canvas grid.",
       },
       layouts: {
         relationshipPresentation:
-          "Per-view relationship presentation supports color (#RRGGBB), strokeWidth (0.5-12), strokeStyle (solid/dashed/dotted), sourceArrow/targetArrow (none/arrow/arrowclosed), sourceSide/targetSide (left/right/top/bottom; null means automatic), and labelOffset ({x,y}). labelPosition (0-1) locates the label along the rendered path; controlPoints set bends. Patch fields merge; null resets presentation. Grouped implied edges use the first relationship's presentation and cannot be reconnected or label-dragged.",
+          "Per-view relationship presentation supports color (#RRGGBB), strokeWidth (0.5-12), strokeStyle (solid/dashed/dotted), sourceArrow/targetArrow (none/arrow/arrowclosed), sourceSide/targetSide (left/right/top/bottom; null means automatic), and labelOffset ({x,y}). labelPosition (0-1) chooses a path anchor; labels slide horizontally on its nearest horizontal leg, with vertical position locked to that leg. The canvas ignores labelOffset.y. controlPoints set bends. Patch fields merge; null resets presentation. Grouped implied edges use the first relationship's presentation; dragging their labels or segments updates all contributing relationships atomically. They cannot be reconnected.",
         persistence:
-          "Manual positions, optional sizes, locks and relationship presentation are saved by view_set_layout or setLayout/setViewRelationships operations. Automatic layout overwrites only unlocked element coordinates.",
+          "Manual positions, optional sizes, locks and relationship presentation are saved by view_set_layout or setLayout/setViewRelationships operations. Automatic layout updates unlocked coordinates and clears manual connector bends and label offsets so stale geometry does not cross newly moved cards.",
         dagre:
           "Hierarchical layout and the default choice. It respects LR/TB direction and keeps members of active nested boundaries together.",
         force:
