@@ -36,6 +36,21 @@ function fixture() {
 test("unsaved preview lays out the existing children without changing the overview or model", () => {
   const f = fixture();
   try {
+    f.services.views.update(f.workspace.id, f.home.id, {
+      settings: {
+        annotations: [
+          {
+            id: "overview-heading",
+            kind: "text",
+            text: "Overview only",
+            x: 0,
+            y: 0,
+            width: 300,
+            height: 60,
+          },
+        ],
+      },
+    });
     const source = f.services.views.get(f.home.id);
     const before = structuredClone(f.services.model.getDocument(f.workspace.id));
     const preview = previewView(
@@ -50,6 +65,7 @@ test("unsaved preview lays out the existing children without changing the overvi
     expect(preview.elements[0]?.x).toBeLessThan(preview.elements[1]?.x ?? 0);
     expect(preview.settings.showFullTitles).toBe(true);
     expect(preview.settings.showRelationshipLabels).toBe(true);
+    expect(preview.settings.annotations).toEqual([]);
     expect(source).toEqual(f.services.views.get(f.home.id));
     expect(f.services.model.getDocument(f.workspace.id)).toEqual(before);
   } finally {

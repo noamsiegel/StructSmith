@@ -145,10 +145,10 @@ describe("UI demo fixture", () => {
     );
   });
 
-  test("offers six Home destinations, preferred details, a chooser and a four-view drill path", () => {
+  test("offers seven Home destinations, preferred details, a chooser and a four-view drill path", () => {
     const home = byKey.get("demo-home");
     expect(document.views[0]?.key).toBe("demo-home");
-    expect(home?.elements).toHaveLength(6);
+    expect(home?.elements).toHaveLength(7);
     for (const { elementId } of home?.elements ?? []) {
       const element = byId.get(elementId);
       if (!element) throw new Error(`Missing Home destination ${elementId}`);
@@ -174,6 +174,28 @@ describe("UI demo fixture", () => {
         .get("demo-validate")
         ?.elements.every((entry) => byId.get(entry.elementId)?.kind !== "workflowGroup"),
     ).toBe(true);
+  });
+
+  test("offers view-owned text, notes and tables with Section membership and empty/long content", () => {
+    const view = byKey.get("demo-annotations");
+    if (!view) throw new Error("Missing annotation demo");
+    expect(view.elements).toHaveLength(0);
+    expect(new Set(view.settings.annotations.map((item) => item.kind))).toEqual(
+      new Set(["text", "note", "table"]),
+    );
+    const section = view.boundaries.find((item) => item.id === "demo-annotations-section");
+    expect(section?.kind).toBe("custom");
+    expect(view.settings.annotations.filter((item) => item.sectionId === section?.id)).toHaveLength(
+      2,
+    );
+    const table = view.settings.annotations.find((item) => item.kind === "table");
+    if (table?.kind !== "table") throw new Error("Missing table");
+    expect(table.cells).toHaveLength(3);
+    expect(table.cells[1]).toEqual(["Ledger complete", "Account A", "Publish"]);
+    expect(view.settings.annotations.some((item) => item.kind === "text" && item.text === "")).toBe(
+      true,
+    );
+    expect(document.elements.some((item) => item.id.startsWith("demo-annotation-"))).toBe(false);
   });
 
   test("covers long and multilingual text, multiline descriptions on every shape, and a saved tall placement", () => {

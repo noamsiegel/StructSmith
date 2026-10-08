@@ -83,6 +83,11 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         "Colors and states",
         "Status tags, custom colors, locked placements and scenarios.",
       ],
+      [
+        "annotations",
+        "Text, notes and tables",
+        "Edit, paste, resize, color and move view-owned annotations.",
+      ],
     ] as const;
     const homeIds = destinations.map(([key, name, description]) =>
       add({ id: `demo-nav-${key}`, kind: "workflowGroup", name, description }),
@@ -102,14 +107,7 @@ export function buildUiDemoDocument(): WorkspaceDocument {
       },
       grid(homeIds, 3, 430, 330),
     );
-    for (const [index, key] of [
-      "catalog",
-      "typography",
-      "sections",
-      "connectors",
-      "comments",
-      "states",
-    ].entries()) {
+    for (const [index, [key]] of destinations.entries()) {
       services.records.create(UI_DEMO_WORKSPACE_ID, {
         id: `demo-check-${key}`,
         kind: "note",
@@ -165,6 +163,92 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         external: role === "externalApi",
       }),
     );
+    const annotationView = view(
+      "annotations",
+      {
+        name: "07 - Text, notes and tables",
+        kind: "workflow",
+        scopeElementId: "demo-nav-annotations",
+        settings: {
+          sectionFrames: {
+            "boundary:demo-annotations-section": { x: 680, y: 80, width: 720, height: 650 },
+          },
+          annotations: [
+            {
+              id: "demo-annotation-heading",
+              kind: "text",
+              text: "Evidence and decisions",
+              x: 0,
+              y: 0,
+              width: 620,
+              height: 70,
+              fontSize: 32,
+            },
+            {
+              id: "demo-annotation-paragraph",
+              kind: "text",
+              text: "Text belongs to this view. Double-click to edit it. Long titles, paragraphs and identifiers wrap without shrinking the words.\n住宅管理ポータル / Résumé / EvidenceIdentifierWithoutSpaces0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+              x: 0,
+              y: 120,
+              width: 560,
+              height: 80,
+            },
+            {
+              id: "demo-annotation-note",
+              kind: "note",
+              text: "Questions and assumptions stay visible.\nA shared login may expose many accounts. Verify safety for each account before publishing.",
+              x: 0,
+              y: 380,
+              width: 320,
+              height: 160,
+            },
+            {
+              id: "demo-annotation-empty",
+              kind: "text",
+              text: "",
+              x: 0,
+              y: 650,
+              width: 300,
+              height: 60,
+            },
+            {
+              id: "demo-annotation-table",
+              kind: "table",
+              cells: [
+                ["Evidence", "Account", "Decision"],
+                ["Ledger complete", "Account A", "Publish"],
+                ["Identity unknown", "Account B", "Withhold and review"],
+              ],
+              x: 740,
+              y: 140,
+              width: 600,
+              height: 220,
+              sectionId: "demo-annotations-section",
+            },
+            {
+              id: "demo-annotation-section-note",
+              kind: "note",
+              text: "Move this Section: the table and this note move together.\nFit to contents includes annotations.\nPaste spreadsheet cells in the table editor.",
+              x: 740,
+              y: 420,
+              width: 520,
+              height: 160,
+              sectionId: "demo-annotations-section",
+              color: "#5AD8CC",
+            },
+          ],
+        },
+      },
+      [],
+    );
+    services.boundaries.create(UI_DEMO_WORKSPACE_ID, {
+      id: "demo-annotations-section",
+      viewId: annotationView,
+      kind: "custom",
+      layer: "custom",
+      name: "Account decision examples",
+      elementIds: [],
+    });
     view(
       "roles",
       { name: "01b - Element roles", kind: "workflow", scopeElementId: rolesNav },

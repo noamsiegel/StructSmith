@@ -222,7 +222,7 @@ test("annotations use only their view's Sections, import remaps ownership and de
     invalidView.settings.annotations = [{ ...text, id: "invalid", sectionId: section.id }];
     expect(() => services.imports.importDocument(invalid)).toThrow("annotation");
     expect(() =>
-      services.boundaries.update(workspace.id, section.id, { kind: "security", layer: "security" }),
+      services.boundaries.update(workspace.id, section.id, { kind: "trustZone", layer: "security" }),
     ).toThrow("must remain a Section");
     services.boundaries.delete(workspace.id, section.id);
     expect(services.views.get(view.id).settings.annotations).toMatchObject([

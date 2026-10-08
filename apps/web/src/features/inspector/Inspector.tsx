@@ -262,12 +262,20 @@ export function Inspector({
             </p>
           )}
 
-          {!element && !relationship && !boundary && selection.type !== "elements" && view && (
-            <>
-              <p className="text-xs text-muted-foreground">{t("inspector.nothingSelected")}</p>
-              <ViewInspector key={view.id} view={view} workspaceId={workspaceId} />
-            </>
+          {selection.type === "annotation" && (
+            <p className="text-sm text-muted-foreground">{t("annotations.editHint")}</p>
           )}
+          {!element &&
+            !relationship &&
+            !boundary &&
+            selection.type !== "elements" &&
+            selection.type !== "annotation" &&
+            view && (
+              <>
+                <p className="text-xs text-muted-foreground">{t("inspector.nothingSelected")}</p>
+                <ViewInspector key={view.id} view={view} workspaceId={workspaceId} />
+              </>
+            )}
 
           {!element && !relationship && !boundary && !view && (
             <p className="text-xs text-muted-foreground">{t("inspector.nothingSelected")}</p>

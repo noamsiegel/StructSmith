@@ -28,6 +28,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useView, useViews } from "@/hooks/useApi";
+import { AnnotationNode } from "../canvas/AnnotationNode";
 import { BoundaryNode } from "../canvas/BoundaryNode";
 import { commandWheelViewport } from "../canvas/commandWheel";
 import { ElementNode } from "../canvas/ElementNode";
@@ -44,7 +45,7 @@ import { DetailNavigationContext } from "./DetailNavigation";
 import { InlineExpansionContext } from "./InlineExpansion";
 import { previewDestination, previewView } from "./preview";
 
-const nodeTypes = { element: ElementNode, boundary: BoundaryNode };
+const nodeTypes = { element: ElementNode, boundary: BoundaryNode, annotation: AnnotationNode };
 const edgeTypes = { relationship: RelationshipEdge };
 
 function PreviewCanvas({
@@ -192,6 +193,7 @@ function PreviewCanvas({
         minZoom={0.15}
         maxZoom={2.5}
         onNodeClick={(_event, node) => {
+          if (node.type === "annotation") return;
           const elementId = node.type === "boundary" ? node.data.elementId : node.id;
           if (typeof elementId === "string") onDrill(elementId);
         }}
