@@ -2,8 +2,31 @@ import type {
   ArchitectureElement,
   ArchitectureRelationship,
   ViewScenario,
+  ViewScenarioStep,
 } from "@structsmith/contracts";
 import { ruleViolation } from "./errors";
+
+/** Reordering changes which edge can arrive from the preceding step. */
+export function clearInvalidScenarioArrivals<T extends ViewScenarioStep>(
+  steps: readonly T[],
+  relationships: readonly Pick<
+    ArchitectureRelationship,
+    "id" | "sourceElementId" | "targetElementId"
+  >[],
+): T[] {
+  const edges = new Map(relationships.map((edge) => [edge.id, edge]));
+  return steps.map((step, index) => {
+    const previous = steps[index - 1];
+    const edge = step.relationshipId ? edges.get(step.relationshipId) : undefined;
+    if (
+      previous &&
+      edge?.sourceElementId === previous.elementId &&
+      edge.targetElementId === step.elementId
+    )
+      return step;
+    return { ...step, relationshipId: undefined };
+  });
+}
 
 export function validateViewScenarios(
   scenarios: readonly ViewScenario[],
