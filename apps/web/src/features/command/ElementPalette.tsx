@@ -10,9 +10,9 @@ import {
   CommandList,
 } from "@/components/ui/command";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
-import { useApplyOperations } from "@/hooks/useApi";
 import { useEditorStore } from "@/store/editor";
 import { iconFor } from "../icons";
+import { useCreatePreset } from "./useCreatePreset";
 
 /**
  * Palette presets (spec §31) are shortcuts for a `kind` + `role` pair — the
@@ -21,65 +21,17 @@ import { iconFor } from "../icons";
 export function ElementPalette({
   workspaceId,
   view,
+  getCreationPoint,
 }: {
   workspaceId: string;
   view: ViewDetail | null;
+  getCreationPoint?: () => { x: number; y: number };
 }) {
   const { t } = useTranslation();
   const open = useEditorStore((state) => state.paletteOpen);
   const boundaryId = useEditorStore((state) => state.paletteBoundaryId);
   const setOpen = useEditorStore((state) => state.setPaletteOpen);
-  const select = useEditorStore((state) => state.select);
-  const applyOperations = useApplyOperations(workspaceId);
-
-  const add = (preset: (typeof presets)[number]): void => {
-    const name = t(`presets.${preset.id}`, { defaultValue: preset.label });
-    applyOperations.mutate(
-      {
-        label: `Added ${name}`,
-        operations: [
-          {
-            op: "createElement",
-            ref: "created",
-            data: {
-              kind: preset.kind,
-              role: preset.role,
-              name,
-              external: preset.external ?? false,
-              technology: preset.technology ?? null,
-            },
-          },
-          ...(view
-            ? [
-                {
-                  op: "setViewElements" as const,
-                  viewId: view.id,
-                  elementIds: ["@created"],
-                  mode: "add" as const,
-                },
-                ...(boundaryId
-                  ? [
-                      {
-                        op: "setBoundaryMembers" as const,
-                        boundaryId,
-                        elementIds: ["@created"],
-                        mode: "add" as const,
-                      },
-                    ]
-                  : []),
-              ]
-            : []),
-        ],
-      },
-      {
-        onSuccess: (result) => {
-          const created = result.appliedOperations.find((operation) => operation.ref === "created");
-          if (created?.id) select({ type: "element", id: created.id });
-          setOpen(false);
-        },
-      },
-    );
-  };
+  const creation = useCreatePreset(workspaceId);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -96,7 +48,15 @@ export function ElementPalette({
                   <CommandItem
                     key={preset.id}
                     value={`${preset.label} ${preset.kind} ${preset.role ?? ""}`}
-                    onSelect={() => add(preset)}
+                    disabled={creation.disabled}
+                    onSelect={() =>
+                      creation.add(
+                        preset,
+                        view?.id ?? null,
+                        boundaryId,
+                        boundaryId ? undefined : getCreationPoint?.(),
+                      )
+                    }
                   >
                     <Icon className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className="flex-1">
