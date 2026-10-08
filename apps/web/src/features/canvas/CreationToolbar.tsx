@@ -62,7 +62,7 @@ export function CreationToolbar({
             <Button
               type="button"
               variant="ghost"
-              className="h-11 w-12 shrink-0 flex-col gap-0.5 px-1 text-[10px]"
+              className="h-12 min-w-16 shrink-0 flex-col gap-1 px-2 text-[11px] leading-4"
               aria-label={t("creationToolbar.add", { name: label })}
               disabled={creation.disabled}
               tabIndex={focused === index ? 0 : -1}
@@ -80,7 +80,7 @@ export function CreationToolbar({
         <Button
           type="button"
           variant="ghost"
-          className="h-11 w-12 shrink-0 flex-col gap-0.5 px-1 text-[10px]"
+          className="h-12 min-w-16 shrink-0 flex-col gap-1 px-2 text-[11px] leading-4"
           aria-label={t("creationToolbar.moreHint")}
           tabIndex={focused === 4 || (creation.disabled && focused < 4) ? 0 : -1}
           onFocus={() => setFocused(4)}

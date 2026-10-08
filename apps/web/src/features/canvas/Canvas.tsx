@@ -1362,6 +1362,7 @@ export function Canvas({
             pannable
             zoomable
             position="bottom-right"
+            style={{ bottom: 96 }}
             nodeStrokeWidth={2}
             maskColor="transparent"
           />
@@ -1384,7 +1385,13 @@ export function Canvas({
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
             <p className="text-sm font-medium">{t("canvas.empty")}</p>
             <p className="max-w-xs text-xs text-muted-foreground">
-              {t(statusOverlay === "liveOnly" ? "statusOverlay.emptyHint" : "canvas.emptyHint")}
+              {t(
+                tagFocus
+                  ? "tagFocus.empty"
+                  : statusOverlay === "liveOnly"
+                    ? "statusOverlay.emptyHint"
+                    : "canvas.emptyHint",
+              )}
             </p>
           </div>
         )}
@@ -1392,27 +1399,6 @@ export function Canvas({
         {graph.hiddenCount > 0 && (
           <div className="pointer-events-none absolute right-3 top-16 rounded border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground">
             {t("canvas.hiddenElements", { count: graph.hiddenCount })}
-          </div>
-        )}
-
-        {graph.nodes.length > 0 && (
-          <div className="pointer-events-none absolute left-14 bottom-20 max-w-[calc(100%-14rem)] flex flex-wrap items-center gap-2 rounded-md border border-border bg-card/90 px-2.5 py-1.5 text-[10px] font-semibold uppercase tracking-wider shadow-sm backdrop-blur-sm">
-            <span className="text-muted-foreground">{t("canvas.legend")}</span>
-            {statusOverlay !== "off" && (
-              <>
-                <span style={{ color: "var(--status-live)" }}>{t("statusOverlay.live")}</span>
-                <span style={{ color: "var(--status-planned)" }}>{t("statusOverlay.planned")}</span>
-                <span className="text-muted-foreground">{t("statusOverlay.untagged")}</span>
-              </>
-            )}
-            <span className="flex items-center gap-1 text-ownership-internal">
-              <span className="h-2 w-2 rounded-sm bg-ownership-internal" />
-              {t("inspector.internal")}
-            </span>
-            <span className="flex items-center gap-1 text-ownership-external">
-              <span className="h-2 w-2 rounded-sm border border-dashed border-ownership-external bg-ownership-external/15" />
-              {t("inspector.external")}
-            </span>
           </div>
         )}
 

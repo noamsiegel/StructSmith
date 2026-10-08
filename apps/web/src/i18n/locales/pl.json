@@ -301,7 +301,8 @@
     "hiddenElements": "ukryte: {{count}}",
     "copiedElements": "Skopiowano elementy: {{count}}",
     "pastedElements": "Wklejono elementy: {{count}}",
-    "deletedSelection": "Usunięto wybrane elementy"
+    "deletedSelection": "Usunięto wybrane elementy",
+    "diagramLegend": "Diagram legend"
   },
   "contextMenu": {
     "edit": "Edytuj",
@@ -813,7 +814,8 @@
   },
   "tagFocus": {
     "title": "Focus by tag",
-    "all": "All tags"
+    "all": "All tags",
+    "empty": "No objects or connections in this diagram use this tag."
   },
   "creationToolbar": {
     "title": "Add to diagram",

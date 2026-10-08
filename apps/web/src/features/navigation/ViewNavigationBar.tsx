@@ -1,7 +1,15 @@
 import type { ArchitectureElement, ArchitectureView } from "@structsmith/contracts";
-import { ArrowLeft, ChevronRight, PanelLeft, PanelRight, Settings2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronRight,
+  CircleHelp,
+  PanelLeft,
+  PanelRight,
+  Settings2,
+} from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import {
   Select,
   SelectContent,
@@ -12,6 +20,7 @@ import {
 import { Tooltip } from "@/components/ui/tooltip";
 import { primaryModifierKeyCode, primaryModifierLabel } from "@/lib/platform";
 import type { StatusOverlay } from "../canvas/statusOverlay";
+import { iconFor } from "../icons";
 import type { ViewLocation } from "./history";
 
 export function ViewNavigationBar({
@@ -165,6 +174,54 @@ export function ViewNavigationBar({
             ))}
           </SelectContent>
         </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="iconSm"
+              className="shrink-0"
+              aria-label={t("canvas.diagramLegend")}
+              title={t("canvas.diagramLegend")}
+            >
+              <CircleHelp className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-64 space-y-3 p-4 text-xs">
+            <h3 className="font-semibold">{t("canvas.diagramLegend")}</h3>
+            {current?.kind === "workflow" && (
+              <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+                {(["workflowGroup", "action", "decision", "outcome"] as const).map((kind) => {
+                  const Icon = iconFor(kind, null);
+                  return (
+                    <span key={kind} className="flex items-center gap-1.5">
+                      <Icon className="h-3.5 w-3.5" />
+                      {t(`kinds.${kind}`)}
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+            <div className="space-y-2 border-t border-border pt-3">
+              <p className="font-medium">{t("canvas.legend")}</p>
+              <div className="flex items-center gap-4">
+                <span className="text-ownership-internal">{t("inspector.internal")}</span>
+                <span className="text-ownership-external">{t("inspector.external")}</span>
+              </div>
+            </div>
+            {statusOverlay !== "off" && (
+              <div className="space-y-2 border-t border-border pt-3">
+                <p className="font-medium">{t("statusOverlay.title")}</p>
+                <div className="flex items-center gap-4">
+                  <span style={{ color: "var(--status-live)" }}>{t("statusOverlay.live")}</span>
+                  <span style={{ color: "var(--status-planned)" }}>
+                    {t("statusOverlay.planned")}
+                  </span>
+                </div>
+                <p className="text-muted-foreground">{t("statusOverlay.untagged")}</p>
+              </div>
+            )}
+          </PopoverContent>
+        </Popover>
         {scope.length > 0 && (
           <span
             className="max-w-[35%] truncate text-[11px] text-muted-foreground"

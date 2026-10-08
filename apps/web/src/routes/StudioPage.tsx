@@ -159,6 +159,7 @@ function StudioContent({
     model: modelPanelVisible ? "19%" : "0%",
     inspector: inspectorPanelVisible ? "22%" : "0%",
   });
+  const sidebarWidths = useRef({ model: "19%", inspector: "22%" });
   const setModelPanelVisible = useEditorStore((state) => state.setModelPanelVisible);
   const setInspectorPanelVisible = useEditorStore((state) => state.setInspectorPanelVisible);
   const updateSidebarVisibility = (side: "model" | "inspector", visible: boolean): void => {
@@ -169,7 +170,7 @@ function StudioContent({
   const toggleSidebar = (side: "model" | "inspector"): void => {
     const panel = (side === "model" ? modelPanel : inspectorPanel).current;
     if (!panel) return;
-    if (panel.isCollapsed()) panel.expand();
+    if (panel.isCollapsed()) panel.resize(sidebarWidths.current[side]);
     else {
       updateSidebarVisibility(side, false);
       panel.collapse();
@@ -177,7 +178,8 @@ function StudioContent({
   };
   useEffect(() => {
     const panel = inspectorPanel.current;
-    if (inspectorPanelVisible && panel?.isCollapsed()) panel.expand();
+    if (inspectorPanelVisible && panel?.isCollapsed())
+      panel.resize(sidebarWidths.current.inspector);
   }, [inspectorPanelVisible, inspectorPanel]);
   const handledReference = useRef<string | null>(null);
   const [viewSettingsOpen, setViewSettingsOpen] = useState(false);
@@ -404,7 +406,10 @@ function StudioContent({
               maxSize="34%"
               inert={!modelPanelVisible}
               aria-hidden={!modelPanelVisible}
-              onResize={(size) => updateSidebarVisibility("model", size.inPixels > 0)}
+              onResize={(size) => {
+                if (size.inPixels > 0) sidebarWidths.current.model = `${size.asPercentage}%`;
+                updateSidebarVisibility("model", size.inPixels > 0);
+              }}
             >
               <Explorer
                 workspaceId={workspaceId}
@@ -501,7 +506,10 @@ function StudioContent({
               maxSize="40%"
               inert={!inspectorPanelVisible}
               aria-hidden={!inspectorPanelVisible}
-              onResize={(size) => updateSidebarVisibility("inspector", size.inPixels > 0)}
+              onResize={(size) => {
+                if (size.inPixels > 0) sidebarWidths.current.inspector = `${size.asPercentage}%`;
+                updateSidebarVisibility("inspector", size.inPixels > 0);
+              }}
             >
               <Inspector
                 views={viewList}
