@@ -27,6 +27,8 @@ export function DetailViewDialog({
   relationships,
   views,
   currentViewId,
+  preferredDetailViews = {},
+  canRemember = true,
   onClose,
   onOpenView,
 }: {
@@ -36,6 +38,8 @@ export function DetailViewDialog({
   relationships: readonly ArchitectureRelationship[];
   views: readonly ArchitectureView[];
   currentViewId: string | null;
+  preferredDetailViews?: Readonly<Record<string, string>>;
+  canRemember?: boolean;
   onClose: () => void;
   onOpenView: (viewId: string) => void;
 }) {
@@ -47,7 +51,30 @@ export function DetailViewDialog({
     t("navigation.defaultName", { name: element.name, kind: t(`viewKinds.${kind}`) }),
   );
   const [seed, setSeed] = useState(true);
+  const [remember, setRemember] = useState(false);
   const elementIds = detailViewElementIds(element, elements, relationships);
+  const open = (viewId: string) => {
+    const navigate = () => {
+      onOpenView(viewId);
+      onClose();
+    };
+    if (!remember || !currentViewId || !canRemember) return navigate();
+    mutation.mutate(
+      {
+        label: t("navigation.rememberDetails"),
+        operations: [
+          {
+            op: "updateView",
+            viewId: currentViewId,
+            data: {
+              settings: { preferredDetailViews: { ...preferredDetailViews, [element.id]: viewId } },
+            },
+          },
+        ],
+      },
+      { onSuccess: navigate },
+    );
+  };
   const create = () => {
     if (!kind || !name.trim() || mutation.isPending) return;
     mutation.mutate(
@@ -95,27 +122,39 @@ export function DetailViewDialog({
           </DialogDescription>
         </DialogHeader>
         {candidates.length ? (
-          <div className="max-h-80 space-y-1 overflow-y-auto">
-            {candidates.map((view) => (
-              <button
-                key={view.id}
-                type="button"
-                className="flex w-full items-center gap-3 rounded-md border border-border p-3 text-left hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                onClick={() => {
-                  onOpenView(view.id);
-                  onClose();
-                }}
-              >
-                <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium">{view.name}</span>
-                  <span className="block text-xs text-muted-foreground">
-                    {t(`viewKinds.${view.kind}`)}
+          <div className="space-y-3">
+            <div className="max-h-80 space-y-1 overflow-y-auto">
+              {candidates.map((view) => (
+                <Button
+                  key={view.id}
+                  type="button"
+                  variant="outline"
+                  className="h-auto w-full gap-3 p-3 text-left"
+                  disabled={mutation.isPending}
+                  onClick={() => open(view.id)}
+                >
+                  <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-sm font-medium">{view.name}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {t(`viewKinds.${view.kind}`)}
+                    </span>
                   </span>
-                </span>
-                <ArrowRight className="h-4 w-4" />
-              </button>
-            ))}
+                  <ArrowRight className="h-4 w-4" />
+                </Button>
+              ))}
+            </div>
+            {currentViewId && canRemember && (
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={remember}
+                  disabled={mutation.isPending}
+                  onChange={(event) => setRemember(event.target.checked)}
+                />
+                {t("navigation.rememberDetails")}
+              </label>
+            )}
           </div>
         ) : (
           <form
@@ -152,6 +191,11 @@ export function DetailViewDialog({
               </span>
             </label>
           </form>
+        )}
+        {Boolean(mutation.error) && (
+          <p role="alert" className="text-sm text-destructive">
+            {mutation.error instanceof Error ? mutation.error.message : String(mutation.error)}
+          </p>
         )}
         <DialogFooter>
           <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>

@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { iconFor } from "../icons";
 import { DetailViewAction } from "../navigation/DetailNavigation";
+import { InlineExpansionAction } from "../navigation/InlineExpansion";
 import type { ElementNodeData } from "./graph";
 import { statusColor } from "./statusOverlay";
 
@@ -87,6 +88,7 @@ function ElementNodeComponent({ data, selected }: NodeProps & { data: ElementNod
           )}
           {locked && <Lock className="h-3 w-3 shrink-0 text-muted-foreground" />}
           <DetailViewAction elementId={element.id} compact />
+          <InlineExpansionAction elementId={element.id} compact />
         </div>
 
         {showDescriptions && element.description?.trim() && (
