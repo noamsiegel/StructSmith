@@ -4,9 +4,106 @@ import { Position, ReactFlowProvider } from "@xyflow/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createTestContext, createWorkspace } from "../../../../../tests/helpers";
+import type { FlowNode } from "./graph";
+import { LabelPlacementProvider } from "./LabelPlacement";
 import { RelationshipArrow, RelationshipEdge } from "./RelationshipEdge";
 import type { ImplementationStatus } from "./statusOverlay";
 import "../../i18n";
+
+test("automatic Own return path avoids a generated-corner dogleg while authored bends remain", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const elements = ["Come back", "Upload documents", "Act on insights", "Review insights"].map(
+      (name) => services.elements.create(workspace.id, { kind: "workflowGroup", name }).result,
+    );
+    const [source, target] = elements;
+    if (!source || !target) throw new Error("Missing Own return endpoints");
+    const boxes = [
+      { x: 2752, y: 400, width: 240, height: 184 },
+      { x: 1472, y: 0, width: 240, height: 184 },
+      { x: 2752, y: -48, width: 240, height: 280 },
+      { x: 2096, y: -4, width: 240, height: 184 },
+    ];
+    const nodes: FlowNode[] = elements.map((element, index) => {
+      const box = boxes[index];
+      if (!box) throw new Error("Missing Own card dimensions");
+      return {
+        id: element.id,
+        type: "element",
+        position: { x: box.x, y: box.y },
+        measured: { width: box.width, height: box.height },
+        data: {
+          element,
+          severity: null,
+          locked: false,
+          showFullTitles: true,
+          showDescriptions: true,
+          minimumHeight: box.height,
+          status: null,
+        },
+      };
+    });
+    const relationship = services.relationships.create(workspace.id, {
+      sourceElementId: source.id,
+      targetElementId: target.id,
+    }).result;
+    const flowProps = { initialNodes: nodes, children: null };
+    const labelProps = { nodes, children: null };
+    const render = (controlPoints: ControlPoint[]) =>
+      renderToStaticMarkup(
+        createElement(
+          ReactFlowProvider,
+          flowProps,
+          createElement(
+            LabelPlacementProvider,
+            labelProps,
+            createElement(RelationshipEdge, {
+              id: relationship.id,
+              source: source.id,
+              target: target.id,
+              sourceX: 2991,
+              sourceY: 492,
+              targetX: 1601,
+              targetY: 183,
+              sourcePosition: Position.Right,
+              targetPosition: Position.Bottom,
+              selectable: true,
+              deletable: true,
+              data: {
+                status: null,
+                relationship,
+                tags: [],
+                implied: false,
+                label: "",
+                count: 1,
+                routing: "orthogonal",
+                showLabel: false,
+                placement: {
+                  viewId: "view",
+                  relationshipId: relationship.id,
+                  hidden: false,
+                  labelPosition: null,
+                  controlPoints,
+                  presentation: { targetFraction: 128 / 238 },
+                },
+              },
+            }),
+          ),
+        ),
+      );
+    expect(render([])).toContain('d="M 2991,492 L 3000,492 L 3000,240 L 1601,240 L 1601,183"');
+    expect(
+      render([
+        { x: 3100, y: 492 },
+        { x: 3100, y: 300 },
+        { x: 1601, y: 300 },
+      ]),
+    ).toContain('d="M 2991,492 L 3100,492 L 3100,300 L 1601,300 L 1601,183"');
+  } finally {
+    close();
+  }
+});
 
 test("visible connector path applies configured color, width, dash, route and status", () => {
   const { services, close } = createTestContext();

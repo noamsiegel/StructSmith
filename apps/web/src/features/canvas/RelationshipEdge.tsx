@@ -277,13 +277,16 @@ function RelationshipEdgeComponent({
     };
     if (!orthogonal)
       return { points: [from.point, ...(routePreview ?? savedBends), to.point], blocked: false };
-    const uncheckedBends = orthogonalRelationshipBends(
-      from.point,
-      to.point,
-      from.side as typeof sourcePosition,
-      to.side as typeof targetPosition,
-      routePreview ?? savedBends,
-    );
+    const authoredBends = routePreview ?? savedBends;
+    const uncheckedBends = authoredBends.length
+      ? orthogonalRelationshipBends(
+          from.point,
+          to.point,
+          from.side as typeof sourcePosition,
+          to.side as typeof targetPosition,
+          authoredBends,
+        )
+      : [];
     const boxes = obstacles.filter((box) => box.id !== from.elementId && box.id !== to.elementId);
     for (const endpoint of [from, to]) {
       if (!endpoint.elementId) continue;
