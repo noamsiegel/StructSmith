@@ -554,8 +554,23 @@ function RelationshipEdgeComponent({
         onPointerMove={moveRoute}
         onPointerUp={endRoute}
         onPointerCancel={cancelRoute}
+        onDoubleClick={(event) => {
+          if (!routeEditable || !savedBends.length || routeSaving || endpointSaving) return;
+          event.preventDefault();
+          event.stopPropagation();
+          cancelRoute();
+          setRouteSaving(true);
+          void data
+            ?.onControlPointsChange?.([])
+            .catch(() => undefined)
+            .finally(() => setRouteSaving(false));
+        }}
       >
-        {route.blocked && <title>{t("canvas.blockedRouteHint")}</title>}
+        {route.blocked ? (
+          <title>{t("canvas.blockedRouteHint")}</title>
+        ) : routeEditable ? (
+          <title>{t("relationshipPresentation.resetRouteHint")}</title>
+        ) : null}
         <BaseEdge
           id={id}
           path={path}

@@ -129,6 +129,12 @@ export const shortcuts: readonly Shortcut[] = [
     keys: ["Shift", "$shortcuts.arrowKeys"],
   },
   { id: "cancel-drag", group: "connectors", labelKey: "shortcuts.cancelDrag", keys: ["Escape"] },
+  {
+    id: "reset-route",
+    group: "connectors",
+    labelKey: "relationshipPresentation.resetRoute",
+    keys: ["$navigation.doubleClick"],
+  },
   { id: "comment", group: "comments", labelKey: "comments.addTitle", keys: ["C"] },
   { id: "comment-center", group: "comments", labelKey: "shortcuts.commentCenter", keys: ["Enter"] },
   {

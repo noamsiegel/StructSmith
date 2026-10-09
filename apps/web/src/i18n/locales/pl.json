@@ -773,6 +773,8 @@
     "labelOffsetX": "Przesunięcie etykiety X",
     "labelOffsetY": "Przesunięcie etykiety Y",
     "reset": "Resetuj wygląd",
+    "resetRoute": "Resetuj trasę",
+    "resetRouteHint": "Usuń ręczne załamania i wyznacz trasę automatycznie. Punkty zaczepienia i wygląd pozostaną bez zmian. Możesz też kliknąć linię dwukrotnie.",
     "updated": "Zmień wygląd połączenia",
     "moveLabel": "Przenieś etykietę: {{label}}",
     "moveLabelHint": "Przesuwaj w lewo lub w prawo wzdłuż połączenia. Lewo/Prawo przesuwa o 1, Shift o 10. Escape anuluje przeciąganie.",

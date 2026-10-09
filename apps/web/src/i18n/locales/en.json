@@ -768,6 +768,8 @@
     "labelOffsetX": "Label offset X",
     "labelOffsetY": "Label offset Y",
     "reset": "Reset appearance",
+    "resetRoute": "Reset route",
+    "resetRouteHint": "Clear manual bends and reroute automatically. Attachment points and appearance stay unchanged. You can also double-click the line.",
     "updated": "Update connector appearance",
     "moveLabel": "Move label: {{label}}",
     "moveLabelHint": "Drag to any connector segment. Text stays horizontal. Arrow keys move along the line; Shift moves 10 units. Escape cancels dragging.",

@@ -80,6 +80,38 @@ export function SelectionColorToolbar({
       aria-label={t("selectionColors.toolbar")}
     >
       {children}
+      {relationshipIds.length > 0 && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          title={t("relationshipPresentation.resetRouteHint")}
+          disabled={
+            command.isPending ||
+            !view.relationships.some(
+              (row) => relationshipIds.includes(row.relationshipId) && row.controlPoints.length,
+            )
+          }
+          onClick={() =>
+            command.mutate({
+              label: t("relationshipPresentation.resetRoute"),
+              operations: [
+                {
+                  op: "setViewRelationships",
+                  viewId: view.id,
+                  relationships: relationshipIds.map((relationshipId) => ({
+                    relationshipId,
+                    controlPoints: [],
+                  })),
+                },
+              ],
+            })
+          }
+        >
+          <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
+          {t("relationshipPresentation.resetRoute")}
+        </Button>
+      )}
       <Popover
         key={targetKey}
         onOpenChange={(open) => {
