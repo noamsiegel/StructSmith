@@ -675,3 +675,49 @@ These links underpin the optional ideas, not claims that the fork implements the
 - [Drafts](https://docs.icepanel.io/future-state-design/drafts) and
   [versioning](https://docs.icepanel.io/future-state-design/versioning).
 - [FigJam canvas gestures](https://help.figma.com/hc/en-us/articles/1500004414582-Pan-and-zoom-in-FigJam).
+
+## Connection alignment acceptance
+
+Reproduced live Own creases of two and four canvas pixels with
+`ownRoutingTab.playwright.evaluate(scanConnectorLanes)`. The screenshot's
+`record fills in` relationship is `mermaid-edge-d320zy-dh757m`; its old path was
+`M 1711,92 L 1830,92 L 1830,94 L 2093,94`.
+
+The shared demo now includes `demo-connection-alignment`. Automatic horizontal
+and vertical attachments rendered as single straight segments without changing
+card positions. With fixed endpoint fractions and unequal card heights,
+`routingDevTab.drag` aligned the five-pixel initial case and persisted target
+position `{x:624,y:261}`; reload retained its straight path. Endpoint dragging
+aligned the same pair; Undo restored the jog, Redo and reload restored the
+straight line. A DOM wait observed the node alignment guide during native drag.
+
+Review identified grid-phase and neighbor-capacity gaps. Card snapping now uses
+unsnapped pointer coordinates. At zoom 2.0736, native dragging aligned an eight
+canvas-pixel mismatch between cards of heights 160 and 144 while the 16px grid
+remained enabled: target `{x:624,y:264}`, path `M 219,336 L 625,336`.
+Shift-click selected both endpoints; dragging moved both by `{x:32,y:16}`, with
+path `M 251,352 L 657,352`. Automatic neighbor clearance reserves its possible
+six-pixel alignment adjustment. Manual fractions and authored middle bends remain
+unchanged unless the user moves them. Only originally automatic, near-straight
+jogs of at most half a grid step collapse after the endpoints align.
+[Demo screenshot](screenshots/connection-alignment-demo.png).
+
+`bun run check`, `bun run typecheck`, `bun run test` (397 pass, zero failures,
+3747 assertions across 71 files), web/site/launcher builds and
+`docker build -t structsmith-fork:connection-alignment .` succeeded.
+Three focused mutation rounds killed 25, six and six deliberate mutations;
+production sources were restored. `bun scripts/smoke-local-helper.ts
+structsmith-fork:connection-alignment` verified HTML, authenticated Docker REST,
+host CLI, scoped MCP writes, streaming and Stop.
+
+The deployed image is `a4eaf6383856a6159df2d4b6afd913ea9fc39a203496ebeaaac0d1257ae097a9`.
+Health reported ok; all six workspace documents were identical across replacement.
+Loopback port, environment and the data volume were retained. The previous
+container is `structsmith-before-connection-alignment-20261009`.
+After `ownRoutingTab.reload()`, the exact screenshot connector rendered
+`M 1711,92 L 2093,92`. Own scanners reported eight labels, 24 segments, zero
+blocked routes, overlaps or routing violations. Console messages after the reload
+timestamp contained no warnings or errors.
+[Own screenshot](screenshots/connection-alignment-own.png).
+
+Touch gestures, exports and large-graph performance were not exercised.

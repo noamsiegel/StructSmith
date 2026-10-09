@@ -103,6 +103,16 @@ and resets to Status on reload, without editing the model or coordinates.
   perpendicular crossings remain possible. Hovering a path/label, or focusing a
   label, highlights the full connector. Fixed endpoint stubs or crowded diagrams
   can still share space when separation is impossible; card safety takes priority.
+- Connected card dragging uses the pointer before grid snapping to align facing
+  border attachments within six screen pixels, with a dotted alignment guide.
+  The grid still applies on other axes. Selected objects and Section contents
+  share one adjustment; two moving endpoints do not snap to each other. Fractional
+  positions survive save and reload. Automatic endpoints on facing borders prefer
+  a shared axis within six canvas pixels when neighboring attachments have room.
+  Explicit endpoint placements remain fixed until dragged. Endpoint dragging also
+  snaps along the visible shape border. An originally automatic jog of at most
+  eight canvas pixels may collapse when its endpoints align; authored bends and
+  larger obstacle detours retain their saved middle route.
 - Cards keep a consistent default width and grow vertically to fit wrapped
   titles, technology and displayed descriptions. Saved heights are minimums,
   so a short saved card cannot clip new text. Wider saved cards remain supported.
