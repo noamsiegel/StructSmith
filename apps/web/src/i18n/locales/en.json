@@ -292,6 +292,8 @@
     "added": "Added {{name}}"
   },
   "canvas": {
+    "blockedRoute": "Blocked route",
+    "blockedRouteHint": "There is not enough space to route this connector. Move overlapping or crowded objects apart.",
     "legend": "Ownership",
     "empty": "This view has no elements yet",
     "emptyHint": "Add elements from the palette, or drag them in from the model tree.",

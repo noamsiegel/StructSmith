@@ -29,8 +29,9 @@ import {
 } from "./ConnectorEndpointHandle";
 import { borderEndpoint, type EndpointSide } from "./endpointGeometry";
 import type { RelationshipEdgeData } from "./graph";
-import { useLabelPlacement } from "./LabelPlacement";
+import { useLabelPlacement, useRoutingObstacles } from "./LabelPlacement";
 import { closestLabelRoutePoint } from "./labelClearance";
+import { safeOrthogonalRoute } from "./orthogonalRouting";
 import {
   closestRelationshipSegment,
   manualRelationshipPath,
@@ -42,6 +43,7 @@ import {
 import { statusColor, statusStroke } from "./statusOverlay";
 
 export type RelationshipFocus = "normal" | "connected" | "dimmed";
+const EMPTY_BENDS: ControlPoint[] = [];
 
 export function relationshipFocus(
   activeElementId: string | null,
@@ -126,6 +128,7 @@ function RelationshipEdgeComponent({
 }: EdgeProps & { data?: RelationshipEdgeData }) {
   const { t } = useTranslation();
   const flow = useReactFlow();
+  const obstacles = useRoutingObstacles();
   const { zoom } = useViewport();
   const markerId = `relationship-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const activeElementId = useEditorStore((state) =>
@@ -181,7 +184,7 @@ function RelationshipEdgeComponent({
         setEndpointSaving(false);
       });
   };
-  const savedBends = data?.movementBends ?? data?.placement?.controlPoints ?? [];
+  const savedBends = data?.movementBends ?? data?.placement?.controlPoints ?? EMPTY_BENDS;
   const [routePreview, setRoutePreview] = useState<ControlPoint[] | null>(null);
   const [routeSaving, setRouteSaving] = useState(false);
   const routeDrag = useRef<{
@@ -195,15 +198,50 @@ function RelationshipEdgeComponent({
   const sourcePoint = start.point;
   const targetPoint = end.point;
   const orthogonal = (data?.routing ?? "orthogonal") === "orthogonal";
-  const bends = orthogonal
-    ? orthogonalRelationshipBends(
-        sourcePoint,
-        targetPoint,
-        pathOptions.sourcePosition,
-        pathOptions.targetPosition,
-        routePreview ?? savedBends,
-      )
-    : (routePreview ?? savedBends);
+  const route = useMemo(() => {
+    const from = {
+      point: { x: start.point.x, y: start.point.y },
+      side: start.side,
+      elementId: start.elementId,
+    };
+    const to = {
+      point: { x: end.point.x, y: end.point.y },
+      side: end.side,
+      elementId: end.elementId,
+    };
+    if (!orthogonal)
+      return { points: [from.point, ...(routePreview ?? savedBends), to.point], blocked: false };
+    const uncheckedBends = orthogonalRelationshipBends(
+      from.point,
+      to.point,
+      from.side as typeof sourcePosition,
+      to.side as typeof targetPosition,
+      routePreview ?? savedBends,
+    );
+    const boxes = obstacles.filter((box) => box.id !== from.elementId && box.id !== to.elementId);
+    for (const endpoint of [from, to]) {
+      if (!endpoint.elementId) continue;
+      const node = flow.getInternalNode(endpoint.elementId);
+      const box = node ? connectorBox(node, node.internals.positionAbsolute) : null;
+      if (box) boxes.push(box);
+    }
+    return safeOrthogonalRoute(from, to, [from.point, ...uncheckedBends, to.point], boxes);
+  }, [
+    orthogonal,
+    routePreview,
+    savedBends,
+    obstacles,
+    start.point.x,
+    start.point.y,
+    start.side,
+    start.elementId,
+    end.point.x,
+    end.point.y,
+    end.side,
+    end.elementId,
+    flow,
+  ]);
+  const bends = route.points.slice(1, -1);
   const labelPosition = data?.placement?.labelPosition ?? 0.5;
   const [path, defaultX, defaultY] =
     bends.length > 0 || orthogonal
@@ -310,17 +348,19 @@ function RelationshipEdgeComponent({
     const point = slidingRelationshipLabel(labelRoute, labelAnchor, next.x, curved, next.y);
     return { x: point.x - baseLabel.x, y: point.y - baseLabel.y };
   };
-  const stroke =
-    presentation?.color ??
-    (data?.status ? statusColor(data.status) : undefined) ??
-    (selected || focus === "connected" ? "var(--primary)" : "var(--edge)");
+  const stroke = route.blocked
+    ? "var(--destructive)"
+    : (presentation?.color ??
+      (data?.status ? statusColor(data.status) : undefined) ??
+      (selected || focus === "connected" ? "var(--primary)" : "var(--edge)"));
   const width =
     presentation?.strokeWidth ??
     (selected ? 2 : focus === "connected" ? 2.4 : data?.implied ? 1.1 : 1.4);
   const originalLabel =
     data?.implied && (data?.count ?? 0) > 1 ? `${data.label} (${data.count})` : (data?.label ?? "");
-  const label =
-    data?.status === "conflict"
+  const label = route.blocked
+    ? `${t("canvas.blockedRoute")}${originalLabel ? ` · ${originalLabel}` : ""}`
+    : data?.status === "conflict"
       ? `${t("statusOverlay.conflict")}${originalLabel ? ` · ${originalLabel}` : ""}`
       : originalLabel;
   const showLabel = Boolean(label);
@@ -384,6 +424,7 @@ function RelationshipEdgeComponent({
     <>
       <path ref={geometryRef} d={path} fill="none" stroke="none" pointerEvents="none" />
       <g
+        data-routing-blocked={route.blocked || undefined}
         onPointerDown={(event) => {
           if (!selected) return;
           const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -393,12 +434,15 @@ function RelationshipEdgeComponent({
         onPointerUp={endRoute}
         onPointerCancel={cancelRoute}
       >
+        {route.blocked && <title>{t("canvas.blockedRouteHint")}</title>}
         <BaseEdge
           id={id}
           path={path}
           style={{
             strokeWidth: width,
-            strokeDasharray: relationshipDash(data?.relationship.interactionStyle, strokeStyle),
+            strokeDasharray: route.blocked
+              ? "5 4"
+              : relationshipDash(data?.relationship.interactionStyle, strokeStyle),
             strokeLinecap: strokeStyle === "dotted" ? "round" : undefined,
             stroke,
             opacity: style?.opacity ?? (focus === "dimmed" ? 0.7 : 1),

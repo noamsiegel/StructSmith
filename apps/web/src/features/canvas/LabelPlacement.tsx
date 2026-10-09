@@ -11,6 +11,7 @@ import {
 } from "react";
 import { boundaryHeaderHeight, type FlowNode } from "./graph";
 import { clearRelationshipLabel, type LabelBox } from "./labelClearance";
+import type { RouteObstacle } from "./orthogonalRouting";
 
 interface LabelRequest {
   showLabel: boolean;
@@ -48,6 +49,7 @@ export function labelObstacles(
 const LabelPlacementContext = createContext<{
   positions: ReadonlyMap<string, ControlPoint>;
   headers: readonly LabelBox[];
+  routingObstacles: readonly RouteObstacle[];
   register: (id: string, request: LabelRequest | null) => void;
   registerHeader: (id: string, height: number | null) => void;
 } | null>(null);
@@ -109,9 +111,28 @@ export function LabelPlacementProvider({
       ),
     [nodes, headerHeights],
   );
+  const routingObstacles = useMemo(
+    () =>
+      nodes
+        .filter((node) => !node.hidden)
+        .flatMap((node) =>
+          labelObstacles([node], headerHeights).map((box) => ({ id: node.id, ...box })),
+        ),
+    [nodes, headerHeights],
+  );
+  const routingCache = useRef(routingObstacles);
+  if (JSON.stringify(routingCache.current) !== JSON.stringify(routingObstacles))
+    routingCache.current = routingObstacles;
+  const stableRoutingObstacles = routingCache.current;
   const value = useMemo(
-    () => ({ positions, headers, register, registerHeader }),
-    [positions, headers, register, registerHeader],
+    () => ({
+      positions,
+      headers,
+      routingObstacles: stableRoutingObstacles,
+      register,
+      registerHeader,
+    }),
+    [positions, headers, stableRoutingObstacles, register, registerHeader],
   );
   return <LabelPlacementContext.Provider value={value}>{children}</LabelPlacementContext.Provider>;
 }
@@ -146,4 +167,8 @@ export function useLabelPlacement(id: string, request: LabelRequest | null) {
   }, [id, request, register]);
   useLayoutEffect(() => () => register?.(id, null), [id, register]);
   return { point: context?.positions.get(id) ?? null, headers: context?.headers ?? [] };
+}
+
+export function useRoutingObstacles() {
+  return useContext(LabelPlacementContext)?.routingObstacles ?? [];
 }

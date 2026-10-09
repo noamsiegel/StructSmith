@@ -302,6 +302,8 @@
     "added": "Added {{name}}"
   },
   "canvas": {
+    "blockedRoute": "Zablokowana trasa",
+    "blockedRouteHint": "Brakuje miejsca na poprowadzenie tego połączenia. Rozsuń nakładające się lub zbyt blisko położone obiekty.",
     "legend": "Własność",
     "empty": "Ten widok nie zawiera jeszcze elementów",
     "emptyHint": "Dodaj elementy z palety lub przeciągnij je z drzewa modelu.",
