@@ -4,7 +4,12 @@ import { type Node, useReactFlow, useViewport } from "@xyflow/react";
 import { type PointerEvent, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
-import { type EndpointBox, type EndpointSide, snapConnectorEndpoint } from "./endpointGeometry";
+import {
+  type EndpointBox,
+  type EndpointSide,
+  snapAlignedBorderEndpoint,
+  snapConnectorEndpoint,
+} from "./endpointGeometry";
 
 export interface ConnectorAttachment {
   elementId?: string;
@@ -31,6 +36,7 @@ export function ConnectorEndpointHandle({
   point,
   side,
   displayPoint = point,
+  oppositePoint,
   label,
   saving,
   onPreview,
@@ -40,6 +46,7 @@ export function ConnectorEndpointHandle({
   point: ControlPoint;
   side: EndpointSide;
   displayPoint?: ControlPoint;
+  oppositePoint: ControlPoint;
   label: string;
   saving: boolean;
   onPreview: (attachment: ConnectorAttachment | null) => void;
@@ -54,6 +61,7 @@ export function ConnectorEndpointHandle({
     current: ConnectorAttachment;
   } | null>(null);
   const [attached, setAttached] = useState(false);
+  const [alignment, setAlignment] = useState<ControlPoint | null>(null);
   const move = (event: PointerEvent<HTMLButtonElement>) => {
     if (!drag.current) return;
     const pointer = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -67,6 +75,13 @@ export function ConnectorEndpointHandle({
       return box ? [box] : [];
     });
     const snap = snapConnectorEndpoint(boxes, canvasPoint, 18 / zoom);
+    const box = boxes.find((candidate) => candidate.id === snap?.elementId);
+    const aligned =
+      snap && box
+        ? snapAlignedBorderEndpoint(box, snap.side, snap.point, oppositePoint, 6 / zoom)
+        : null;
+    if (snap && aligned) Object.assign(snap, aligned);
+    setAlignment(aligned?.point ?? null);
     drag.current.current = snap
       ? { elementId: snap.elementId, side: snap.side, fraction: snap.fraction, point: snap.point }
       : { point: canvasPoint, side };
@@ -76,6 +91,7 @@ export function ConnectorEndpointHandle({
   const cancel = () => {
     drag.current = null;
     setAttached(false);
+    setAlignment(null);
     onPreview(null);
   };
   const display = drag.current
@@ -83,6 +99,22 @@ export function ConnectorEndpointHandle({
     : displayPoint;
   return (
     <>
+      {alignment && (
+        <svg
+          data-connection-alignment-guide="endpoint"
+          aria-hidden="true"
+          className="pointer-events-none absolute overflow-visible"
+          width={1}
+          height={1}
+        >
+          <path
+            d={`M ${alignment.x},${alignment.y} L ${oppositePoint.x},${oppositePoint.y}`}
+            stroke="var(--primary)"
+            strokeWidth={1 / zoom}
+            strokeDasharray={`${4 / zoom} ${4 / zoom}`}
+          />
+        </svg>
+      )}
       {(display.x !== point.x || display.y !== point.y) && (
         <svg
           aria-hidden="true"
@@ -148,6 +180,7 @@ export function ConnectorEndpointHandle({
           else onPreview(null);
           drag.current = null;
           setAttached(false);
+          setAlignment(null);
           event.currentTarget.releasePointerCapture(event.pointerId);
         }}
         onPointerCancel={cancel}

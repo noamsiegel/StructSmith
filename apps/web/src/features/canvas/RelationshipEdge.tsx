@@ -27,8 +27,8 @@ import {
   ConnectorEndpointHandle,
   connectorBox,
 } from "./ConnectorEndpointHandle";
-import { borderEndpoint, type EndpointSide } from "./endpointGeometry";
-import type { RelationshipEdgeData } from "./graph";
+import { borderEndpoint, type EndpointSide, snapAlignedBorderEndpoint } from "./endpointGeometry";
+import type { FlowEdge, FlowNode, RelationshipEdgeData } from "./graph";
 import { useConnectorLanes, useLabelPlacement, useRoutingObstacles } from "./LabelPlacement";
 import { closestLabelRoutePoint } from "./labelClearance";
 import { safeOrthogonalRoute } from "./orthogonalRouting";
@@ -38,6 +38,7 @@ import {
   moveRelationshipSegment,
   orthogonalRelationshipBends,
   relationshipDash,
+  sideFromHandle,
   slidingRelationshipLabel,
 } from "./relationshipGeometry";
 import { statusColor, statusStroke } from "./statusOverlay";
@@ -127,7 +128,7 @@ function RelationshipEdgeComponent({
   style,
 }: EdgeProps & { data?: RelationshipEdgeData }) {
   const { t } = useTranslation();
-  const flow = useReactFlow();
+  const flow = useReactFlow<FlowNode, FlowEdge>();
   const obstacles = useRoutingObstacles();
   const { zoom } = useViewport();
   const markerId = `relationship-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
@@ -168,8 +169,69 @@ function RelationshipEdgeComponent({
       fraction,
     };
   };
-  const start = endpointAt("source", { x: sourceX, y: sourceY }, sourcePosition);
-  const end = endpointAt("target", { x: targetX, y: targetY }, targetPosition);
+  let start = endpointAt("source", { x: sourceX, y: sourceY }, sourcePosition);
+  let end = endpointAt("target", { x: targetX, y: targetY }, targetPosition);
+  const axis = start.side === "left" || start.side === "right" ? "y" : "x";
+  const facing = { left: "right", right: "left", top: "bottom", bottom: "top" }[start.side];
+  if (
+    (data?.routing ?? "orthogonal") === "orthogonal" &&
+    end.side === facing &&
+    !endpointPreview.source &&
+    !endpointPreview.target
+  ) {
+    for (const endpoint of ["target", "source"] as const) {
+      const attachment = endpoint === "target" ? end : start;
+      const reference = endpoint === "target" ? start : end;
+      if (!attachment.elementId) continue;
+      const automatic =
+        presentation?.[`${endpoint}Fraction`] === undefined &&
+        presentation?.[`${endpoint}Slot`] === undefined;
+      const tolerance = automatic ? 6 : 1e-6;
+      if (Math.abs(attachment.point[axis] - reference.point[axis]) > tolerance) continue;
+      const node = flow.getInternalNode(attachment.elementId);
+      const box = node ? connectorBox(node, node.internals.positionAbsolute) : null;
+      if (!box) continue;
+      const occupied = flow.getEdges().flatMap((edge) => {
+        if (edge.id === id || edge.hidden) return [];
+        return (["source", "target"] as const).flatMap((other) => {
+          const saved = edge.data?.placement?.presentation;
+          const side =
+            saved?.[`${other}Side`] ??
+            sideFromHandle(other === "source" ? edge.sourceHandle : edge.targetHandle, other);
+          if (
+            edge[other] !== attachment.elementId ||
+            side !== attachment.side ||
+            saved?.[`${other}Point`]
+          )
+            return [];
+          const fraction =
+            saved?.[`${other}Fraction`] ??
+            (saved?.[`${other}Slot`] !== undefined
+              ? (1 + (saved?.[`${other}Slot`] ?? 1)) / 4
+              : (edge.data?.automaticAttachments?.[other] ?? 0.5));
+          return [
+            {
+              coordinate: borderEndpoint(box, attachment.side, fraction)[axis],
+              automatic:
+                saved?.[`${other}Fraction`] === undefined && saved?.[`${other}Slot`] === undefined,
+            },
+          ];
+        });
+      });
+      const aligned = snapAlignedBorderEndpoint(
+        box,
+        attachment.side,
+        attachment.point,
+        reference.point,
+        tolerance,
+        occupied,
+      );
+      if (!aligned) continue;
+      if (endpoint === "target") end = { ...end, ...aligned };
+      else start = { ...start, ...aligned };
+      break;
+    }
+  }
   const pathOptions = {
     sourceX: start.point.x,
     sourceY: start.point.y,
@@ -526,6 +588,7 @@ function RelationshipEdgeComponent({
             const attachment = endpoint === "source" ? start : end;
             return (
               <ConnectorEndpointHandle
+                oppositePoint={endpoint === "source" ? targetPoint : sourcePoint}
                 key={endpoint}
                 endpoint={endpoint}
                 point={attachment.point}

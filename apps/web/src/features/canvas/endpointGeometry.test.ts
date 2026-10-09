@@ -4,6 +4,7 @@ import {
   borderEndpoint,
   type EndpointBox,
   nearestBorderEndpoint,
+  snapAlignedBorderEndpoint,
   snapConnectorEndpoint,
 } from "./endpointGeometry";
 
@@ -20,6 +21,54 @@ const shapes: NodeShape[] = [
   "end",
   "bar",
 ];
+
+test("nearby connector axes snap exactly on every visible silhouette", () => {
+  for (const shape of shapes) {
+    for (const side of ["left", "right", "top", "bottom"] as const) {
+      const next = { ...box, shape };
+      const point = borderEndpoint(next, side, 0.5);
+      const reference = borderEndpoint(next, side, 0.51);
+      const axis = side === "left" || side === "right" ? "y" : "x";
+      const aligned = snapAlignedBorderEndpoint(next, side, point, reference, 6);
+      expect(aligned?.point[axis]).toBe(reference[axis]);
+      expect(aligned?.fraction).toBeCloseTo(0.51, 10);
+      const outline = borderEndpoint(next, side, aligned?.fraction ?? 0);
+      expect(
+        Math.hypot(outline.x - (aligned?.point.x ?? 0), outline.y - (aligned?.point.y ?? 0)),
+      ).toBeLessThan(1e-10);
+    }
+  }
+});
+
+test("alignment rejects distant axes, unavailable border spans and occupied lanes", () => {
+  const point = borderEndpoint(box, "left", 0.5);
+  expect(snapAlignedBorderEndpoint(box, "left", point, { ...point, y: point.y + 7 }, 6)).toBeNull();
+  expect(snapAlignedBorderEndpoint(box, "left", point, { ...point, y: box.y - 1 }, 100)).toBeNull();
+  expect(
+    snapAlignedBorderEndpoint(box, "left", point, { ...point, y: box.y + box.height + 1 }, 100),
+  ).toBeNull();
+  expect(
+    snapAlignedBorderEndpoint(box, "left", point, { ...point, y: 92 }, 6, [{ coordinate: 95 }]),
+  ).toBeNull();
+  expect(
+    snapAlignedBorderEndpoint(box, "left", point, { ...point, y: 92 }, 6, [{ coordinate: 104 }])
+      ?.point.y,
+  ).toBe(92);
+});
+
+test("automatic neighbors retain lane clearance even when both move toward each other", () => {
+  const source = { x: 31, y: 100 };
+  expect(
+    snapAlignedBorderEndpoint(box, "left", source, { ...source, y: 106 }, 6, [
+      { coordinate: 118, automatic: true },
+    ]),
+  ).toBeNull();
+  expect(
+    snapAlignedBorderEndpoint(box, "left", source, { ...source, y: 106 }, 6, [
+      { coordinate: 124, automatic: true },
+    ])?.point.y,
+  ).toBe(106);
+});
 
 test("border attachments use the visible silhouette rather than the text bounding box", () => {
   const midpoint = (shape: NodeShape, side: "left" | "right" | "top" | "bottom") =>

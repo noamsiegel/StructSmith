@@ -103,6 +103,51 @@ export function nearestBorderEndpoint(box: EndpointBox, point: ControlPoint) {
   return best;
 }
 
+/** Align on the silhouette, not its rectangular bounding box. */
+export function alignedBorderEndpoint(
+  box: EndpointBox,
+  side: EndpointSide,
+  reference: ControlPoint,
+) {
+  const axis = side === "left" || side === "right" ? "y" : "x";
+  const first = borderEndpoint(box, side, 0)[axis];
+  const last = borderEndpoint(box, side, 1)[axis];
+  if (reference[axis] < Math.min(first, last) || reference[axis] > Math.max(first, last))
+    return null;
+  let low = 0;
+  let high = 1;
+  for (let iteration = 0; iteration < 48; iteration++) {
+    const fraction = (low + high) / 2;
+    if (borderEndpoint(box, side, fraction)[axis] < reference[axis]) low = fraction;
+    else high = fraction;
+  }
+  const fraction = (low + high) / 2;
+  const point = borderEndpoint(box, side, fraction);
+  point[axis] = reference[axis];
+  return { fraction, point };
+}
+
+export function snapAlignedBorderEndpoint(
+  box: EndpointBox,
+  side: EndpointSide,
+  point: ControlPoint,
+  reference: ControlPoint,
+  tolerance: number,
+  occupied: readonly { coordinate: number; automatic?: boolean }[] = [],
+) {
+  const axis = side === "left" || side === "right" ? "y" : "x";
+  if (Math.abs(point[axis] - reference[axis]) > tolerance) return null;
+  const aligned = alignedBorderEndpoint(box, side, reference);
+  // Automatic neighbors can independently shift up to six canvas units.
+  return aligned &&
+    occupied.every(
+      ({ coordinate, automatic }) =>
+        Math.abs(coordinate - reference[axis]) >= (automatic ? 18 : 12),
+    )
+    ? aligned
+    : null;
+}
+
 function contains(box: EndpointBox, point: ControlPoint): boolean {
   const x = point.x - box.x;
   const y = point.y - box.y;
