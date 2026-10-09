@@ -777,3 +777,18 @@ snapshot mechanism after interaction checks.
 Exports, touch input and large-graph performance were not exercised. Existing
 intentional manual routes are retained; other old saved detours need an explicit
 endpoint change or Reset appearance to return to automatic routing.
+
+## Reset route acceptance (2026-10-09)
+
+The contextual Reset route button and line double-click clear only saved bends.
+They use existing revision-guarded layout commands and Undo snapshots.
+Own button, double-click, Undo/Redo and reload were exercised in the preceding
+acceptance pass; [Own screenshot](screenshots/reset-route-own.png) records the result.
+
+After `bun run ui:demo --reset`, `verifyTab.click([1882,530], {clickCount:2})`
+double-clicked an unselected manual right/right connector. Reset route became
+disabled. REST document readback showed empty controlPoints with the same right
+border sides and 0.5 fractions. `verifyTab.reload()` retained the result;
+`verifyTab.dev.logs({levels:['error','warn'],limit:10})` returned no entries.
+The demo was restored with the snapshot-backed reset command afterward.
+Browser network tracing is unavailable in the fallback computer-use tool.

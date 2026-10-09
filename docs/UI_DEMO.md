@@ -50,6 +50,9 @@ actual interaction, reload, then inspect screenshot, console and request evidenc
 Check titles, connector labels, controls and popups for clipping and overlap.
 Repeat at a narrower desktop viewport when changing canvas chrome or dialogs.
 Reset after destructive exercises so the next session begins with known cases.
+For Reset route, use the manual right/right connector in `demo-connection-alignment`:
+check the selection button and double-click an unselected line, then Undo/Redo and
+reload. Only bends should change; attachments, appearance and label placement remain.
 For multi-selection, Shift-click model objects, notes and Section headers to
 add/remove them; move two connected endpoints, then one endpoint. Check that
 the middle route translates only with both endpoints. `demo-connectors` includes

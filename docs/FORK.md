@@ -146,6 +146,10 @@ and resets to Status on reload, without editing the model or coordinates.
   including saved routes after endpoint moves. Redundant collinear waypoints are
   omitted from rendering; labels and drag handles follow the same route. Saved
   layout data remains intact until you edit it.
+- Select a connector and choose **Reset route**, or double-click its line, to
+  clear manual bends and calculate an automatic route. Attachment points, colors,
+  arrowheads and label placement remain unchanged. Undo restores the old bends.
+  Reset route is disabled when selected connectors already have automatic routes.
 - Select an unambiguous connector to reveal its endpoint dots. Each has a
   28-screen-pixel hit area at every zoom; close endpoints separate with guides.
   Drag onto any point along an object's actual outline to attach, onto another
