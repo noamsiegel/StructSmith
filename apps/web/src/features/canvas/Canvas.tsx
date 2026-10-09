@@ -84,6 +84,7 @@ import {
   type RelationshipEdgeData,
 } from "./graph";
 import { inlineFrames } from "./inlineFrames";
+import { LabelPlacementProvider } from "./LabelPlacement";
 import { type ContextMenuItem, NodeContextMenu } from "./NodeContextMenu";
 import { RelationshipEdge } from "./RelationshipEdge";
 import {
@@ -2007,128 +2008,130 @@ export function Canvas({
           event.dataTransfer.dropEffect = "copy";
         }}
       >
-        <ReactFlow
-          nodes={allNodes}
-          edges={editableEdges}
-          nodeTypes={nodeTypes}
-          edgeTypes={edgeTypes}
-          onNodesChange={onNodesChange}
-          onNodeDragStart={onNodeDragStart}
-          onNodeDrag={onNodeDrag}
-          onNodeDragStop={onNodeDragStop}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onReconnect={(edge, connection) => {
-            if (connection.source !== edge.source || connection.target !== edge.target) return;
-            const relationshipId = relationshipIdOf(edge);
-            void changeRelationshipPresentation([
-              {
-                relationshipId,
-                presentation: {
-                  sourceSide: sideFromHandle(connection.sourceHandle, "source"),
-                  targetSide: sideFromHandle(connection.targetHandle, "target"),
-                  sourceSlot: slotFromHandle(connection.sourceHandle),
-                  targetSlot: slotFromHandle(connection.targetHandle),
+        <LabelPlacementProvider key={view.id} nodes={allNodes}>
+          <ReactFlow
+            nodes={allNodes}
+            edges={editableEdges}
+            nodeTypes={nodeTypes}
+            edgeTypes={edgeTypes}
+            onNodesChange={onNodesChange}
+            onNodeDragStart={onNodeDragStart}
+            onNodeDrag={onNodeDrag}
+            onNodeDragStop={onNodeDragStop}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onReconnect={(edge, connection) => {
+              if (connection.source !== edge.source || connection.target !== edge.target) return;
+              const relationshipId = relationshipIdOf(edge);
+              void changeRelationshipPresentation([
+                {
+                  relationshipId,
+                  presentation: {
+                    sourceSide: sideFromHandle(connection.sourceHandle, "source"),
+                    targetSide: sideFromHandle(connection.targetHandle, "target"),
+                    sourceSlot: slotFromHandle(connection.sourceHandle),
+                    targetSlot: slotFromHandle(connection.targetHandle),
+                  },
                 },
-              },
-            ]).catch(() => undefined);
-          }}
-          onSelectionChange={onSelectionChange}
-          onNodeClick={onNodeClick}
-          onNodeDoubleClick={(event, node) => {
-            if (
-              connectFrom ||
-              Date.now() < ignoreDetailsUntil.current ||
-              event.ctrlKey ||
-              event.metaKey ||
-              event.altKey ||
-              event.shiftKey ||
-              (event.target as HTMLElement).closest(
-                "button, input, textarea, a, .react-flow__handle",
+              ]).catch(() => undefined);
+            }}
+            onSelectionChange={onSelectionChange}
+            onNodeClick={onNodeClick}
+            onNodeDoubleClick={(event, node) => {
+              if (
+                connectFrom ||
+                Date.now() < ignoreDetailsUntil.current ||
+                event.ctrlKey ||
+                event.metaKey ||
+                event.altKey ||
+                event.shiftKey ||
+                (event.target as HTMLElement).closest(
+                  "button, input, textarea, a, .react-flow__handle",
+                )
               )
-            )
-              return;
-            if (node.type === "annotation") {
-              setEditingAnnotationId(node.data.annotation.id);
-              return;
-            }
-            const elementId = node.type === "boundary" ? node.data.elementId : node.id;
-            if (elementId) onOpenDetails(String(elementId));
-          }}
-          zoomOnDoubleClick={false}
-          onNodeContextMenu={onNodeContextMenu}
-          onEdgeContextMenu={onEdgeContextMenu}
-          onPaneClick={() => {
-            setMenu(null);
-            clearSelection();
-            setNodes((current) =>
-              current.map((node) => (node.selected ? { ...node, selected: false } : node)),
-            );
-            setEdges((current) =>
-              current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
-            );
-          }}
-          onDelete={deleteSelection}
-          selectionMode={SelectionMode.Partial}
-          panOnDrag
-          selectionKeyCode={primaryModifierKeyCode()}
-          multiSelectionKeyCode={["Shift", primaryModifierKeyCode()]}
-          // A selected boundary covers a large area. Keep the explicit graph
-          // layering (boundaries < edges < elements) so cards remain clickable.
-          elevateNodesOnSelect={false}
-          snapToGrid={view.settings.snapToGrid}
-          snapGrid={[16, 16]}
-          minZoom={0.15}
-          maxZoom={2.5}
-          defaultViewport={initialViewport.current}
-          fitView={!initialViewport.current}
-          panOnScroll
-          zoomOnScroll={false}
-          zoomActivationKeyCode={["Meta", "Control"]}
-          fitViewOptions={{ padding: CANVAS_FIT_PADDING, maxZoom: 1 }}
-          proOptions={{ hideAttribution: false }}
-          deleteKeyCode={["Delete", "Backspace"]}
-        >
-          <Panel position="top-left" className="z-40">
-            <ScenarioPanel
+                return;
+              if (node.type === "annotation") {
+                setEditingAnnotationId(node.data.annotation.id);
+                return;
+              }
+              const elementId = node.type === "boundary" ? node.data.elementId : node.id;
+              if (elementId) onOpenDetails(String(elementId));
+            }}
+            zoomOnDoubleClick={false}
+            onNodeContextMenu={onNodeContextMenu}
+            onEdgeContextMenu={onEdgeContextMenu}
+            onPaneClick={() => {
+              setMenu(null);
+              clearSelection();
+              setNodes((current) =>
+                current.map((node) => (node.selected ? { ...node, selected: false } : node)),
+              );
+              setEdges((current) =>
+                current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+              );
+            }}
+            onDelete={deleteSelection}
+            selectionMode={SelectionMode.Partial}
+            panOnDrag
+            selectionKeyCode={primaryModifierKeyCode()}
+            multiSelectionKeyCode={["Shift", primaryModifierKeyCode()]}
+            // A selected boundary covers a large area. Keep the explicit graph
+            // layering (boundaries < edges < elements) so cards remain clickable.
+            elevateNodesOnSelect={false}
+            snapToGrid={view.settings.snapToGrid}
+            snapGrid={[16, 16]}
+            minZoom={0.15}
+            maxZoom={2.5}
+            defaultViewport={initialViewport.current}
+            fitView={!initialViewport.current}
+            panOnScroll
+            zoomOnScroll={false}
+            zoomActivationKeyCode={["Meta", "Control"]}
+            fitViewOptions={{ padding: CANVAS_FIT_PADDING, maxZoom: 1 }}
+            proOptions={{ hideAttribution: false }}
+            deleteKeyCode={["Delete", "Backspace"]}
+          >
+            <Panel position="top-left" className="z-40">
+              <ScenarioPanel
+                key={view.id}
+                workspaceId={workspaceId}
+                view={view}
+                elements={elements}
+                relationships={relationships}
+                onStep={onScenarioStep}
+              />
+            </Panel>
+            <CanvasComments
               key={view.id}
               workspaceId={workspaceId}
               view={view}
-              elements={elements}
-              relationships={relationships}
-              onStep={onScenarioStep}
+              canvasRef={canvasRef}
             />
-          </Panel>
-          <CanvasComments
-            key={view.id}
-            workspaceId={workspaceId}
-            view={view}
-            canvasRef={canvasRef}
-          />
-          <Background
-            variant={BackgroundVariant.Dots}
-            gap={18}
-            size={1}
-            color="var(--canvas-dot)"
-          />
-          <Controls showInteractive={false} position="bottom-left" showFitView={false}>
-            <ControlButton
-              onClick={fit}
-              aria-label={t("topbar.fitView")}
-              title={t("topbar.fitView")}
-            >
-              <Maximize />
-            </ControlButton>
-          </Controls>
-          <MiniMap
-            pannable
-            zoomable
-            position="bottom-right"
-            style={{ bottom: 96 }}
-            nodeStrokeWidth={2}
-            maskColor="transparent"
-          />
-        </ReactFlow>
+            <Background
+              variant={BackgroundVariant.Dots}
+              gap={18}
+              size={1}
+              color="var(--canvas-dot)"
+            />
+            <Controls showInteractive={false} position="bottom-left" showFitView={false}>
+              <ControlButton
+                onClick={fit}
+                aria-label={t("topbar.fitView")}
+                title={t("topbar.fitView")}
+              >
+                <Maximize />
+              </ControlButton>
+            </Controls>
+            <MiniMap
+              pannable
+              zoomable
+              position="bottom-right"
+              style={{ bottom: 96 }}
+              nodeStrokeWidth={2}
+              maskColor="transparent"
+            />
+          </ReactFlow>
+        </LabelPlacementProvider>
 
         <SelectionColorToolbar
           workspaceId={workspaceId}

@@ -184,10 +184,9 @@
   fill: var(--muted-foreground);
   opacity: 0.55;
 }
-/* Diagram edges use z-index 10 and nodes start at 20. Keep labels above the
-   lines without allowing them to cover cards. */
+/* Padded label placement keeps cards clear; elevation protects during measurement. */
 .react-flow__edgelabel-renderer {
-  z-index: 15;
+  z-index: 35;
 }
 .react-flow__handle {
   background: var(--muted-foreground);

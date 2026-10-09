@@ -38,6 +38,7 @@ import {
   computeCanvasBoundaries,
   type FlowNode,
 } from "../canvas/graph";
+import { LabelPlacementProvider } from "../canvas/LabelPlacement";
 import { RelationshipEdge } from "../canvas/RelationshipEdge";
 import { applyNodeColors } from "../canvas/selectionColors";
 import type { StatusOverlay } from "../canvas/statusOverlay";
@@ -171,40 +172,46 @@ function PreviewCanvas({
       className="exploration-preview relative min-h-0 flex-1 bg-canvas"
       data-testid="exploration-preview-canvas"
     >
-      <ReactFlow
-        nodes={nodes}
-        onNodesChange={onNodesChange}
-        edges={graph.edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        nodesFocusable={false}
-        edgesFocusable={false}
-        edgesReconnectable={false}
-        elementsSelectable={false}
-        deleteKeyCode={null}
-        selectionKeyCode={null}
-        multiSelectionKeyCode={null}
-        panOnDrag
-        panOnScroll
-        zoomOnScroll={false}
-        zoomActivationKeyCode={["Meta", "Control"]}
-        minZoom={0.15}
-        maxZoom={2.5}
-        onNodeClick={(_event, node) => {
-          if (node.type === "annotation") return;
-          const elementId = node.type === "boundary" ? node.data.elementId : node.id;
-          if (typeof elementId === "string") onDrill(elementId);
-        }}
-      >
-        <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        <Controls showInteractive={false} showFitView={false}>
-          <ControlButton onClick={fit} aria-label={t("topbar.fitView")} title={t("topbar.fitView")}>
-            <Maximize />
-          </ControlButton>
-        </Controls>
-      </ReactFlow>
+      <LabelPlacementProvider key={view.id} nodes={nodes}>
+        <ReactFlow
+          nodes={nodes}
+          onNodesChange={onNodesChange}
+          edges={graph.edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          nodesFocusable={false}
+          edgesFocusable={false}
+          edgesReconnectable={false}
+          elementsSelectable={false}
+          deleteKeyCode={null}
+          selectionKeyCode={null}
+          multiSelectionKeyCode={null}
+          panOnDrag
+          panOnScroll
+          zoomOnScroll={false}
+          zoomActivationKeyCode={["Meta", "Control"]}
+          minZoom={0.15}
+          maxZoom={2.5}
+          onNodeClick={(_event, node) => {
+            if (node.type === "annotation") return;
+            const elementId = node.type === "boundary" ? node.data.elementId : node.id;
+            if (typeof elementId === "string") onDrill(elementId);
+          }}
+        >
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+          <Controls showInteractive={false} showFitView={false}>
+            <ControlButton
+              onClick={fit}
+              aria-label={t("topbar.fitView")}
+              title={t("topbar.fitView")}
+            >
+              <Maximize />
+            </ControlButton>
+          </Controls>
+        </ReactFlow>
+      </LabelPlacementProvider>
       {!graph.nodes.length && (
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6 text-sm text-muted-foreground">
           {t("navigation.previewEmpty")}

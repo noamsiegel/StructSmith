@@ -7,12 +7,14 @@ import {
   getStraightPath,
   useReactFlow,
 } from "@xyflow/react";
-import { memo, type PointerEvent, useId, useLayoutEffect, useRef, useState } from "react";
+import { memo, type PointerEvent, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/store/editor";
 import type { RelationshipEdgeData } from "./graph";
+import { useLabelPlacement } from "./LabelPlacement";
+import { closestLabelRoutePoint } from "./labelClearance";
 import {
   closestRelationshipSegment,
   manualRelationshipPath,
@@ -198,8 +200,6 @@ function RelationshipEdgeComponent({
     const point = slidingRelationshipLabel(labelRoute, labelAnchor, next.x, curved, next.y);
     return { x: point.x - baseLabel.x, y: point.y - baseLabel.y };
   };
-  const labelX = labelPoint.x;
-  const labelY = labelPoint.y;
   const stroke =
     presentation?.color ??
     (data?.status ? statusColor(data.status) : undefined) ??
@@ -214,6 +214,32 @@ function RelationshipEdgeComponent({
       ? `${t("statusOverlay.conflict")}${originalLabel ? ` · ${originalLabel}` : ""}`
       : originalLabel;
   const showLabel = Boolean(label);
+  const labelRef = useRef<HTMLButtonElement>(null);
+  const [labelSize, setLabelSize] = useState({ width: 170, height: 32 });
+  useLayoutEffect(() => {
+    const button = labelRef.current;
+    if (!showLabel || !button) return;
+    const measure = () => {
+      const width = button.offsetWidth;
+      const height = button.offsetHeight;
+      setLabelSize((previous) =>
+        previous.width === width && previous.height === height ? previous : { width, height },
+      );
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(button);
+    return () => observer.disconnect();
+  }, [showLabel]);
+  const request = useMemo(
+    () => (showLabel ? { points: labelRoute, desired: labelPoint, ...labelSize } : null),
+    [showLabel, labelRoute, labelPoint, labelSize],
+  );
+  const clearPoint = useLabelPlacement(id, request) ?? labelPoint;
+  const labelX = clearPoint.x;
+  const labelY = clearPoint.y;
+  const leaderAnchor = closestLabelRoutePoint(labelRoute, clearPoint);
+  const leader = Math.hypot(labelX - leaderAnchor.x, labelY - leaderAnchor.y) > 0.5;
   const editable = Boolean(data?.onLabelOffsetChange);
   const labelSaves = useRef<Promise<void>>(Promise.resolve());
   const labelSaveSequence = useRef(0);
@@ -286,9 +312,22 @@ function RelationshipEdgeComponent({
           }}
         />
       </g>
+      {showLabel && leader && (
+        <path
+          d={`M ${leaderAnchor.x},${leaderAnchor.y} L ${labelX},${leaderAnchor.y} L ${labelX},${labelY}`}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="1"
+          strokeDasharray="2 3"
+          pointerEvents="none"
+          data-label-leader={id}
+        />
+      )}
       {showLabel && (
         <EdgeLabelRenderer>
           <Button
+            ref={labelRef}
+            data-relationship-label={id}
             type="button"
             variant="outline"
             aria-label={t("relationshipPresentation.moveLabel", { label })}
@@ -304,7 +343,7 @@ function RelationshipEdgeComponent({
             style={{
               transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
               backgroundColor: relationshipLabelBackground(focus),
-              opacity: style?.opacity ?? (focus === "dimmed" ? 0.75 : 1),
+              opacity: 1,
               touchAction: "none",
               cursor: editable ? "grab" : "default",
               overflowWrap: "anywhere",
@@ -318,8 +357,8 @@ function RelationshipEdgeComponent({
               event.currentTarget.setPointerCapture(event.pointerId);
               drag.current = {
                 start: flow.screenToFlowPosition({ x: event.clientX, y: event.clientY }),
-                offset: snapOffset(offset),
-                current: snapOffset(offset),
+                offset: snapOffset({ x: labelX - baseLabel.x, y: labelY - baseLabel.y }),
+                current: snapOffset({ x: labelX - baseLabel.x, y: labelY - baseLabel.y }),
               };
             }}
             onPointerMove={(event) => {
@@ -364,7 +403,10 @@ function RelationshipEdgeComponent({
               event.preventDefault();
               event.stopPropagation();
               const step = event.shiftKey ? 10 : 1;
-              const current = pendingOffset.current ?? offset;
+              const current = pendingOffset.current ?? {
+                x: labelX - baseLabel.x,
+                y: labelY - baseLabel.y,
+              };
               const next = snapOffset({
                 x: current.x + (move[0] ?? 0) * step,
                 y: current.y + (move[1] ?? 0) * step,
