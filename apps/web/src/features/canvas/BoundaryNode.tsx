@@ -11,15 +11,18 @@ import { DetailViewAction } from "../navigation/DetailNavigation";
 import { InlineExpansionAction } from "../navigation/InlineExpansion";
 import { ConnectionHandles } from "./ConnectionHandles";
 import { type BoundaryNodeData, boundaryHeaderHeight } from "./graph";
+import { useLabelHeader } from "./LabelPlacement";
 
 /** A semantic boundary rendered from the live footprint of its visible members. */
 function BoundaryNodeComponent({
+  id,
   data,
   selected,
   draggable,
   width,
 }: NodeProps & { data: BoundaryNodeData }) {
   const { t } = useTranslation();
+  const headerRef = useLabelHeader(id);
   const cancelled = useRef(false);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(data.name);
@@ -76,6 +79,7 @@ function BoundaryNodeComponent({
       )}
       {data.elementId && <ConnectionHandles />}
       <div
+        ref={headerRef}
         className={cn(
           data.section
             ? "absolute bottom-full left-0 mb-1 flex w-full items-center gap-1 rounded-md bg-canvas px-1 py-0.5 text-xs font-medium"

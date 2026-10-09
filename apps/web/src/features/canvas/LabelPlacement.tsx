@@ -6,6 +6,7 @@ import {
   useContext,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { boundaryHeaderHeight, type FlowNode } from "./graph";
@@ -18,14 +19,19 @@ interface LabelRequest {
   height: number;
 }
 
-export function labelObstacles(nodes: readonly FlowNode[]): LabelBox[] {
+export function labelObstacles(
+  nodes: readonly FlowNode[],
+  headerHeights: ReadonlyMap<string, number> = new Map(),
+): LabelBox[] {
   return nodes
     .filter((node) => !node.hidden)
     .map((node) => {
       const width = node.measured?.width ?? node.width ?? 220;
       const height = node.measured?.height ?? node.height ?? Number(node.data.minimumHeight ?? 96);
       if (node.type === "boundary") {
-        const header = boundaryHeaderHeight(node.data.name, width, node.data.section);
+        const header =
+          headerHeights.get(node.id) ??
+          boundaryHeaderHeight(node.data.name, width, node.data.section);
         return {
           x: node.position.x,
           y: node.position.y - (node.data.section ? header : 0),
@@ -40,6 +46,7 @@ export function labelObstacles(nodes: readonly FlowNode[]): LabelBox[] {
 const LabelPlacementContext = createContext<{
   positions: ReadonlyMap<string, ControlPoint>;
   register: (id: string, request: LabelRequest | null) => void;
+  registerHeader: (id: string, height: number | null) => void;
 } | null>(null);
 
 export function LabelPlacementProvider({
@@ -50,6 +57,16 @@ export function LabelPlacementProvider({
   children: ReactNode;
 }) {
   const [requests, setRequests] = useState(new Map<string, LabelRequest>());
+  const [headerHeights, setHeaderHeights] = useState(new Map<string, number>());
+  const registerHeader = useCallback((id: string, height: number | null) => {
+    setHeaderHeights((current) => {
+      if ((current.get(id) ?? null) === height) return current;
+      const next = new Map(current);
+      if (height !== null) next.set(id, height);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
   const register = useCallback((id: string, request: LabelRequest | null) => {
     setRequests((current) => {
       if (JSON.stringify(current.get(id) ?? null) === JSON.stringify(request)) return current;
@@ -60,7 +77,7 @@ export function LabelPlacementProvider({
     });
   }, []);
   const positions = useMemo(() => {
-    const obstacles = labelObstacles(nodes);
+    const obstacles = labelObstacles(nodes, headerHeights);
     const positions = new Map<string, ControlPoint>();
     // Stable ordering prevents labels swapping places as their edges rerender.
     for (const [id, request] of [...requests].sort(([left], [right]) =>
@@ -76,9 +93,34 @@ export function LabelPlacementProvider({
       });
     }
     return positions;
-  }, [nodes, requests]);
-  const value = useMemo(() => ({ positions, register }), [positions, register]);
+  }, [nodes, requests, headerHeights]);
+  const value = useMemo(
+    () => ({ positions, register, registerHeader }),
+    [positions, register, registerHeader],
+  );
   return <LabelPlacementContext.Provider value={value}>{children}</LabelPlacementContext.Provider>;
+}
+
+export function useLabelHeader(id: string) {
+  const headerRef = useRef<HTMLDivElement>(null);
+  const register = useContext(LabelPlacementContext)?.registerHeader;
+  useLayoutEffect(() => {
+    const header = headerRef.current;
+    if (!header || !register) return;
+    const measure = () =>
+      register(
+        id,
+        header.offsetHeight + (Number.parseFloat(getComputedStyle(header).marginBottom) || 0),
+      );
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(header);
+    return () => {
+      observer.disconnect();
+      register(id, null);
+    };
+  }, [id, register]);
+  return headerRef;
 }
 
 export function useLabelPlacement(id: string, request: LabelRequest | null): ControlPoint | null {

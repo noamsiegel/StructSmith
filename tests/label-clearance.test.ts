@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ControlPoint } from "@structsmith/contracts";
+import type { FlowNode } from "../apps/web/src/features/canvas/graph";
 import { labelObstacles } from "../apps/web/src/features/canvas/LabelPlacement";
 import {
   clearRelationshipLabel,
@@ -234,4 +235,50 @@ test("obstacles include measured annotations and group headers but allow labels 
   expect(clearRelationshipLabel([desired], desired, { width: 60, height: 20 }, boxes)).toEqual(
     desired,
   );
+});
+
+test("measured multiline section headers reserve their full height outside the frame", () => {
+  const nodes: FlowNode[] = [
+    {
+      id: "section",
+      type: "boundary",
+      position: { x: 10, y: 100 },
+      width: 220,
+      height: 300,
+      data: { name: "First line\nSecond line", section: true, classification: null },
+    },
+    {
+      id: "workflow",
+      type: "boundary",
+      position: { x: 400, y: 100 },
+      width: 220,
+      height: 300,
+      data: { name: "Subprocess", classification: null },
+    },
+  ];
+  const boxes = labelObstacles(
+    nodes,
+    new Map([
+      ["section", 48],
+      ["workflow", 44],
+    ]),
+  );
+  expect(boxes).toEqual([
+    { x: 10, y: 52, width: 220, height: 48 },
+    { x: 400, y: 100, width: 220, height: 44 },
+  ]);
+  const desired = { x: 100, y: 51 };
+  const size = { width: 40, height: 20 };
+  const point = clearRelationshipLabel(
+    [
+      { x: 100, y: 0 },
+      { x: 100, y: 200 },
+    ],
+    desired,
+    size,
+    boxes,
+  );
+  expect(point).toEqual({ x: 100, y: 34 });
+  expectClear(point, size, boxes);
+  expect(labelObstacles(nodes)[0]?.height).toBe(40);
 });
