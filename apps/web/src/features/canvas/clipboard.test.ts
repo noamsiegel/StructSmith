@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import type {
   ArchitectureElement,
   ArchitectureRelationship,
+  RelationshipPresentation,
   ViewDetail,
 } from "@structsmith/contracts";
 import { buildPasteOperations, createDiagramClipboard } from "./clipboard";
@@ -177,6 +178,73 @@ describe("diagram clipboard", () => {
         targetElementId: "two",
       },
     });
+  });
+
+  test("paste offsets free endpoints with bends while retaining border attachments", () => {
+    const presentation = {
+      sourcePoint: { x: -50, y: 0 },
+      targetPoint: { x: 0, y: 350 },
+      sourceFraction: 0.17,
+      targetFraction: 0.83,
+    };
+    const copiedView = {
+      ...view,
+      relationships: [
+        {
+          viewId: view.id,
+          relationshipId: relationship.id,
+          hidden: false,
+          labelPosition: 0.4,
+          controlPoints: [{ x: 150, y: 0 }],
+          presentation,
+        },
+      ],
+    };
+    const copied = createDiagramClipboard(
+      "workspace",
+      copiedView,
+      [element("one"), element("two")],
+      [relationship],
+      ["one", "two"],
+    );
+    if (!copied) throw new Error("Expected endpoint clipboard");
+    const original = JSON.stringify(copied);
+    const pastedPlacement = (pasteCount: number) => {
+      const patch = buildPasteOperations({ ...copied, pasteCount }, "workspace", view).find(
+        (operation) => operation.op === "setViewRelationships",
+      );
+      if (patch?.op !== "setViewRelationships") throw new Error("Missing pasted relationship");
+      return patch.relationships[0];
+    };
+    expect(pastedPlacement(0)).toMatchObject({
+      controlPoints: [{ x: 190, y: 40 }],
+      presentation: {
+        sourcePoint: { x: -10, y: 40 },
+        targetPoint: { x: 40, y: 390 },
+        sourceFraction: 0.17,
+        targetFraction: 0.83,
+      },
+    });
+    expect(pastedPlacement(2)).toMatchObject({
+      controlPoints: [{ x: 270, y: 120 }],
+      presentation: {
+        sourcePoint: { x: 70, y: 120 },
+        targetPoint: { x: 120, y: 470 },
+        sourceFraction: 0.17,
+        targetFraction: 0.83,
+      },
+    });
+    expect(JSON.stringify(copied)).toBe(original);
+    const copiedPlacement = copied.relationshipPlacements[0];
+    if (!copiedPlacement) throw new Error("Missing copied relationship");
+    for (const attached of [
+      { sourcePoint: null, targetPoint: null, sourceFraction: 0.17 },
+      { sourceFraction: 0.17, targetFraction: 0.83 },
+      null,
+    ] satisfies (RelationshipPresentation | null)[]) {
+      copiedPlacement.presentation = attached;
+      expect(pastedPlacement(0)?.presentation).toEqual(attached);
+    }
   });
 });
 

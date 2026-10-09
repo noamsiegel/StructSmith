@@ -484,6 +484,18 @@ export const RelationshipPresentationSchema = z
     targetSide: z.enum(["left", "right", "top", "bottom"]).nullable().optional(),
     sourceSlot: z.number().int().min(0).max(2).optional(),
     targetSlot: z.number().int().min(0).max(2).optional(),
+    sourceFraction: z.number().finite().min(0).max(1).nullable().optional(),
+    targetFraction: z.number().finite().min(0).max(1).nullable().optional(),
+    sourcePoint: ControlPointSchema.nullable()
+      .optional()
+      .describe(
+        "Free source endpoint on this view; semantic source remains unchanged. Null reattaches.",
+      ),
+    targetPoint: ControlPointSchema.nullable()
+      .optional()
+      .describe(
+        "Free target endpoint on this view; semantic target remains unchanged. Null reattaches.",
+      ),
     labelOffset: ControlPointSchema.optional(),
   })
   .strict();

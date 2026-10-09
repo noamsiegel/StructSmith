@@ -180,7 +180,27 @@ export function buildPasteOperations(
             relationshipId: `@${ref}`,
             hidden: placement.hidden,
             labelPosition: placement.labelPosition,
-            presentation: placement.presentation,
+            presentation: placement.presentation
+              ? {
+                  ...placement.presentation,
+                  ...(placement.presentation.sourcePoint
+                    ? {
+                        sourcePoint: {
+                          x: placement.presentation.sourcePoint.x + offset,
+                          y: placement.presentation.sourcePoint.y + offset,
+                        },
+                      }
+                    : {}),
+                  ...(placement.presentation.targetPoint
+                    ? {
+                        targetPoint: {
+                          x: placement.presentation.targetPoint.x + offset,
+                          y: placement.presentation.targetPoint.y + offset,
+                        },
+                      }
+                    : {}),
+                }
+              : placement.presentation,
             controlPoints: placement.controlPoints.map((point) => ({
               x: point.x + offset,
               y: point.y + offset,
