@@ -20,6 +20,7 @@ import {
 } from "@structsmith/domain";
 import type { Edge, Node } from "@xyflow/react";
 import { annotationNodeId, annotationSize } from "./annotations";
+import { automaticAttachmentFractions } from "./attachmentSpacing";
 import type { ConnectorAttachment } from "./ConnectorEndpointHandle";
 import {
   type ImplementationStatus,
@@ -79,6 +80,7 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
   tags: string[];
   onControlPointsChange?: (points: ControlPoint[]) => Promise<void>;
   movementBends?: ControlPoint[];
+  automaticAttachments?: { source?: number; target?: number };
   onLabelOffsetChange?: (relationshipId: string, offset: ControlPoint) => Promise<void>;
   onEndpointChange?: (
     endpoint: "source" | "target",
@@ -289,6 +291,15 @@ export function buildGraph({
       },
     };
   });
+
+  const attachments = automaticAttachmentFractions(
+    edges,
+    view.settings.autoLayoutDirection,
+    relationships,
+  );
+  for (const edge of edges) {
+    if (edge.data) edge.data.automaticAttachments = attachments.get(edge.id);
+  }
 
   for (const annotation of view.settings.annotations ?? []) {
     const size = annotationSize(annotation);
