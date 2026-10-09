@@ -72,7 +72,11 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         "Sections and drill-down",
         "Nested visual frames and semantic Subprocess navigation.",
       ],
-      ["connectors", "Connectors", "Labels, bend points, styles, arrows and attachment slots."],
+      [
+        "connectors",
+        "Connectors",
+        "Labels, bend points, arrows, border attachments and loose endpoints.",
+      ],
       [
         "comments",
         "Comment threads",
@@ -663,6 +667,10 @@ export function buildUiDemoDocument(): WorkspaceDocument {
             targetSide: index === 4 ? "right" : targetSides[index % targetSides.length],
             sourceSlot: index % 3,
             targetSlot: index % 3,
+            sourceFraction: index === 0 ? 0.37 : null,
+            targetFraction: index === 3 ? 0.73 : null,
+            sourcePoint: index === 5 ? { x: 1430, y: 1660 } : null,
+            targetPoint: index === 5 ? { x: 1680, y: 2200 } : null,
             strokeStyle: index % 3 === 0 ? "solid" : index % 3 === 1 ? "dashed" : "dotted",
             strokeWidth: index === 5 ? 3 : 1.5,
             sourceArrow: index % 3 === 0 ? "none" : index % 3 === 1 ? "arrow" : "arrowclosed",

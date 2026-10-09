@@ -274,6 +274,17 @@ describe("UI demo fixture", () => {
         (edge) => edge.controlPoints.length === 4 && edge.presentation?.labelOffset?.y === 40,
       ),
     ).toBe(true);
+    expect(
+      connectors.find((edge) => edge.relationshipId === "demo-edge-sync")?.presentation
+        ?.sourceFraction,
+    ).toBe(0.37);
+    expect(
+      connectors.find((edge) => edge.relationshipId === "demo-edge-data")?.presentation
+        ?.targetFraction,
+    ).toBe(0.73);
+    expect(
+      connectors.find((edge) => edge.relationshipId === "demo-edge-custom")?.presentation,
+    ).toMatchObject({ sourcePoint: { x: 1430, y: 1660 }, targetPoint: { x: 1680, y: 2200 } });
     const clearance = byKey.get("demo-label-clearance");
     expect({
       cardGap:

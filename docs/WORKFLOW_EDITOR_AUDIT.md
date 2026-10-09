@@ -519,6 +519,47 @@ demo was snapshot/reset after destructive exercises; real diagrams were not edit
 Network tracing was unavailable in the browser fallback; REST and MCP were checked
 directly. Exports, mobile and performance on very large graphs were not tested.
 
+## Connector endpoint acceptance (2026-10-09)
+
+Reproduced before editing: endpoint targets shrank with canvas zoom and dragging
+to another object did not reconnect the relationship. The existing presentation
+schema and shared editor/preview edge renderer now support arbitrary border
+fractions and loose canvas points. No dependency or separate connector model was
+added. Loose ends detach visually in that view; the semantic relationship remains.
+Reconnecting changes the dragged semantic endpoint and presentation atomically.
+
+On deployed port 8090, `finalEndpointTab.drag` moved the data handoff endpoint to
+empty canvas. `finalEndpointTab.reload()` retained its saved point
+`{x:811.9152542372882,y:523.822033898305}`. A subsequent drag onto another object's
+right border saved `targetElementId: demo-edge-target-2`, fraction
+`0.603439632061276`, and `targetPoint: null`. REST reads of
+`/api/workspaces/structsmith-ui-demo/document` confirmed each result. Endpoint
+controls measured 28 screen pixels across. Browser console reads returned no
+warnings/errors. The demo was snapshot/reset afterward with `bun run ui:demo --reset`.
+
+Earlier browser exercises covered Undo/Redo, diamond borders, refused
+self-connections, moving a former attached object, and Fit with a distant loose
+point. Orthogonal, curved, crowded and read-only previews retained visible arrows
+and labels; the final straight view measured six labels, eight arrowheads and
+zero arrow-label intersections. Orthogonal routes had zero diagonal legs.
+Arrowheads render above cards/frames at a constant screen size with a background
+outline; close endpoint handles separate so their hit areas remain usable.
+[Deployed screenshot](screenshots/connector-endpoints.png).
+
+Verification: `bun run test` reported 364 passing tests, zero failures and 3082
+assertions across 68 files. `bun run check`, `bun run typecheck`, `bun run build`,
+`bun run build:local`, `bun run build:site`, and the final Docker build succeeded.
+Focused mutations caught schema, geometry, reconnection, clipboard, Fit,
+short-route, arrow rendering, layout-reset and fixture regressions. Native MCP
+SDK catalog inspection exposed border fractions and loose points, and
+`workspace_list` succeeded at the unchanged `/mcp` URL. Six workspace documents
+were identical around container replacement.
+
+Merged edges are not individually reconnectable; lifted hidden endpoints must
+be edited in their detail view. The browser fallback lacked network tracing;
+REST/MCP were checked directly. Exports, mobile and very large graphs remain
+untested. The native-agent launcher smoke test was not rerun for this canvas change.
+
 ## Reference documentation
 
 These links underpin the optional ideas, not claims that the fork implements them:
