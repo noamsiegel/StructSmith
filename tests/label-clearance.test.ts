@@ -259,12 +259,12 @@ test("measured multiline section headers reserve their full height outside the f
   const boxes = labelObstacles(
     nodes,
     new Map([
-      ["section", 48],
-      ["workflow", 44],
+      ["section", { width: 140, height: 48 }],
+      ["workflow", { width: 140, height: 44 }],
     ]),
   );
   expect(boxes).toEqual([
-    { x: 10, y: 52, width: 220, height: 48 },
+    { x: 10, y: 52, width: 140, height: 48 },
     { x: 400, y: 100, width: 220, height: 44 },
   ]);
   const desired = { x: 100, y: 51 };
@@ -280,5 +280,9 @@ test("measured multiline section headers reserve their full height outside the f
   );
   expect(point).toEqual({ x: 100, y: 34 });
   expectClear(point, size, boxes);
+  const besideTitle = { x: 190, y: 76 };
+  expect(
+    clearRelationshipLabel([besideTitle], besideTitle, { width: 40, height: 20 }, boxes),
+  ).toEqual(besideTitle);
   expect(labelObstacles(nodes)[0]?.height).toBe(40);
 });

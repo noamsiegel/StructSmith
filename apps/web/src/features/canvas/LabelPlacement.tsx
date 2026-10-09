@@ -56,7 +56,7 @@ interface LabelRequest {
 
 export function labelObstacles(
   nodes: readonly FlowNode[],
-  headerHeights: ReadonlyMap<string, number> = new Map(),
+  headerSizes: ReadonlyMap<string, Pick<LabelBox, "width" | "height">> = new Map(),
 ): LabelBox[] {
   return nodes
     .filter((node) => !node.hidden)
@@ -64,13 +64,13 @@ export function labelObstacles(
       const width = node.measured?.width ?? node.width ?? 220;
       const height = node.measured?.height ?? node.height ?? Number(node.data.minimumHeight ?? 96);
       if (node.type === "boundary") {
+        const measuredHeader = headerSizes.get(node.id);
         const header =
-          headerHeights.get(node.id) ??
-          boundaryHeaderHeight(node.data.name, width, node.data.section);
+          measuredHeader?.height ?? boundaryHeaderHeight(node.data.name, width, node.data.section);
         return {
           x: node.position.x,
           y: node.position.y - (node.data.section ? header : 0),
-          width,
+          width: node.data.section ? (measuredHeader?.width ?? width) : width,
           height: header,
         };
       }
@@ -85,7 +85,7 @@ const LabelPlacementContext = createContext<{
   headers: readonly LabelBox[];
   routingObstacles: readonly RouteObstacle[];
   register: (id: string, request: LabelRequest | null) => void;
-  registerHeader: (id: string, height: number | null) => void;
+  registerHeader: (id: string, size: Pick<LabelBox, "width" | "height"> | null) => void;
 } | null>(null);
 
 export function LabelPlacementProvider({
@@ -107,16 +107,22 @@ export function LabelPlacementProvider({
   }, []);
   const routes = useMemo(() => spaceConnectorRoutes(routeRequests), [routeRequests]);
   const [requests, setRequests] = useState(new Map<string, LabelRequest>());
-  const [headerHeights, setHeaderHeights] = useState(new Map<string, number>());
-  const registerHeader = useCallback((id: string, height: number | null) => {
-    setHeaderHeights((current) => {
-      if ((current.get(id) ?? null) === height) return current;
-      const next = new Map(current);
-      if (height !== null) next.set(id, height);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
+  const [headerSizes, setHeaderSizes] = useState(
+    new Map<string, Pick<LabelBox, "width" | "height">>(),
+  );
+  const registerHeader = useCallback(
+    (id: string, size: Pick<LabelBox, "width" | "height"> | null) => {
+      setHeaderSizes((current) => {
+        const previous = current.get(id) ?? null;
+        if (previous?.width === size?.width && previous?.height === size?.height) return current;
+        const next = new Map(current);
+        if (size !== null) next.set(id, size);
+        else next.delete(id);
+        return next;
+      });
+    },
+    [],
+  );
   const register = useCallback((id: string, request: LabelRequest | null) => {
     setRequests((current) => {
       if (JSON.stringify(current.get(id) ?? null) === JSON.stringify(request)) return current;
@@ -128,7 +134,7 @@ export function LabelPlacementProvider({
   }, []);
   const positions = useMemo(() => {
     const obstacles = [
-      ...labelObstacles(nodes, headerHeights),
+      ...labelObstacles(nodes, headerSizes),
       ...[...requests.values()].flatMap((request) => request.obstacles),
     ];
     const positions = new Map<string, ControlPoint>();
@@ -147,23 +153,23 @@ export function LabelPlacementProvider({
       });
     }
     return positions;
-  }, [nodes, requests, headerHeights]);
+  }, [nodes, requests, headerSizes]);
   const headers = useMemo(
     () =>
       labelObstacles(
         nodes.filter((node) => node.type === "boundary"),
-        headerHeights,
+        headerSizes,
       ),
-    [nodes, headerHeights],
+    [nodes, headerSizes],
   );
   const routingObstacles = useMemo(
     () =>
       nodes
         .filter((node) => !node.hidden)
         .flatMap((node) =>
-          labelObstacles([node], headerHeights).map((box) => ({ id: node.id, ...box })),
+          labelObstacles([node], headerSizes).map((box) => ({ id: node.id, ...box })),
         ),
-    [nodes, headerHeights],
+    [nodes, headerSizes],
   );
   const routingCache = useRef(routingObstacles);
   if (JSON.stringify(routingCache.current) !== JSON.stringify(routingObstacles))
@@ -191,10 +197,11 @@ export function useLabelHeader(id: string) {
     const header = headerRef.current;
     if (!header || !register) return;
     const measure = () =>
-      register(
-        id,
-        header.offsetHeight + (Number.parseFloat(getComputedStyle(header).marginBottom) || 0),
-      );
+      register(id, {
+        width: header.offsetWidth,
+        height:
+          header.offsetHeight + (Number.parseFloat(getComputedStyle(header).marginBottom) || 0),
+      });
     measure();
     const observer = new ResizeObserver(measure);
     observer.observe(header);

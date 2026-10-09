@@ -31,7 +31,19 @@ function clear(a: ControlPoint, b: ControlPoint, boxes: readonly LabelBox[]): bo
   );
 }
 
-function compact(points: readonly ControlPoint[]): ControlPoint[] {
+function outward(endpoint: RouteEndpoint, neighbour: ControlPoint): boolean {
+  const [dx, dy] = directions[endpoint.side];
+  return (
+    !endpoint.elementId ||
+    (neighbour.x - endpoint.point.x) * dx + (neighbour.y - endpoint.point.y) * dy > 0
+  );
+}
+
+function compact(
+  points: readonly ControlPoint[],
+  source?: RouteEndpoint,
+  target?: RouteEndpoint,
+): ControlPoint[] {
   const result: ControlPoint[] = [];
   for (const point of points) {
     if (result.length && same(result[result.length - 1] as ControlPoint, point)) continue;
@@ -40,12 +52,14 @@ function compact(points: readonly ControlPoint[]): ControlPoint[] {
       const b = result[result.length - 1] as ControlPoint;
       if (
         !((a.x === b.x && b.x === point.x) || (a.y === b.y && b.y === point.y)) ||
-        (b.x - a.x) * (point.x - b.x) + (b.y - a.y) * (point.y - b.y) < 0
+        (source && result.length === 2 && !outward(source, point)) ||
+        (target && same(point, target.point) && !outward(target, a))
       )
         break;
       result.pop();
     }
-    result.push(point);
+    if (!result.length || !same(result[result.length - 1] as ControlPoint, point))
+      result.push(point);
   }
   return result;
 }
@@ -199,30 +213,24 @@ export function safeOrthogonalRoute(
     width: box.width + 16,
     height: box.height + 16,
   }));
-  const outward = (endpoint: RouteEndpoint, neighbour: ControlPoint) => {
-    const [dx, dy] = directions[endpoint.side];
-    return (
-      !endpoint.elementId ||
-      (neighbour.x - endpoint.point.x) * dx + (neighbour.y - endpoint.point.y) * dy > 0
-    );
-  };
+  const normalized = compact(points, source, target);
   const valid =
-    points.length > 1 &&
-    outward(source, points[1] as ControlPoint) &&
-    outward(target, points[points.length - 2] as ControlPoint) &&
-    points.slice(1).every((b, i) => laneClear(points[i] as ControlPoint, b, lanes)) &&
-    points.slice(1).every((b, index) =>
+    normalized.length > 1 &&
+    outward(source, normalized[1] as ControlPoint) &&
+    outward(target, normalized[normalized.length - 2] as ControlPoint) &&
+    normalized.slice(1).every((b, i) => laneClear(normalized[i] as ControlPoint, b, lanes)) &&
+    normalized.slice(1).every((b, index) =>
       clear(
-        points[index] as ControlPoint,
+        normalized[index] as ControlPoint,
         b,
         boxes.filter(
           (box) =>
             !(index === 0 && box.id === source.elementId) &&
-            !(index === points.length - 2 && box.id === target.elementId),
+            !(index === normalized.length - 2 && box.id === target.elementId),
         ),
       ),
     );
-  if (valid) return { points: [...points], blocked: false };
+  if (valid) return { points: normalized, blocked: false };
   const pin = (endpoint: RouteEndpoint) => {
     if (!endpoint.elementId) return endpoint.point;
     const [dx, dy] = directions[endpoint.side];
@@ -286,5 +294,5 @@ export function safeOrthogonalRoute(
     route.push(...part.slice(1));
   }
   route.push(target.point);
-  return { points: compact(route), blocked: false };
+  return { points: compact(route, source, target), blocked: false };
 }

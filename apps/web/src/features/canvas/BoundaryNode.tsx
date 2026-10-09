@@ -82,8 +82,9 @@ function BoundaryNodeComponent({
         ref={headerRef}
         className={cn(
           data.section
-            ? "absolute bottom-full left-0 mb-1 flex w-full items-center gap-1 rounded-md bg-canvas px-1 py-0.5 text-xs font-medium"
+            ? "absolute bottom-full left-0 mb-1 flex w-fit max-w-full items-center gap-1 rounded-md bg-canvas px-1 py-0.5 text-xs font-medium"
             : "flex min-w-0 items-center gap-2 rounded-t-lg border-b px-3 py-1 text-xs",
+          data.section && editing && "w-full",
           draggable && "cursor-grab active:cursor-grabbing",
         )}
         title={draggable ? t("boundaries.moveGroupHint") : undefined}
@@ -136,7 +137,7 @@ function BoundaryNodeComponent({
         ) : data.section && data.onRename ? (
           <Button
             variant="ghost"
-            className="nodrag nopan h-auto min-w-0 flex-1 justify-start whitespace-pre-line px-1 py-1 text-left text-xs leading-4 normal-case tracking-normal [overflow-wrap:anywhere]"
+            className="nodrag nopan h-auto min-w-0 justify-start whitespace-pre-line px-1 py-1 text-left text-xs leading-4 normal-case tracking-normal [overflow-wrap:anywhere]"
             title={t("sections.rename")}
             onClick={(event) => {
               if (event.shiftKey || event.metaKey || event.ctrlKey) return;
@@ -149,7 +150,10 @@ function BoundaryNodeComponent({
           </Button>
         ) : (
           <span
-            className="min-w-0 flex-1 whitespace-pre-line font-semibold leading-4 text-foreground [overflow-wrap:anywhere]"
+            className={cn(
+              "min-w-0 whitespace-pre-line font-semibold leading-4 text-foreground [overflow-wrap:anywhere]",
+              !data.section && "flex-1",
+            )}
             title={data.name}
           >
             {data.name}

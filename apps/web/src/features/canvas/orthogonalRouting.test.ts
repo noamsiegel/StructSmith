@@ -33,6 +33,86 @@ function assertClear(points: ControlPoint[], boxes: RouteObstacle[]) {
   }
 }
 
+test("removes immediate retraces from the Upload documents section-title detour", () => {
+  const source = { point: { x: 1592, y: 1 }, side: "top" as const, elementId: "source" };
+  const target = { point: { x: 1592, y: -271 }, side: "top" as const };
+  const saved = [
+    source.point,
+    { x: 1592, y: -24 },
+    { x: 1608, y: -24 },
+    { x: 1608, y: -76 },
+    { x: 1656, y: -76 },
+    { x: 1656, y: -271 },
+    target.point,
+  ];
+  const boxes = [
+    { id: "source", x: 1472, y: 0, width: 240, height: 184 },
+    { id: "header", x: 1088, y: -68, width: 656, height: 36 },
+  ];
+  const result = safeOrthogonalRoute(source, target, saved, boxes);
+  expect(result.blocked).toBe(false);
+  expect(result.points).toEqual([
+    source.point,
+    { x: 1592, y: -24 },
+    { x: 1752, y: -24 },
+    { x: 1752, y: -76 },
+    { x: 1656, y: -76 },
+    { x: 1656, y: -271 },
+    target.point,
+  ]);
+  assertClear(result.points, boxes);
+  expect(saved[3]).toEqual({ x: 1608, y: -76 });
+});
+
+test("normalizes retraces and duplicates on valid routes without flattening authored loops", () => {
+  const source = { point: { x: 0, y: 0 }, side: "right" as const };
+  const target = { point: { x: 200, y: 100 }, side: "left" as const };
+  const loop = [
+    source.point,
+    { x: 100, y: 0 },
+    { x: 100, y: 100 },
+    { x: 50, y: 100 },
+    { x: 50, y: 50 },
+    { x: 150, y: 50 },
+    { x: 150, y: 100 },
+    target.point,
+  ];
+  expect(safeOrthogonalRoute(source, target, loop, []).points).toEqual(loop);
+  const saved = [
+    source.point,
+    source.point,
+    { x: 50, y: 0 },
+    { x: 50, y: 100 },
+    { x: 150, y: 100 },
+    { x: 50, y: 100 },
+    { x: 150, y: 100 },
+    target.point,
+    target.point,
+  ];
+  expect(safeOrthogonalRoute(source, target, saved, [])).toEqual({
+    points: [source.point, { x: 50, y: 0 }, { x: 50, y: 100 }, target.point],
+    blocked: false,
+  });
+});
+
+test("compaction preserves outward attached endpoint approaches", () => {
+  const source = { point: { x: 0, y: 0 }, side: "right" as const, elementId: "source" };
+  const target = { point: { x: -100, y: 100 }, side: "left" as const, elementId: "target" };
+  const saved = [
+    source.point,
+    { x: 24, y: 0 },
+    { x: -124, y: 0 },
+    { x: -124, y: 100 },
+    { x: -200, y: 100 },
+    target.point,
+  ];
+  const result = safeOrthogonalRoute(source, target, saved, []);
+  expect(result.blocked).toBe(false);
+  expect(result.points[1]?.x).toBeGreaterThan(source.point.x);
+  expect(result.points.at(-2)?.x).toBeLessThan(target.point.x);
+  expect(result.points).not.toContainEqual({ x: -200, y: 100 });
+});
+
 test("repairs the Own return route using expanded card heights and outside right approaches", () => {
   const source = { point: { x: 3007, y: 492 }, side: "right" as const, elementId: "source" };
   const target = { point: { x: 2991, y: 108 }, side: "right" as const, elementId: "target" };
@@ -110,7 +190,7 @@ test("keeps a valid manual lane, repairs only a blocked segment and respects all
   const blocked = { id: "new-card", x: 350, y: 420, width: 100, height: 100 };
   const repaired = safeOrthogonalRoute(source, target, saved, [...boxes, blocked]).points;
   expect(repaired).toContainEqual({ x: 150, y: 450 });
-  expect(repaired).toContainEqual({ x: 550, y: 450 });
+  expect(repaired).toContainEqual({ x: 550, y: 350 });
   assertClear(repaired, [...boxes, blocked]);
 });
 
