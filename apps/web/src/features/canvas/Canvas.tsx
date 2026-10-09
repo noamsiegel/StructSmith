@@ -620,7 +620,7 @@ export function Canvas({
         dragRoutes.current.set(edge.id, {
           automaticAlignment: saved.length === 0 ? alignment : undefined,
           bends:
-            renderedRoutes.current.get(edge.id)?.slice(1, -1) ??
+            (saved.length > 0 ? saved : renderedRoutes.current.get(edge.id)?.slice(1, -1)) ??
             captureRelationshipBends(
               point(source, sourceHandle, "source"),
               point(target, targetHandle, "target"),
@@ -2109,6 +2109,21 @@ export function Canvas({
                           endpoint === "source" ? edge.source : edge.target,
                           endpoint,
                           attachment,
+                          {
+                            side:
+                              edge.data.placement?.presentation?.[
+                                endpoint === "source" ? "sourceSide" : "targetSide"
+                              ] ??
+                              sideFromHandle(
+                                endpoint === "source" ? edge.sourceHandle : edge.targetHandle,
+                                endpoint,
+                              ),
+                            detached: Boolean(
+                              edge.data.placement?.presentation?.[
+                                endpoint === "source" ? "sourcePoint" : "targetPoint"
+                              ],
+                            ),
+                          },
                         );
                       } catch (error) {
                         toast.message(

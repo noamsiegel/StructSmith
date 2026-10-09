@@ -7,6 +7,7 @@ export function reconnectRelationshipOperations(
   visibleEndpointId: string,
   endpoint: "source" | "target",
   attachment: ConnectorAttachment,
+  currentAttachment?: { side: ConnectorAttachment["side"]; detached: boolean },
 ): ArchitectureOperation[] {
   const semanticKey = endpoint === "source" ? "sourceElementId" : "targetElementId";
   const changedObject = attachment.elementId && attachment.elementId !== visibleEndpointId;
@@ -18,6 +19,11 @@ export function reconnectRelationshipOperations(
     throw new Error("self-endpoint");
   if (changedObject && visibleEndpointId !== relationship[semanticKey])
     throw new Error("lifted-endpoint");
+  const resetRoute =
+    changedObject ||
+    (currentAttachment &&
+      (currentAttachment.side !== attachment.side ||
+        currentAttachment.detached !== !attachment.elementId));
   return [
     ...(changedObject
       ? [
@@ -34,6 +40,7 @@ export function reconnectRelationshipOperations(
       relationships: [
         {
           relationshipId: relationship.id,
+          ...(resetRoute ? { controlPoints: [] } : {}),
           presentation: {
             [`${endpoint}Side`]: attachment.side,
             [`${endpoint}Fraction`]: attachment.fraction ?? null,

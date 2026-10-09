@@ -3,7 +3,7 @@ import { createTestContext, createWorkspace } from "../../../../../tests/helpers
 import { canvasFitBounds, type FlowEdge } from "./graph";
 import { reconnectRelationshipOperations } from "./reconnectRelationship";
 
-test("reconnecting changes only the dragged semantic endpoint, keeps the route, and undoes atomically", () => {
+test("reconnecting changes only the dragged semantic endpoint, clears the route, and undoes atomically", () => {
   const { services, close } = createTestContext();
   try {
     const workspace = createWorkspace(services);
@@ -54,7 +54,7 @@ test("reconnecting changes only the dragged semantic endpoint, keeps the route, 
       targetElementId: replacement.id,
     });
     expect(services.views.get(view.id).relationships[0]).toMatchObject({
-      controlPoints: controls,
+      controlPoints: [],
       presentation: {
         sourceSide: "bottom",
         sourceFraction: 0.4,
@@ -66,6 +66,7 @@ test("reconnecting changes only the dragged semantic endpoint, keeps the route, 
     if (!result.snapshotId) throw new Error("Missing undo snapshot");
     services.snapshots.restore(result.snapshotId);
     expect(services.model.get(workspace.id).relationships[0]?.targetElementId).toBe(target.id);
+    expect(services.views.get(view.id).relationships[0]?.controlPoints).toEqual(controls);
     expect(services.views.get(view.id).relationships[0]?.presentation?.targetPoint).toEqual({
       x: 600,
       y: 260,
@@ -107,6 +108,52 @@ test("reconnecting changes only the dragged semantic endpoint, keeps the route, 
     });
   } finally {
     close();
+  }
+});
+
+test("same-border moves preserve the route; changed border or attachment state clears it", () => {
+  const relationship = {
+    id: "relation",
+    sourceElementId: "source",
+    targetElementId: "target",
+  } as Parameters<typeof reconnectRelationshipOperations>[1];
+  for (const endpoint of ["source", "target"] as const) {
+    const attached = {
+      elementId: endpoint,
+      side: "bottom" as const,
+      fraction: 0.8,
+      point: { x: 40, y: 50 },
+    };
+    const free = { side: "bottom" as const, point: { x: 200, y: 300 } };
+    const placement = (
+      attachment: Parameters<typeof reconnectRelationshipOperations>[4],
+      current: Parameters<typeof reconnectRelationshipOperations>[5],
+    ) => {
+      const operations = reconnectRelationshipOperations(
+        "view",
+        relationship,
+        endpoint,
+        endpoint,
+        attachment,
+        current,
+      );
+      const operation = operations.find((item) => item.op === "setViewRelationships");
+      if (operation?.op !== "setViewRelationships") throw new Error("Missing placement operation");
+      return operation.relationships[0];
+    };
+    expect(placement(attached, { side: "bottom", detached: false })).not.toHaveProperty(
+      "controlPoints",
+    );
+    expect(placement(free, { side: "bottom", detached: true })).not.toHaveProperty("controlPoints");
+    expect(placement(attached, { side: "left", detached: false })).toMatchObject({
+      controlPoints: [],
+    });
+    expect(placement(attached, { side: "bottom", detached: true })).toMatchObject({
+      controlPoints: [],
+    });
+    expect(placement(free, { side: "bottom", detached: false })).toMatchObject({
+      controlPoints: [],
+    });
   }
 });
 

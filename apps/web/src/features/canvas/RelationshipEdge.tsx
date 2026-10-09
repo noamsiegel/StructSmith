@@ -375,7 +375,14 @@ function RelationshipEdgeComponent({
     }
     setRouteSaving(true);
     void data
-      ?.onControlPointsChange?.(gesture.current)
+      ?.onControlPointsChange?.(
+        moveRelationshipSegment(
+          gesture.points,
+          gesture.index,
+          gesture.delta,
+          orthogonal ? savedBends : undefined,
+        ),
+      )
       .catch(() => undefined)
       .finally(() => {
         setRoutePreview(null);

@@ -114,7 +114,11 @@ export function RelationshipPresentationEditor({
   const { t } = useTranslation();
   const presentation = placement?.presentation;
   const patch = (data: NonNullable<ViewRelationshipPatch["presentation"]>) =>
-    onPatch({ relationshipId, presentation: data });
+    onPatch({
+      relationshipId,
+      presentation: data,
+      ...("sourceSide" in data || "targetSide" in data ? { controlPoints: [] } : {}),
+    });
   const selectField = (
     key: "strokeStyle" | "sourceArrow" | "targetArrow" | "sourceSide" | "targetSide",
     value: string,

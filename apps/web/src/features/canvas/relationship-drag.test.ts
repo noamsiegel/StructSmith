@@ -212,6 +212,46 @@ test("segment dragging keeps endpoints and right angles while moving the picked 
   ).toBe(1);
 });
 
+test("segment edits save authored bends and the edited leg without freezing automatic repairs", () => {
+  const authored = [
+    { x: 100, y: 0 },
+    { x: 100, y: 200 },
+    { x: 300, y: 200 },
+  ];
+  const rendered = [
+    { x: 0, y: 0 },
+    { x: 100, y: 0 },
+    { x: 100, y: 50 },
+    { x: 200, y: 50 },
+    { x: 200, y: 150 },
+    { x: 100, y: 150 },
+    { x: 100, y: 200 },
+    { x: 300, y: 200 },
+    { x: 300, y: 300 },
+  ];
+  expect(moveRelationshipSegment(rendered, 6, { x: 0, y: 20 }, authored)).toEqual([
+    { x: 100, y: 0 },
+    { x: 100, y: 220 },
+    { x: 300, y: 220 },
+  ]);
+  expect(moveRelationshipSegment(rendered, 3, { x: 40, y: 0 }, authored)).toEqual([
+    { x: 100, y: 0 },
+    { x: 240, y: 50 },
+    { x: 240, y: 150 },
+    { x: 100, y: 200 },
+    { x: 300, y: 200 },
+  ]);
+  expect(moveRelationshipSegment(rendered, 3, { x: 40, y: 0 }, [])).toEqual([
+    { x: 240, y: 50 },
+    { x: 240, y: 150 },
+  ]);
+  expect(authored).toEqual([
+    { x: 100, y: 0 },
+    { x: 100, y: 200 },
+    { x: 300, y: 200 },
+  ]);
+});
+
 test("native orthogonal route seeds omit duplicate and redundant handles but retain backtracking", () => {
   expect(
     orthogonalRelationshipBends({ x: 0, y: 0 }, { x: 300, y: 100 }, Position.Right, Position.Left),

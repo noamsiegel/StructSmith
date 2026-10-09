@@ -253,6 +253,7 @@ export function moveRelationshipSegment(
   points: readonly ControlPoint[],
   index: number,
   delta: ControlPoint,
+  authoredBends?: readonly ControlPoint[],
 ): ControlPoint[] {
   const start = points[index];
   const end = points[index + 1];
@@ -268,5 +269,14 @@ export function moveRelationshipSegment(
   ];
   if (index === 0) moved.unshift(points[0] as ControlPoint);
   if (index === points.length - 2) moved.push(points[points.length - 1] as ControlPoint);
-  return moved.slice(1, -1);
+  const bends = moved.slice(1, -1);
+  if (!authoredBends) return bends;
+  // Automatic repair corners stay derived; only the edited segment becomes authored.
+  const edited = [
+    { x: start.x + x, y: start.y + y },
+    { x: end.x + x, y: end.y + y },
+  ];
+  return bends.filter((point) =>
+    [...authoredBends, ...edited].some((keep) => keep.x === point.x && keep.y === point.y),
+  );
 }
