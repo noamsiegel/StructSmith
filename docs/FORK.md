@@ -91,6 +91,10 @@ and resets to Status on reload, without editing the model or coordinates.
   Existing crowded layouts may need Auto layout after cards grow; previewing
   never rewrites those layouts. The legacy full-title setting no longer hides text.
 - Named connection labels remain visible without clicking or selecting a card.
+  The editor and previews measure the whole label and reserve eight canvas pixels
+  around cards, annotations, group titles and other labels. Labels slide to the
+  closest clear position. Crowded routes use a nearby label with a short dotted
+  leader; this does not move saved cards, bends or label-offset intent.
   Drag a label onto any connector segment, including vertical legs; text stays
   horizontal and snaps to the route. Arrow keys move along its leg; Shift moves
   ten units. Default placement favors horizontal legs.

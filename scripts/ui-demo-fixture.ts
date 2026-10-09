@@ -683,6 +683,51 @@ export function buildUiDemoDocument(): WorkspaceDocument {
       );
     }
 
+    const clearanceView = view(
+      "label-clearance",
+      {
+        name: "04 - Connector label clearance",
+        kind: "workflow",
+        scopeElementId: "demo-nav-connectors",
+        settings: {
+          relationshipRouting: "orthogonal",
+          annotations: [
+            {
+              id: "demo-label-obstacle",
+              kind: "note",
+              text: "Labels reserve space around cards, notes and Section titles.",
+              x: 470,
+              y: 200,
+              width: 240,
+              height: 160,
+            },
+          ],
+          sectionFrames: {
+            "boundary:demo-label-section": { x: -28, y: -30, width: 510, height: 1020 },
+          },
+        },
+      },
+      connectorEntries.map((entry, index) => ({
+        elementId: entry.elementId,
+        x: (index % 2) * 236,
+        y: Math.floor(index / 2) * 170,
+      })),
+    );
+    services.boundaries.create(UI_DEMO_WORKSPACE_ID, {
+      id: "demo-label-section",
+      viewId: clearanceView,
+      kind: "custom",
+      layer: "custom",
+      name: "Padded labels remain visible\nIncluding wrapped Section titles and controls",
+      elementIds: [],
+    });
+    services.views.saveLayout(
+      UI_DEMO_WORKSPACE_ID,
+      clearanceView,
+      [],
+      connectorIds.map((relationshipId) => ({ relationshipId, labelPosition: 1 })),
+    );
+
     const commentElements = [
       add({
         id: "demo-comment-target",

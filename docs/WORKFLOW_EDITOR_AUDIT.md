@@ -477,6 +477,48 @@ separate capabilities, but have lower value here until simultaneous proposals
 need isolated changes and review. Tags continue to describe status in one
 functional hierarchy. Milestone timeline work is already tracked in #106.
 
+## Connector label clearance acceptance (2026-10-09)
+
+Reproduced on the shared demo before editing: dragging its long connector label
+onto the target card made `document.elementFromPoint` return card content at the
+label center. Labels were on layer 15, below cards on layer 20.
+
+The shared editor/preview renderer now measures label boxes and group headers,
+reserves eight canvas pixels around cards, annotations, headers and earlier labels,
+and chooses the nearest clear route position. If the route cannot fit the label,
+a dotted leader identifies its nearby position. Leaders are masked beneath group
+headers. Saved card coordinates, connector bends and label-offset intent remain
+unchanged by clearance calculation.
+
+Browser acceptance used `labelTab.drag` and
+`labelTab.playwright.evaluate(scanLabelClearance)`, measuring every label rectangle
+against cards, annotation rectangles, actual group headers and other labels,
+including eight pixels scaled by the viewport zoom. Results: zero clearance
+violations on `demo-label-clearance`, orthogonal/curved/straight connector views,
+and the read-only connector preview. The crowded fixture has six labels, 16px
+card gaps, a note and a measured two-line Section header (44px plus 4px margin).
+Dragging labels into cards, moving cards through labels, Undo/Redo, a multilingual
+97px-tall label, reload and Auto layout retained zero violations. The final
+port-8090 image repeated the label-into-card gesture with zero violations and no
+console warnings/errors. [Screenshot](screenshots/connector-label-clearance.jpg).
+
+Verification commands: `bun run check`, `bun run typecheck`, `bun run test`
+(346 passing), `bun run build`, `bun run build:local`, `bun run build:site`,
+and `docker build -t structsmith-fork:label-clearance-final .`.
+Focused solver/header/fixture tests passed; intentional width, padding, interval,
+projection, header-height and misplaced-note mutations failed and were restored.
+The Impeccable detector flagged the existing SVG `stroke-width` transition as a
+box-layout transition; it does not change box layout. Existing schema-version,
+large-bundle and Docker AUTH_MODE-name advisories remain.
+
+A native MCP SDK client successfully called `workspace_list` at the unchanged
+`http://127.0.0.1:8090/mcp` endpoint. REST document comparisons around cutover
+reported all six workspace documents identical. The same data/agent-chat volume
+is mounted and the original container is retained for rollback. The dedicated UI
+demo was snapshot/reset after destructive exercises; real diagrams were not edited.
+Network tracing was unavailable in the browser fallback; REST and MCP were checked
+directly. Exports, mobile and performance on very large graphs were not tested.
+
 ## Reference documentation
 
 These links underpin the optional ideas, not claims that the fork implements them:
