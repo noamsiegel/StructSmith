@@ -81,6 +81,7 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
   onControlPointsChange?: (points: ControlPoint[]) => Promise<void>;
   movementBends?: ControlPoint[];
   automaticAttachments?: { source?: number; target?: number };
+  onRouteRendered?: (points: ControlPoint[]) => void;
   onLabelOffsetChange?: (relationshipId: string, offset: ControlPoint) => Promise<void>;
   onEndpointChange?: (
     endpoint: "source" | "target",
