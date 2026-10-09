@@ -560,6 +560,52 @@ be edited in their detail view. The browser fallback lacked network tracing;
 REST/MCP were checked directly. Exports, mobile and very large graphs remain
 untested. The native-agent launcher smoke test was not rerun for this canvas change.
 
+## Orthogonal routing acceptance (2026-10-09)
+
+Reproduced Own's right-border return arrow approaching through its card:
+`M 3007,492 L 2447.5,492 L 2447.5,108 L 2991,108`.
+The shared editor/preview renderer now repairs endpoint approaches and obstructed
+orthogonal segments using measured card/annotation bounds and group titles,
+with eight pixels of padding. Valid manual segments remain intact; saved diagrams
+are not rewritten. Section interiors remain traversable. Impossible routes show
+a red dashed line, Blocked route label and explanatory tooltip.
+
+After deploying the final web build, `ownRoutingTab.reload()` and
+`ownRoutingTab.playwright.evaluate(scanRouting)` reported eight labels, 34 segments,
+zero blocked routes and zero diagonal/card-crossing violations. The repaired
+return path was `M 3007,492 L 3079,492 L 3079,108 L 2991,108`.
+Browser console inspection returned no warnings/errors.
+[Own screenshot](screenshots/orthogonal-routing-own.png).
+
+`bun run ui:demo --reset` snapshotted/restored the shared demo. The deployed
+`demo-connectors` baseline includes invalid right/right return bends and an
+expanded obstacle. `routingDevTab.playwright.evaluate(scanRouting)` reported six
+labels, 20 segments and zero blocked routes or violations. After a clean reload,
+console entries filtered to the reload timestamp contained no warnings/errors.
+[Demo screenshot](screenshots/orthogonal-routing-demo.png).
+Earlier development browser dragging covered detours, overlapping-card warnings,
+warning removal after separation, native shapes and read-only previews.
+
+`bun run test` reported 369 passing tests, zero failures and 3491 assertions
+across 69 files. `bun run check`, `bun run typecheck`, web/site/launcher builds
+succeeded. Six deliberate router mutations failed regression tests; fixture
+mutations changing the endpoint side, saved bends, obstacle height and obstacle
+position each failed the focused right-border regression and were restored.
+
+Docker Hub returned HTTP 504 on full rebuild attempts. The final deployment used
+`docker build --pull=false -f - -t structsmith-fork:routing-final apps/web/dist`
+with a Dockerfile overlaying the verified existing runtime. Running image:
+`cbc5b37bf25c6588f8633732e79fab98b8f54e644f507c0936504beb4926601e`.
+`curl -fsS http://127.0.0.1:8090/health` reported database and MCP ok.
+Loopback port 8090, data volume and auth/MCP settings were retained; all six
+workspace documents were identical across replacement. The old container is
+retained as `structsmith-before-orthogonal-routing-20261009`.
+
+The browser fallback lacks network tracing. Exports, mobile, very large graphs
+and native-agent launcher smoke were not exercised. Straight/curved routes do
+not use obstacle avoidance. Distinct attachment slots and parallel lane allocation
+remain separate work; this fix prevents card crossings, not connector overlaps.
+
 ## Reference documentation
 
 These links underpin the optional ideas, not claims that the fork implements them:

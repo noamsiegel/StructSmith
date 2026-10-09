@@ -27,6 +27,24 @@ const byId = new Map(document.elements.map((element) => [element.id, element]));
 const byKey = new Map(document.views.map((view) => [view.key, view]));
 
 describe("UI demo fixture", () => {
+  test("covers the right-border return route with invalid saved bends and expanded obstacles", () => {
+    const view = byKey.get("demo-connectors");
+    if (!view) throw new Error("Missing connector view");
+    const edge = view.relationships.find(
+      (entry) => entry.relationshipId === "demo-edge-dependency",
+    );
+    const source = view.elements.find((entry) => entry.elementId === "demo-edge-source-4");
+    const target = view.elements.find((entry) => entry.elementId === "demo-edge-target-4");
+    const obstacle = view.elements.find((entry) => entry.elementId === "demo-return-obstacle");
+    if (!edge || !source || !target || !obstacle) throw new Error("Missing return-route fixture");
+    expect(edge.presentation).toMatchObject({ sourceSide: "right", targetSide: "right" });
+    expect(edge.controlPoints.length).toBeGreaterThan(0);
+    expect(edge.controlPoints.every((point) => point.x < Math.min(source.x, target.x))).toBe(true);
+    const size = estimateElementSize(byId.get(obstacle.elementId), view.settings, obstacle);
+    expect(size.height).toBeGreaterThan(200);
+    expect(obstacle.x > source.x + 220 && obstacle.x + size.width < target.x).toBe(true);
+  });
+
   test("places orthogonal and straight connector labels clear of every card", () => {
     for (const key of ["demo-connectors", "demo-connectors-straight", "demo-native-flow"]) {
       const view = byKey.get(key);
@@ -284,7 +302,7 @@ describe("UI demo fixture", () => {
     ).toBe(0.73);
     expect(
       connectors.find((edge) => edge.relationshipId === "demo-edge-custom")?.presentation,
-    ).toMatchObject({ sourcePoint: { x: 1430, y: 1660 }, targetPoint: { x: 1680, y: 2200 } });
+    ).toMatchObject({ sourcePoint: { x: 1680, y: 1660 }, targetPoint: { x: 1680, y: 2200 } });
     const clearance = byKey.get("demo-label-clearance");
     expect({
       cardGap:

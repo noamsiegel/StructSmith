@@ -641,6 +641,19 @@ export function buildUiDemoDocument(): WorkspaceDocument {
     });
     const sides = ["right", "bottom", "top", "left"] as const;
     const targetSides = ["left", "top", "bottom", "right"] as const;
+    const returnObstacle = add({
+      id: "demo-return-obstacle",
+      kind: "action",
+      name: "Expanded routing obstacle",
+      description: [
+        "This card blocks the return route.",
+        "Its complete description expands the rendered bounds.",
+        "The connector must go around the whole card.",
+        "The right-border endpoints must approach from outside.",
+        "Saved bends deliberately sit left of both endpoint cards.",
+        "Moving or resizing any card must keep the route clear.",
+      ].join("\n"),
+    });
     for (const routing of ["orthogonal", "curved", "straight"] as const) {
       const id = view(
         routing === "orthogonal" ? "connectors" : `connectors-${routing}`,
@@ -653,7 +666,9 @@ export function buildUiDemoDocument(): WorkspaceDocument {
           scopeElementId: "demo-nav-connectors",
           settings: { relationshipRouting: routing },
         },
-        connectorEntries,
+        routing === "orthogonal"
+          ? [...connectorEntries, { elementId: returnObstacle, x: 320, y: 1500, width: 220 }]
+          : connectorEntries,
       );
       services.views.saveLayout(
         UI_DEMO_WORKSPACE_ID,
@@ -669,7 +684,7 @@ export function buildUiDemoDocument(): WorkspaceDocument {
             targetSlot: index % 3,
             sourceFraction: index === 0 ? 0.37 : null,
             targetFraction: index === 3 ? 0.73 : null,
-            sourcePoint: index === 5 ? { x: 1430, y: 1660 } : null,
+            sourcePoint: index === 5 ? { x: 1680, y: 1660 } : null,
             targetPoint: index === 5 ? { x: 1680, y: 2200 } : null,
             strokeStyle: index % 3 === 0 ? "solid" : index % 3 === 1 ? "dashed" : "dotted",
             strokeWidth: index === 5 ? 3 : 1.5,
@@ -686,7 +701,12 @@ export function buildUiDemoDocument(): WorkspaceDocument {
                   { x: 360, y: 1000 },
                   { x: 165, y: 1000 },
                 ]
-              : [],
+              : routing === "orthogonal" && index === 4
+                ? [
+                    { x: -120, y: 1660 },
+                    { x: -120, y: 1840 },
+                  ]
+                : [],
         })),
       );
     }

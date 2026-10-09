@@ -83,6 +83,15 @@ and resets to Status on reload, without editing the model or coordinates.
   Automatic orthogonal routes become saved view geometry on the first drag;
   Reset appearance returns them to automatic routing. Positions, annotations,
   Section frames and affected routes save as one undoable change.
+- Orthogonal connectors approach attached borders from outside and avoid measured
+  cards, annotations and group titles with eight pixels of padding. Section
+  interiors remain traversable. Clear manual routes stay unchanged; invalid end
+  bends and obstructed segments are repaired for display in the editor and previews,
+  including existing/imported views. Saved positions and bends are not rewritten.
+  Loose ends still avoid their former objects. If overlapping/crowded objects leave
+  no clear route, a red dashed connector and **Blocked route** label explain that
+  the objects need separating. Straight and curved routing retain their existing
+  behavior; they do not use orthogonal obstacle avoidance.
 - Cards keep a consistent default width and grow vertically to fit wrapped
   titles, technology and displayed descriptions. Saved heights are minimums,
   so a short saved card cannot clip new text. Wider saved cards remain supported.
