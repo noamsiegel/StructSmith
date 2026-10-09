@@ -909,9 +909,11 @@ export function Canvas({
         ),
       );
       const annotationChanges = changes.filter((change) => isAnnotationId(change.elementId));
-      const routeChanges = previewDraggedRoutes(
-        new Map(changes.map((change) => [change.elementId, change.after])),
+      const positions = new Map(changes.map((change) => [change.elementId, change.after]));
+      setNodes((current) =>
+        current.map((item) => ({ ...item, position: positions.get(item.id) ?? item.position })),
       );
+      const routeChanges = previewDraggedRoutes(positions);
       if (annotationChanges.length || routeChanges.length) {
         const sections = dragSectionNodes.current.flatMap((section) =>
           section.type === "boundary" && section.data.boundaryId
