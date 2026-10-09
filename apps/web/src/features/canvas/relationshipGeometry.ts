@@ -52,12 +52,12 @@ export function sideFromHandle(
   if (handle === "t" || handle === "source-t") return "top";
   if (handle === "b" || handle === "target-b") return "bottom";
   if (handle === "source-l") return "left";
-  if (handle === "target-r") return "right";
+  if (handle === "target-r" || handle === "source-r") return "right";
   return endpoint === "source" ? "right" : "left";
 }
 
-export function slotFromHandle(handle: string | null | undefined): number {
-  return handle?.endsWith("-0") ? 0 : handle?.endsWith("-2") ? 2 : 1;
+export function slotFromHandle(handle: string | null | undefined): number | undefined {
+  return handle?.endsWith("-0") ? 0 : handle?.endsWith("-2") ? 2 : undefined;
 }
 
 export function orthogonalRelationshipBends(

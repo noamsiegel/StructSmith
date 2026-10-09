@@ -322,13 +322,13 @@ export function buildGraph({
 
 export function sourceHandleFor(side: string | null | undefined, direction: "LR" | "TB", slot = 1) {
   const resolved = side ?? (direction === "TB" ? "bottom" : "right");
-  const base = { left: "source-l", top: "source-t", bottom: "b", right: undefined }[resolved];
+  const base = { left: "source-l", top: "source-t", bottom: "b", right: "source-r" }[resolved];
   return slot === 1 ? base : `${base ?? "source-r"}-${slot}`;
 }
 
 export function targetHandleFor(side: string | null | undefined, direction: "LR" | "TB", slot = 1) {
   const resolved = side ?? (direction === "TB" ? "top" : "left");
-  const base = { right: "target-r", bottom: "target-b", top: "t", left: undefined }[resolved];
+  const base = { right: "target-r", bottom: "target-b", top: "t", left: "target-l" }[resolved];
   return slot === 1 ? base : `${base ?? "target-l"}-${slot}`;
 }
 

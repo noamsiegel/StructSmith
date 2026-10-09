@@ -3,6 +3,7 @@ import type { ArchitectureRelationship, RelationshipPresentation } from "@struct
 import { createTestContext, createWorkspace } from "../../../../../tests/helpers";
 import { automaticAttachmentFractions } from "./attachmentSpacing";
 import { buildGraph } from "./graph";
+import { sideFromHandle, slotFromHandle } from "./relationshipGeometry";
 
 const contexts: ReturnType<typeof createTestContext>[] = [];
 afterEach(() => {
@@ -143,4 +144,14 @@ test("TB defaults combine with explicit bottom attachments after lifting hidden 
   expect(edges[0]?.source).toBe(source.id);
   expect(edges[0]?.data?.implied).toBe(true);
   expect(edges.map((edge) => edge.data?.automaticAttachments?.source)).toEqual([0.5, 0.25, 0.75]);
+});
+
+test("drawing from center handles leaves allocation automatic while side slots remain explicit", () => {
+  expect(sideFromHandle("source-r", "target")).toBe("right");
+  expect(sideFromHandle("source-l-0", "target")).toBe("left");
+  expect(slotFromHandle(null)).toBeUndefined();
+  expect(slotFromHandle("source-r")).toBeUndefined();
+  expect(slotFromHandle("target-l")).toBeUndefined();
+  expect(slotFromHandle("source-r-0")).toBe(0);
+  expect(slotFromHandle("target-l-2")).toBe(2);
 });

@@ -3,7 +3,7 @@ import type { EndpointSide } from "./endpointGeometry";
 import type { LabelBox } from "./labelClearance";
 
 export type RouteObstacle = LabelBox & { id: string };
-type RouteEndpoint = { point: ControlPoint; side: EndpointSide; elementId?: string };
+export type RouteEndpoint = { point: ControlPoint; side: EndpointSide; elementId?: string };
 const same = (a: ControlPoint, b: ControlPoint) => a.x === b.x && a.y === b.y;
 const directions = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] } as const;
 
@@ -50,31 +50,65 @@ function compact(points: readonly ControlPoint[]): ControlPoint[] {
   return result;
 }
 
-/** Search only when a saved segment/elbow collides; obstacle borders form an orthogonal grid. */
+function laneClear(a: ControlPoint, b: ControlPoint, lanes: readonly ControlPoint[][]): boolean {
+  return lanes.every((points) =>
+    points.slice(1).every((end, index) => {
+      const begin = points[index] as ControlPoint;
+      if (a.y === b.y && begin.y === end.y)
+        return (
+          Math.abs(a.y - begin.y) >= 12 - 1e-6 ||
+          Math.max(a.x, b.x) <= Math.min(begin.x, end.x) + 1e-6 ||
+          Math.min(a.x, b.x) >= Math.max(begin.x, end.x) - 1e-6
+        );
+      if (a.x === b.x && begin.x === end.x)
+        return (
+          Math.abs(a.x - begin.x) >= 12 - 1e-6 ||
+          Math.max(a.y, b.y) <= Math.min(begin.y, end.y) + 1e-6 ||
+          Math.min(a.y, b.y) >= Math.max(begin.y, end.y) - 1e-6
+        );
+      return true;
+    }),
+  );
+}
+
+/** Obstacle borders and neighboring lanes form the search grid. */
 function detour(
   start: ControlPoint,
   end: ControlPoint,
   boxes: readonly LabelBox[],
+  lanes: readonly ControlPoint[][] = [],
 ): ControlPoint[] | null {
+  const available = (a: ControlPoint, b: ControlPoint) =>
+    clear(a, b, boxes) && laneClear(a, b, lanes);
   for (const points of [
     [start, end],
     [start, { x: end.x, y: start.y }, end],
     [start, { x: start.x, y: end.y }, end],
   ]) {
-    if (points.slice(1).every((point, index) => clear(points[index] as ControlPoint, point, boxes)))
+    if (points.slice(1).every((point, index) => available(points[index] as ControlPoint, point)))
       return compact(points);
   }
-  const xs = [...new Set([start.x, end.x, ...boxes.flatMap((b) => [b.x, b.x + b.width])])].sort(
-    (a, b) => a - b,
-  );
-  const ys = [...new Set([start.y, end.y, ...boxes.flatMap((b) => [b.y, b.y + b.height])])].sort(
-    (a, b) => a - b,
-  );
+  const xs = [
+    ...new Set([
+      start.x,
+      end.x,
+      ...boxes.flatMap((b) => [b.x, b.x + b.width]),
+      ...lanes.flatMap((points) => points.flatMap((p) => [p.x - 12, p.x, p.x + 12])),
+    ]),
+  ].sort((a, b) => a - b);
+  const ys = [
+    ...new Set([
+      start.y,
+      end.y,
+      ...boxes.flatMap((b) => [b.y, b.y + b.height]),
+      ...lanes.flatMap((points) => points.flatMap((p) => [p.y - 12, p.y, p.y + 12])),
+    ]),
+  ].sort((a, b) => a - b);
   const point = (id: number): ControlPoint => ({
-    x: xs[id % xs.length] as number,
-    y: ys[Math.floor(id / xs.length)] as number,
+    x: xs[Math.floor(id / 3) % xs.length] as number,
+    y: ys[Math.floor(id / (3 * xs.length))] as number,
   });
-  const first = ys.indexOf(start.y) * xs.length + xs.indexOf(start.x);
+  const first = (ys.indexOf(start.y) * xs.length + xs.indexOf(start.x)) * 3;
   const last = ys.indexOf(end.y) * xs.length + xs.indexOf(end.x);
   const costs = new Map<number, number>([[first, 0]]);
   const previous = new Map<number, number>();
@@ -108,9 +142,9 @@ function detour(
       heap[i] = tail;
     }
     if (current.cost !== costs.get(current.id)) continue;
-    if (current.id === last) {
+    if (Math.floor(current.id / 3) === last) {
       const path = [end];
-      let id = last;
+      let id = current.id;
       while (id !== first) {
         id = previous.get(id) as number;
         path.push(point(id));
@@ -118,8 +152,8 @@ function detour(
       return compact(path.reverse());
     }
     const a = point(current.id);
-    const x = current.id % xs.length;
-    const y = Math.floor(current.id / xs.length);
+    const x = Math.floor(current.id / 3) % xs.length;
+    const y = Math.floor(current.id / (3 * xs.length));
     for (const [nx, ny] of [
       [x - 1, y],
       [x + 1, y],
@@ -135,10 +169,12 @@ function detour(
         ny >= ys.length
       )
         continue;
-      const id = ny * xs.length + nx;
+      const direction = nx !== x ? 1 : 2;
+      const id = (ny * xs.length + nx) * 3 + direction;
       const b = point(id);
-      if (!clear(a, b, boxes)) continue;
-      const cost = current.cost + Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
+      if (!available(a, b)) continue;
+      const turn = lanes.length && current.id % 3 && current.id % 3 !== direction ? 24 : 0;
+      const cost = current.cost + Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + turn;
       if (cost >= (costs.get(id) ?? Infinity)) continue;
       costs.set(id, cost);
       previous.set(id, current.id);
@@ -154,6 +190,7 @@ export function safeOrthogonalRoute(
   target: RouteEndpoint,
   points: readonly ControlPoint[],
   obstacles: readonly RouteObstacle[],
+  lanes: readonly ControlPoint[][] = [],
 ): { points: ControlPoint[]; blocked: boolean } {
   const boxes = obstacles.map((box) => ({
     ...box,
@@ -173,6 +210,7 @@ export function safeOrthogonalRoute(
     points.length > 1 &&
     outward(source, points[1] as ControlPoint) &&
     outward(target, points[points.length - 2] as ControlPoint) &&
+    points.slice(1).every((b, i) => laneClear(points[i] as ControlPoint, b, lanes)) &&
     points.slice(1).every((b, index) =>
       clear(
         points[index] as ControlPoint,
@@ -235,7 +273,7 @@ export function safeOrthogonalRoute(
     )
   )
     return { points: [...points], blocked: true };
-  const hints = points
+  const hints = (lanes.length ? [] : points)
     .slice(
       outward(source, points[1] ?? target.point) ? 1 : 2,
       outward(target, points[points.length - 2] ?? source.point) ? -1 : -2,
@@ -243,7 +281,7 @@ export function safeOrthogonalRoute(
     .filter((p) => !boxes.some((box) => inside(p, box)));
   const route = [source.point, start];
   for (const next of [...hints, end]) {
-    const part = detour(route[route.length - 1] as ControlPoint, next, boxes);
+    const part = detour(route[route.length - 1] as ControlPoint, next, boxes, lanes);
     if (!part) return { points: [...points], blocked: true };
     route.push(...part.slice(1));
   }

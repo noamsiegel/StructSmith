@@ -21,6 +21,7 @@ import {
   Background,
   BackgroundVariant,
   type Connection,
+  ConnectionMode,
   ControlButton,
   Controls,
   type EdgeChange,
@@ -228,6 +229,7 @@ export function Canvas({
   const pendingLayout = useRef(new Map<string, { x: number; y: number }>());
   const layoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragOrigins = useRef(new Map<string, { x: number; y: number }>());
+  const renderedRoutes = useRef(new Map<string, ControlPoint[]>());
   const dragRoutes = useRef(
     new Map<
       string,
@@ -560,7 +562,9 @@ export function Canvas({
               box,
               handle.position,
               presentation?.[`${endpoint}Fraction`] ??
-                (1 + (presentation?.[`${endpoint}Slot`] ?? 1)) / 4,
+                (presentation?.[`${endpoint}Slot`] !== undefined
+                  ? (1 + (presentation?.[`${endpoint}Slot`] ?? 1)) / 4
+                  : (edge.data?.automaticAttachments?.[endpoint] ?? 0.5)),
             );
           return {
             x:
@@ -582,13 +586,15 @@ export function Canvas({
           };
         };
         dragRoutes.current.set(edge.id, {
-          bends: captureRelationshipBends(
-            point(source, sourceHandle, "source"),
-            point(target, targetHandle, "target"),
-            sourceHandle.position,
-            targetHandle.position,
-            saved,
-          ),
+          bends:
+            renderedRoutes.current.get(edge.id)?.slice(1, -1) ??
+            captureRelationshipBends(
+              point(source, sourceHandle, "source"),
+              point(target, targetHandle, "target"),
+              sourceHandle.position,
+              targetHandle.position,
+              saved,
+            ),
           source: presentation?.sourcePoint ? "" : edge.source,
           target: presentation?.targetPoint ? "" : edge.target,
           sourceOrigin: { ...source.position },
@@ -1990,6 +1996,9 @@ export function Canvas({
         data: edge.data
           ? {
               ...edge.data,
+              onRouteRendered: (points: ControlPoint[]) => {
+                renderedRoutes.current.set(edge.id, points);
+              },
               onControlPointsChange: (controlPoints: { x: number; y: number }[]) =>
                 changeRelationshipPresentation(
                   (edge.data?.relationshipIds ?? [edge.data?.relationship.id as string]).map(
@@ -2074,6 +2083,7 @@ export function Canvas({
             onNodeDrag={onNodeDrag}
             onNodeDragStop={onNodeDragStop}
             onEdgesChange={onEdgesChange}
+            connectionMode={ConnectionMode.Loose}
             onConnect={onConnect}
             edgesReconnectable={false}
             onSelectionChange={onSelectionChange}

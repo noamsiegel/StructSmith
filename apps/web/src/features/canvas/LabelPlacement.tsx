@@ -11,7 +11,39 @@ import {
 } from "react";
 import { boundaryHeaderHeight, type FlowNode } from "./graph";
 import { clearRelationshipLabel, type LabelBox } from "./labelClearance";
-import type { RouteObstacle } from "./orthogonalRouting";
+import { type RouteEndpoint, type RouteObstacle, safeOrthogonalRoute } from "./orthogonalRouting";
+
+interface RoutingRequest {
+  source: RouteEndpoint;
+  target: RouteEndpoint;
+  points: ControlPoint[];
+  obstacles: readonly RouteObstacle[];
+  manual: boolean;
+  createdAt: string;
+}
+
+export function spaceConnectorRoutes(requests: ReadonlyMap<string, RoutingRequest>) {
+  const result = new Map<string, ControlPoint[]>();
+  const lanes: ControlPoint[][] = [];
+  const ordered = [...requests].sort(
+    ([, a], [, b]) => Number(b.manual) - Number(a.manual) || a.createdAt.localeCompare(b.createdAt),
+  );
+  for (const [id, request] of ordered) {
+    const spaced = request.manual
+      ? null
+      : safeOrthogonalRoute(
+          request.source,
+          request.target,
+          request.points,
+          request.obstacles,
+          lanes,
+        );
+    const points = spaced && !spaced.blocked ? spaced.points : request.points;
+    result.set(id, points);
+    lanes.push(points);
+  }
+  return result;
+}
 
 interface LabelRequest {
   showLabel: boolean;
@@ -48,6 +80,8 @@ export function labelObstacles(
 
 const LabelPlacementContext = createContext<{
   positions: ReadonlyMap<string, ControlPoint>;
+  routes: ReadonlyMap<string, ControlPoint[]>;
+  registerRoute: (id: string, request: RoutingRequest | null) => void;
   headers: readonly LabelBox[];
   routingObstacles: readonly RouteObstacle[];
   register: (id: string, request: LabelRequest | null) => void;
@@ -61,6 +95,17 @@ export function LabelPlacementProvider({
   nodes: readonly FlowNode[];
   children: ReactNode;
 }) {
+  const [routeRequests, setRouteRequests] = useState(new Map<string, RoutingRequest>());
+  const registerRoute = useCallback((id: string, request: RoutingRequest | null) => {
+    setRouteRequests((current) => {
+      if (JSON.stringify(current.get(id) ?? null) === JSON.stringify(request)) return current;
+      const next = new Map(current);
+      if (request) next.set(id, request);
+      else next.delete(id);
+      return next;
+    });
+  }, []);
+  const routes = useMemo(() => spaceConnectorRoutes(routeRequests), [routeRequests]);
   const [requests, setRequests] = useState(new Map<string, LabelRequest>());
   const [headerHeights, setHeaderHeights] = useState(new Map<string, number>());
   const registerHeader = useCallback((id: string, height: number | null) => {
@@ -127,12 +172,14 @@ export function LabelPlacementProvider({
   const value = useMemo(
     () => ({
       positions,
+      routes,
+      registerRoute,
       headers,
       routingObstacles: stableRoutingObstacles,
       register,
       registerHeader,
     }),
-    [positions, headers, stableRoutingObstacles, register, registerHeader],
+    [positions, routes, registerRoute, headers, stableRoutingObstacles, register, registerHeader],
   );
   return <LabelPlacementContext.Provider value={value}>{children}</LabelPlacementContext.Provider>;
 }
@@ -171,4 +218,14 @@ export function useLabelPlacement(id: string, request: LabelRequest | null) {
 
 export function useRoutingObstacles() {
   return useContext(LabelPlacementContext)?.routingObstacles ?? [];
+}
+
+export function useConnectorLanes(id: string, request: RoutingRequest | null) {
+  const context = useContext(LabelPlacementContext);
+  const register = context?.registerRoute;
+  useLayoutEffect(() => {
+    register?.(id, request);
+  }, [id, request, register]);
+  useLayoutEffect(() => () => register?.(id, null), [id, register]);
+  return context?.routes.get(id) ?? null;
 }

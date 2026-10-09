@@ -29,7 +29,7 @@ import {
 } from "./ConnectorEndpointHandle";
 import { borderEndpoint, type EndpointSide } from "./endpointGeometry";
 import type { RelationshipEdgeData } from "./graph";
-import { useLabelPlacement, useRoutingObstacles } from "./LabelPlacement";
+import { useConnectorLanes, useLabelPlacement, useRoutingObstacles } from "./LabelPlacement";
 import { closestLabelRoutePoint } from "./labelClearance";
 import { safeOrthogonalRoute } from "./orthogonalRouting";
 import {
@@ -135,7 +135,8 @@ function RelationshipEdgeComponent({
     state.selection.type === "element" ? state.selection.id : null,
   );
   const select = useEditorStore((state) => state.select);
-  const focus = relationshipFocus(activeElementId, source, target);
+  const [hovered, setHovered] = useState(false);
+  const focus = hovered ? "connected" : relationshipFocus(activeElementId, source, target);
   const presentation = data?.placement?.presentation;
   const strokeStyle = data?.status ? statusStroke(data.status) : presentation?.strokeStyle;
   const sourceArrow = presentation?.sourceArrow ?? "none";
@@ -156,7 +157,10 @@ function RelationshipEdgeComponent({
     const node = flow.getInternalNode(endpoint === "source" ? source : target);
     const box = node ? connectorBox(node, node.internals.positionAbsolute) : null;
     const fraction =
-      presentation?.[`${endpoint}Fraction`] ?? (1 + (presentation?.[`${endpoint}Slot`] ?? 1)) / 4;
+      presentation?.[`${endpoint}Fraction`] ??
+      (presentation?.[`${endpoint}Slot`] !== undefined
+        ? (1 + (presentation?.[`${endpoint}Slot`] ?? 1)) / 4
+        : (data?.automaticAttachments?.[endpoint] ?? 0.5));
     return {
       point: box ? borderEndpoint(box, side, fraction) : fallback,
       side,
@@ -241,7 +245,47 @@ function RelationshipEdgeComponent({
     end.elementId,
     flow,
   ]);
-  const bends = route.points.slice(1, -1);
+  const laneRequest = useMemo(
+    () =>
+      orthogonal && !route.blocked
+        ? {
+            source: {
+              point: { x: start.point.x, y: start.point.y },
+              side: start.side,
+              elementId: start.elementId,
+            },
+            target: {
+              point: { x: end.point.x, y: end.point.y },
+              side: end.side,
+              elementId: end.elementId,
+            },
+            points: route.points,
+            obstacles,
+            manual: savedBends.length > 0 || routePreview !== null || endpointSaving,
+            createdAt: data?.relationship.createdAt ?? "",
+          }
+        : null,
+    [
+      orthogonal,
+      route,
+      start.point.x,
+      start.point.y,
+      start.side,
+      start.elementId,
+      end.point.x,
+      end.point.y,
+      end.side,
+      end.elementId,
+      obstacles,
+      savedBends.length,
+      routePreview,
+      endpointSaving,
+      data?.relationship.createdAt,
+    ],
+  );
+  const lanePoints = useConnectorLanes(id, laneRequest);
+  const routePoints = lanePoints ?? route.points;
+  const bends = routePoints.slice(1, -1);
   const labelPosition = data?.placement?.labelPosition ?? 0.5;
   const [path, defaultX, defaultY] =
     bends.length > 0 || orthogonal
@@ -251,7 +295,9 @@ function RelationshipEdgeComponent({
         : data?.routing === "curved"
           ? getBezierPath(pathOptions)
           : manualRelationshipPath(sourcePoint, targetPoint, bends, labelPosition);
-  const routePoints = [sourcePoint, ...bends, targetPoint];
+  useLayoutEffect(() => {
+    data?.onRouteRendered?.(routePoints);
+  }, [data?.onRouteRendered, routePoints]);
   const routeEditable = Boolean(data?.onControlPointsChange);
   const cancelRoute = () => {
     routeDrag.current = null;
@@ -425,6 +471,9 @@ function RelationshipEdgeComponent({
       <path ref={geometryRef} d={path} fill="none" stroke="none" pointerEvents="none" />
       <g
         data-routing-blocked={route.blocked || undefined}
+        data-connector-highlighted={hovered || undefined}
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => setHovered(false)}
         onPointerDown={(event) => {
           if (!selected) return;
           const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
@@ -439,7 +488,7 @@ function RelationshipEdgeComponent({
           id={id}
           path={path}
           style={{
-            strokeWidth: width,
+            strokeWidth: hovered ? Math.max(width, 2.8) : width,
             strokeDasharray: route.blocked
               ? "5 4"
               : relationshipDash(data?.relationship.interactionStyle, strokeStyle),
@@ -555,6 +604,10 @@ function RelationshipEdgeComponent({
           <Button
             ref={labelRef}
             data-relationship-label={id}
+            onPointerEnter={() => setHovered(true)}
+            onPointerLeave={() => setHovered(false)}
+            onFocus={() => setHovered(true)}
+            onBlur={() => setHovered(false)}
             type="button"
             variant="outline"
             aria-label={t("relationshipPresentation.moveLabel", { label })}
