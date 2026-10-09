@@ -20,6 +20,7 @@ import {
 } from "@structsmith/domain";
 import type { Edge, Node } from "@xyflow/react";
 import { annotationNodeId, annotationSize } from "./annotations";
+import type { ConnectorAttachment } from "./ConnectorEndpointHandle";
 import {
   type ImplementationStatus,
   relationshipStatus,
@@ -79,6 +80,10 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
   onControlPointsChange?: (points: ControlPoint[]) => Promise<void>;
   movementBends?: ControlPoint[];
   onLabelOffsetChange?: (relationshipId: string, offset: ControlPoint) => Promise<void>;
+  onEndpointChange?: (
+    endpoint: "source" | "target",
+    attachment: ConnectorAttachment,
+  ) => Promise<void>;
 }
 
 export interface AnnotationNodeData extends Record<string, unknown> {
@@ -93,7 +98,7 @@ export type FlowNode =
 export type FlowEdge = Edge<RelationshipEdgeData>;
 
 /** Section titles sit outside node rectangles, but must remain visible when fitting. */
-export function canvasFitBounds(nodes: readonly FlowNode[]) {
+export function canvasFitBounds(nodes: readonly FlowNode[], edges: readonly FlowEdge[] = []) {
   const boxes = nodes
     .filter((node) => !node.hidden)
     .map((node) => {
@@ -113,6 +118,16 @@ export function canvasFitBounds(nodes: readonly FlowNode[]) {
         height: height + titleHeight,
       };
     });
+  for (const edge of edges) {
+    const presentation = edge.data?.placement?.presentation;
+    for (const point of [
+      presentation?.sourcePoint,
+      presentation?.targetPoint,
+      ...(edge.data?.movementBends ?? edge.data?.placement?.controlPoints ?? []),
+    ]) {
+      if (point) boxes.push({ x: point.x - 16, y: point.y - 16, width: 32, height: 32 });
+    }
+  }
   if (!boxes.length) return { x: 0, y: 0, width: 0, height: 0 };
   const x = Math.min(...boxes.map((box) => box.x));
   const y = Math.min(...boxes.map((box) => box.y));

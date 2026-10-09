@@ -124,7 +124,16 @@ export function RelationshipPresentationEditor({
       <Label>{t(`relationshipPresentation.${key}`)}</Label>
       <Select
         value={value}
-        onValueChange={(next) => patch({ [key]: next === "auto" ? null : next })}
+        onValueChange={(next) =>
+          patch({
+            [key]: next === "auto" ? null : next,
+            ...(key === "sourceSide"
+              ? { sourceFraction: null, sourcePoint: null }
+              : key === "targetSide"
+                ? { targetFraction: null, targetPoint: null }
+                : {}),
+          })
+        }
       >
         <SelectTrigger aria-label={t(`relationshipPresentation.${key}`)}>
           <SelectValue />
@@ -147,6 +156,11 @@ export function RelationshipPresentationEditor({
       aria-label={t("relationshipPresentation.title")}
     >
       <h3 className="text-xs font-semibold">{t("relationshipPresentation.title")}</h3>
+      {(presentation?.sourcePoint || presentation?.targetPoint) && (
+        <p className="text-xs leading-5 text-muted-foreground">
+          {t("relationshipPresentation.looseEndpointHint")}
+        </p>
+      )}
       <div className="grid grid-cols-2 gap-2">
         <ColorField
           label={t("relationshipPresentation.color")}
@@ -195,7 +209,14 @@ export function RelationshipPresentationEditor({
             <Label>{t(`relationshipPresentation.${key}`)}</Label>
             <Select
               value={String(presentation?.[key] ?? 1)}
-              onValueChange={(value) => patch({ [key]: Number(value) })}
+              onValueChange={(value) =>
+                patch({
+                  [key]: Number(value),
+                  ...(key === "sourceSlot"
+                    ? { sourceFraction: null, sourcePoint: null }
+                    : { targetFraction: null, targetPoint: null }),
+                })
+              }
             >
               <SelectTrigger aria-label={t(`relationshipPresentation.${key}`)}>
                 <SelectValue />

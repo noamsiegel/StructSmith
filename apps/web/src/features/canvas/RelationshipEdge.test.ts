@@ -4,11 +4,11 @@ import { Position, ReactFlowProvider } from "@xyflow/react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createTestContext, createWorkspace } from "../../../../../tests/helpers";
-import { RelationshipEdge } from "./RelationshipEdge";
+import { RelationshipArrow, RelationshipEdge } from "./RelationshipEdge";
 import type { ImplementationStatus } from "./statusOverlay";
 import "../../i18n";
 
-test("visible SVG applies configured color, width, dash and both arrowheads", () => {
+test("visible connector path applies configured color, width, dash, route and status", () => {
   const { services, close } = createTestContext();
   try {
     const workspace = createWorkspace(services);
@@ -76,9 +76,6 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
         ),
       );
     const html = render(null);
-    expect(html).toContain('marker-start="url(#relationship-');
-    expect(html).toContain('marker-end="url(#relationship-');
-    expect(html).toContain('fill="#123456"');
     expect(html).toContain("stroke-width:4");
     expect(html).toContain("stroke-dasharray:1 4");
     expect(html).toContain("stroke:#123456");
@@ -92,7 +89,6 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
     const live = render("live", undefined, null);
     expect(live).toContain("stroke:var(--status-live)");
     expect(live).not.toContain("stroke-dasharray");
-    expect(live).toContain('fill="var(--status-live)"');
     const planned = render("planned", undefined, null);
     expect(planned).toContain("stroke:var(--status-planned)");
     expect(planned).toContain("stroke-dasharray:5 4");
@@ -104,4 +100,40 @@ test("visible SVG applies configured color, width, dash and both arrowheads", ()
   } finally {
     close();
   }
+});
+
+test("elevated arrowheads retain direction, zoom-independent size, halo and configured style", () => {
+  const props = {
+    endpoint: "target" as const,
+    point: { x: 100, y: 50 },
+    neighbour: { x: 100, y: 20 },
+    stroke: "#123456",
+    zoom: 0.5,
+    opacity: 0.7,
+  };
+  const filled = renderToStaticMarkup(
+    createElement(RelationshipArrow, { ...props, arrow: "arrowclosed" }),
+  );
+  expect(filled).toContain('data-connector-arrow="target"');
+  expect(filled).toContain("translate(100px, 50px) rotate(90deg)");
+  expect(filled).toContain('d="M -20,-10 L 0,0 L -20,10 Z"');
+  expect(filled).toContain('fill="#123456"');
+  expect(filled).toContain('stroke="var(--canvas)" stroke-width="10"');
+  expect(filled).toContain('stroke="#123456" stroke-width="3"');
+  expect(filled).toContain("opacity:0.7");
+  const open = renderToStaticMarkup(
+    createElement(RelationshipArrow, {
+      ...props,
+      endpoint: "source",
+      arrow: "arrow",
+      point: { x: 0, y: 20 },
+      neighbour: { x: 50, y: 20 },
+      zoom: 1,
+    }),
+  );
+  expect(open).toContain("rotate(180deg)");
+  expect(open).toContain('d="M -10,-5 L 0,0 L -10,5" fill="none"');
+  expect(renderToStaticMarkup(createElement(RelationshipArrow, { ...props, arrow: "none" }))).toBe(
+    "",
+  );
 });

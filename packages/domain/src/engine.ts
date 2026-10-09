@@ -1239,6 +1239,8 @@ export function autoLayoutView(
             labelOffset: { x: 0, y: 0 },
             sourceSide: null,
             targetSide: null,
+            sourceFraction: null,
+            targetFraction: null,
           }
         : placement.presentation,
     });

@@ -58,7 +58,7 @@ function ElementNodeComponent({
         minHeight: minimumHeight,
         outline: "none",
       }}
-      className="as-node group relative flex w-full overflow-visible"
+      className="as-node group relative flex w-full overflow-visible [&>[data-handlepos]]:opacity-0! [&:hover>[data-handlepos]]:opacity-100! [&:focus-within>[data-handlepos]]:opacity-100!"
     >
       <NodeSilhouette
         shape={shape}

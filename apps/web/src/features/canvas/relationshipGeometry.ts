@@ -99,6 +99,16 @@ export function orthogonalRelationshipBends(
     }
     return route.slice(1, -1);
   }
+  const facingGap =
+    sourcePosition === "right" && targetPosition === "left"
+      ? target.x - source.x
+      : sourcePosition === "left" && targetPosition === "right"
+        ? source.x - target.x
+        : sourcePosition === "bottom" && targetPosition === "top"
+          ? target.y - source.y
+          : sourcePosition === "top" && targetPosition === "bottom"
+            ? source.y - target.y
+            : Infinity;
   const [path] = getSmoothStepPath({
     sourceX: source.x,
     sourceY: source.y,
@@ -107,7 +117,7 @@ export function orthogonalRelationshipBends(
     sourcePosition,
     targetPosition,
     borderRadius: 0,
-    offset: 24,
+    offset: facingGap >= 0 ? Math.min(24, facingGap / 2) : 24,
   });
   const coordinates = (path.match(/-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/gi) ?? []).map(Number);
   const points = coordinates

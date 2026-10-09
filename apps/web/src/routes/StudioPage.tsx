@@ -14,7 +14,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Canvas } from "@/features/canvas/Canvas";
-import { CANVAS_FIT_PADDING, canvasFitBounds, type FlowNode } from "@/features/canvas/graph";
+import {
+  CANVAS_FIT_PADDING,
+  canvasFitBounds,
+  type FlowEdge,
+  type FlowNode,
+} from "@/features/canvas/graph";
 import type { StatusOverlay } from "@/features/canvas/statusOverlay";
 import { useChatStore } from "@/features/chat/store";
 import { CommandPalette } from "@/features/command/CommandPalette";
@@ -125,7 +130,7 @@ function StudioContent({
   setStatusOverlay: Dispatch<SetStateAction<StatusOverlay>>;
 }) {
   const { t } = useTranslation();
-  const flow = useReactFlow<FlowNode>();
+  const flow = useReactFlow<FlowNode, FlowEdge>();
   const canvasWidth = useStore((state) => state.width);
   const canvasHeight = useStore((state) => state.height);
 
@@ -308,10 +313,10 @@ function StudioContent({
   const fitView = (): void =>
     void flow.setViewport(
       getViewportForBounds(
-        canvasFitBounds(flow.getNodes()),
+        canvasFitBounds(flow.getNodes(), flow.getEdges()),
         canvasWidth,
         canvasHeight,
-        0.15,
+        0.05,
         2.5,
         CANVAS_FIT_PADDING,
       ),

@@ -252,7 +252,14 @@ test("auto-layout resets connector geometry, preserves styling and undoes as one
         hidden: true,
         labelPosition: null,
         controlPoints: [],
-        presentation: { ...style, sourceSide: null, targetSide: null, labelOffset: { x: 0, y: 0 } },
+        presentation: {
+          ...style,
+          sourceSide: null,
+          targetSide: null,
+          sourceFraction: null,
+          targetFraction: null,
+          labelOffset: { x: 0, y: 0 },
+        },
       },
     ]);
     services.snapshots.restore(change.snapshotId as string);

@@ -106,9 +106,26 @@ and resets to Status on reload, without editing the model or coordinates.
   including saved routes after endpoint moves. Redundant collinear waypoints are
   omitted from rendering; labels and drag handles follow the same route. Saved
   layout data remains intact until you edit it.
+- Select an unambiguous connector to reveal its endpoint dots. Each has a
+  28-screen-pixel hit area at every zoom; close endpoints separate with guides.
+  Drag onto any point along an object's actual outline to attach, onto another
+  object to reconnect, or onto empty canvas to leave that end loose. Escape
+  cancels; arrow keys move an endpoint freely, with Shift moving ten units.
+  Reconnecting to another object changes only that side of the shared model
+  relationship. A drop onto its opposite endpoint is refused to prevent an
+  invisible self-connection. Lifted hidden endpoints must be reconnected in their
+  detail view; moving their visual attachment is still allowed.
+- Loose ends are visual, per-view detachment: `sourcePoint`/`targetPoint` retain
+  the shared model relationship. `sourceFraction`/`targetFraction` save arbitrary
+  outline attachments alongside the legacy side/slot fields. The inspector
+  explains this distinction. Auto layout preserves loose ends and resets border
+  fractions; copy/paste translates loose ends. Fit includes loose endpoints and
+  saved bends, including in read-only previews.
+- Arrowheads stay above cards and frames with a canvas-colored outline and a
+  consistent screen size. Labels reserve padded space around endpoints as well
+  as objects and other labels. Short automatic routes stay in the available gap.
 - A merged overview connector updates all represented relationships together in
-  the active view. Reconnecting endpoints is only available for an unambiguous
-  connection. Geometry belongs to the view and never changes semantic endpoints.
+  the active view. Its endpoints cannot be edited as a single relationship.
 - The relationship inspector controls sides, three attachment slots per side,
   arrows, stroke, label position and X/Y offsets. **Reset appearance** clears
   manual geometry and styling.

@@ -375,3 +375,22 @@ test("one shared-route command persists merged connectors and undo restores ever
     close();
   }
 });
+
+test("close facing borders do not produce connector backtracking through the cards", () => {
+  for (const [source, target, sourceSide, targetSide, axis] of [
+    [{ x: 219, y: 48 }, { x: 237, y: 52 }, Position.Right, Position.Left, "x"],
+    [{ x: 237, y: 52 }, { x: 219, y: 48 }, Position.Left, Position.Right, "x"],
+    [{ x: 48, y: 219 }, { x: 52, y: 237 }, Position.Bottom, Position.Top, "y"],
+    [{ x: 52, y: 237 }, { x: 48, y: 219 }, Position.Top, Position.Bottom, "y"],
+  ] as const) {
+    const points = [
+      source,
+      ...orthogonalRelationshipBends(source, target, sourceSide, targetSide),
+      target,
+    ];
+    for (const point of points) {
+      expect(point[axis]).toBeGreaterThanOrEqual(Math.min(source[axis], target[axis]));
+      expect(point[axis]).toBeLessThanOrEqual(Math.max(source[axis], target[axis]));
+    }
+  }
+});

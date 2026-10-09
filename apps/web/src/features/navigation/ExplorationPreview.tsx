@@ -36,6 +36,7 @@ import {
   buildGraph,
   canvasFitBounds,
   computeCanvasBoundaries,
+  type FlowEdge,
   type FlowNode,
 } from "../canvas/graph";
 import { LabelPlacementProvider } from "../canvas/LabelPlacement";
@@ -65,7 +66,7 @@ function PreviewCanvas({
   onDrill: (elementId: string) => void;
 }) {
   const { t } = useTranslation();
-  const flow = useReactFlow<FlowNode>();
+  const flow = useReactFlow<FlowNode, FlowEdge>();
   const container = useRef<HTMLDivElement>(null);
   const graph = useMemo(() => {
     const graph = buildGraph({ view, elements, relationships, records, statusOverlay });
@@ -131,10 +132,10 @@ function PreviewCanvas({
     if (!canvas) return;
     void flow.setViewport(
       getViewportForBounds(
-        canvasFitBounds(flow.getNodes()),
+        canvasFitBounds(flow.getNodes(), flow.getEdges()),
         canvas.clientWidth,
         canvas.clientHeight,
-        0.15,
+        0.05,
         1,
         0.15,
       ),
@@ -192,7 +193,7 @@ function PreviewCanvas({
           panOnScroll
           zoomOnScroll={false}
           zoomActivationKeyCode={["Meta", "Control"]}
-          minZoom={0.15}
+          minZoom={0.05}
           maxZoom={2.5}
           onNodeClick={(_event, node) => {
             if (node.type === "annotation") return;

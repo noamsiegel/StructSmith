@@ -13,6 +13,8 @@ import { boundaryHeaderHeight, type FlowNode } from "./graph";
 import { clearRelationshipLabel, type LabelBox } from "./labelClearance";
 
 interface LabelRequest {
+  showLabel: boolean;
+  obstacles: readonly LabelBox[];
   points: readonly ControlPoint[];
   desired: ControlPoint;
   width: number;
@@ -78,12 +80,16 @@ export function LabelPlacementProvider({
     });
   }, []);
   const positions = useMemo(() => {
-    const obstacles = labelObstacles(nodes, headerHeights);
+    const obstacles = [
+      ...labelObstacles(nodes, headerHeights),
+      ...[...requests.values()].flatMap((request) => request.obstacles),
+    ];
     const positions = new Map<string, ControlPoint>();
     // Stable ordering prevents labels swapping places as their edges rerender.
     for (const [id, request] of [...requests].sort(([left], [right]) =>
       left.localeCompare(right),
     )) {
+      if (!request.showLabel) continue;
       const point = clearRelationshipLabel(request.points, request.desired, request, obstacles);
       positions.set(id, point);
       obstacles.push({

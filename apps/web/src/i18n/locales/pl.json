@@ -789,7 +789,13 @@
     "targetSlot": "Target attachment",
     "slot0": "First quarter",
     "slot1": "Center",
-    "slot2": "Third quarter"
+    "slot2": "Third quarter",
+    "moveSource": "Przesuń początek: {{label}}",
+    "moveTarget": "Przesuń koniec: {{label}}",
+    "moveEndpointHint": "Przeciągnij do krawędzi obiektu, aby połączyć, lub na puste płótno, aby odłączyć. Escape anuluje. Strzałki przesuwają luźny koniec.",
+    "liftedEndpointHint": "Otwórz widok szczegółów, aby zmienić połączenie ukrytego obiektu. W tym widoku można nadal przesuwać punkt mocowania.",
+    "looseEndpointHint": "Luźne końce są zapisane w tym widoku. Wspólny model zachowuje relację. Przeciągnij koniec do obiektu, aby ponownie połączyć.",
+    "selfEndpointHint": "Łącznik wymaga dwóch różnych obiektów. Ten koniec zachował poprzednie połączenie."
   },
   "dependencies": {
     "title": "Dependencies",

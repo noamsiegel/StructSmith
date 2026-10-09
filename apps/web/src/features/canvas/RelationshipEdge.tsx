@@ -6,12 +6,28 @@ import {
   getBezierPath,
   getStraightPath,
   useReactFlow,
+  useViewport,
 } from "@xyflow/react";
-import { memo, type PointerEvent, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  memo,
+  type PointerEvent,
+  useId,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { useEditorStore } from "@/store/editor";
+import {
+  type ConnectorAttachment,
+  ConnectorEndpointHandle,
+  connectorBox,
+} from "./ConnectorEndpointHandle";
+import { borderEndpoint, type EndpointSide } from "./endpointGeometry";
 import type { RelationshipEdgeData } from "./graph";
 import { useLabelPlacement } from "./LabelPlacement";
 import { closestLabelRoutePoint } from "./labelClearance";
@@ -44,6 +60,56 @@ export function relationshipLabelBackground(focus: RelationshipFocus): string {
     : "var(--card)";
 }
 
+export function RelationshipArrow({
+  endpoint,
+  point,
+  neighbour,
+  arrow,
+  stroke,
+  zoom,
+  opacity,
+}: {
+  endpoint: "source" | "target";
+  point: ControlPoint;
+  neighbour?: ControlPoint;
+  arrow: "none" | "arrow" | "arrowclosed";
+  stroke: string;
+  zoom: number;
+  opacity: CSSProperties["opacity"];
+}) {
+  if (arrow === "none") return null;
+  const angle = neighbour
+    ? (Math.atan2(point.y - neighbour.y, point.x - neighbour.x) * 180) / Math.PI
+    : 0;
+  const size = 10 / zoom;
+  const path = `M ${-size},${-size / 2} L 0,0 L ${-size},${size / 2}${arrow === "arrowclosed" ? " Z" : ""}`;
+  return (
+    <svg
+      data-connector-arrow={endpoint}
+      aria-hidden="true"
+      className="pointer-events-none absolute overflow-visible"
+      width={1}
+      height={1}
+      style={{ transform: `translate(${point.x}px, ${point.y}px) rotate(${angle}deg)`, opacity }}
+    >
+      <path
+        d={path}
+        fill={arrow === "arrowclosed" ? stroke : "none"}
+        stroke="var(--canvas)"
+        strokeWidth={5 / zoom}
+        strokeLinejoin="round"
+      />
+      <path
+        d={path}
+        fill={arrow === "arrowclosed" ? stroke : "none"}
+        stroke={stroke}
+        strokeWidth={1.5 / zoom}
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 function RelationshipEdgeComponent({
   id,
   source,
@@ -60,6 +126,7 @@ function RelationshipEdgeComponent({
 }: EdgeProps & { data?: RelationshipEdgeData }) {
   const { t } = useTranslation();
   const flow = useReactFlow();
+  const { zoom } = useViewport();
   const markerId = `relationship-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const activeElementId = useEditorStore((state) =>
     state.selection.type === "element" ? state.selection.id : null,
@@ -70,7 +137,50 @@ function RelationshipEdgeComponent({
   const strokeStyle = data?.status ? statusStroke(data.status) : presentation?.strokeStyle;
   const sourceArrow = presentation?.sourceArrow ?? "none";
   const targetArrow = presentation?.targetArrow ?? "arrowclosed";
-  const pathOptions = { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
+  const [endpointPreview, setEndpointPreview] = useState<
+    Partial<Record<"source" | "target", ConnectorAttachment>>
+  >({});
+  const [endpointSaving, setEndpointSaving] = useState(false);
+  const endpointAt = (
+    endpoint: "source" | "target",
+    fallback: ControlPoint,
+    side: EndpointSide,
+  ) => {
+    const preview = endpointPreview[endpoint];
+    if (preview) return preview;
+    const freePoint = presentation?.[`${endpoint}Point`];
+    if (freePoint) return { point: freePoint, side };
+    const node = flow.getInternalNode(endpoint === "source" ? source : target);
+    const box = node ? connectorBox(node, node.internals.positionAbsolute) : null;
+    const fraction =
+      presentation?.[`${endpoint}Fraction`] ?? (1 + (presentation?.[`${endpoint}Slot`] ?? 1)) / 4;
+    return {
+      point: box ? borderEndpoint(box, side, fraction) : fallback,
+      side,
+      elementId: endpoint === "source" ? source : target,
+      fraction,
+    };
+  };
+  const start = endpointAt("source", { x: sourceX, y: sourceY }, sourcePosition);
+  const end = endpointAt("target", { x: targetX, y: targetY }, targetPosition);
+  const pathOptions = {
+    sourceX: start.point.x,
+    sourceY: start.point.y,
+    targetX: end.point.x,
+    targetY: end.point.y,
+    sourcePosition: start.side as typeof sourcePosition,
+    targetPosition: end.side as typeof targetPosition,
+  };
+  const saveEndpoint = (endpoint: "source" | "target", attachment: ConnectorAttachment) => {
+    setEndpointSaving(true);
+    void data
+      ?.onEndpointChange?.(endpoint, attachment)
+      .catch(() => undefined)
+      .finally(() => {
+        setEndpointPreview({});
+        setEndpointSaving(false);
+      });
+  };
   const savedBends = data?.movementBends ?? data?.placement?.controlPoints ?? [];
   const [routePreview, setRoutePreview] = useState<ControlPoint[] | null>(null);
   const [routeSaving, setRouteSaving] = useState(false);
@@ -82,15 +192,15 @@ function RelationshipEdgeComponent({
     current: ControlPoint[];
     keyboard: boolean;
   } | null>(null);
-  const sourcePoint = { x: sourceX, y: sourceY };
-  const targetPoint = { x: targetX, y: targetY };
+  const sourcePoint = start.point;
+  const targetPoint = end.point;
   const orthogonal = (data?.routing ?? "orthogonal") === "orthogonal";
   const bends = orthogonal
     ? orthogonalRelationshipBends(
         sourcePoint,
         targetPoint,
-        sourcePosition,
-        targetPosition,
+        pathOptions.sourcePosition,
+        pathOptions.targetPosition,
         routePreview ?? savedBends,
       )
     : (routePreview ?? savedBends);
@@ -232,8 +342,19 @@ function RelationshipEdgeComponent({
     return () => observer.disconnect();
   }, [showLabel]);
   const request = useMemo(
-    () => (showLabel ? { points: labelRoute, desired: labelPoint, ...labelSize } : null),
-    [showLabel, labelRoute, labelPoint, labelSize],
+    () => ({
+      points: labelRoute,
+      desired: labelPoint,
+      ...labelSize,
+      showLabel,
+      obstacles: [sourcePoint, targetPoint].map((point) => ({
+        x: point.x - 14 / zoom,
+        y: point.y - 14 / zoom,
+        width: 28 / zoom,
+        height: 28 / zoom,
+      })),
+    }),
+    [showLabel, labelRoute, labelPoint, labelSize, sourcePoint, targetPoint, zoom],
   );
   const placement = useLabelPlacement(id, request);
   const clearPoint = placement.point ?? labelPoint;
@@ -261,31 +382,6 @@ function RelationshipEdgeComponent({
 
   return (
     <>
-      <defs>
-        {[sourceArrow, targetArrow].map((arrow, index) =>
-          arrow === "none" ? null : (
-            <marker
-              key={index === 0 ? "source" : "target"}
-              id={`${markerId}-${index}`}
-              markerWidth="12"
-              markerHeight="12"
-              viewBox="0 0 12 12"
-              refX="10"
-              refY="6"
-              orient="auto-start-reverse"
-              markerUnits="userSpaceOnUse"
-            >
-              <path
-                d={arrow === "arrow" ? "M 2 2 L 10 6 L 2 10" : "M 2 2 L 10 6 L 2 10 Z"}
-                fill={arrow === "arrow" ? "none" : stroke}
-                stroke={stroke}
-                strokeWidth="1.5"
-                strokeLinejoin="round"
-              />
-            </marker>
-          ),
-        )}
-      </defs>
       <path ref={geometryRef} d={path} fill="none" stroke="none" pointerEvents="none" />
       <g
         onPointerDown={(event) => {
@@ -300,8 +396,6 @@ function RelationshipEdgeComponent({
         <BaseEdge
           id={id}
           path={path}
-          markerStart={sourceArrow === "none" ? undefined : `url(#${markerId}-0)`}
-          markerEnd={targetArrow === "none" ? undefined : `url(#${markerId}-1)`}
           style={{
             strokeWidth: width,
             strokeDasharray: relationshipDash(data?.relationship.interactionStyle, strokeStyle),
@@ -313,6 +407,64 @@ function RelationshipEdgeComponent({
           }}
         />
       </g>
+      <EdgeLabelRenderer>
+        {(["source", "target"] as const).map((endpoint) => {
+          const attachment = endpoint === "source" ? start : end;
+          const arrow = endpoint === "source" ? sourceArrow : targetArrow;
+          const point = attachment.point;
+          const tangentPoints = curved && curvePoints.length > 1 ? curvePoints : routePoints;
+          const neighbour = endpoint === "source" ? tangentPoints[1] : tangentPoints.at(-2);
+          return (
+            <RelationshipArrow
+              key={endpoint}
+              endpoint={endpoint}
+              point={point}
+              neighbour={neighbour}
+              arrow={arrow}
+              stroke={stroke}
+              zoom={zoom}
+              opacity={style?.opacity ?? (focus === "dimmed" ? 0.7 : 1)}
+            />
+          );
+        })}
+        {selected &&
+          data?.onEndpointChange &&
+          (["source", "target"] as const).map((endpoint) => {
+            const attachment = endpoint === "source" ? start : end;
+            return (
+              <ConnectorEndpointHandle
+                key={endpoint}
+                endpoint={endpoint}
+                point={attachment.point}
+                displayPoint={
+                  Math.hypot(start.point.x - end.point.x, start.point.y - end.point.y) * zoom < 40
+                    ? Math.abs(start.point.x - end.point.x) >= Math.abs(start.point.y - end.point.y)
+                      ? {
+                          x: attachment.point.x,
+                          y: attachment.point.y + (endpoint === "source" ? -18 : 18) / zoom,
+                        }
+                      : {
+                          x: attachment.point.x + (endpoint === "source" ? -18 : 18) / zoom,
+                          y: attachment.point.y,
+                        }
+                    : attachment.point
+                }
+                side={attachment.side}
+                label={originalLabel}
+                saving={endpointSaving}
+                onPreview={(next) =>
+                  setEndpointPreview((previous) => {
+                    const updated = { ...previous };
+                    if (next) updated[endpoint] = next;
+                    else delete updated[endpoint];
+                    return updated;
+                  })
+                }
+                onSave={(next) => saveEndpoint(endpoint, next)}
+              />
+            );
+          })}
+      </EdgeLabelRenderer>
       {showLabel && leader && (
         <>
           <defs>
@@ -457,7 +609,7 @@ function RelationshipEdgeComponent({
           {(routeDrag.current?.points ?? routePoints).slice(0, -1).map((start, index) => {
             const end = (routeDrag.current?.points ?? routePoints)[index + 1] as ControlPoint;
             if (
-              Math.hypot(end.x - start.x, end.y - start.y) < 1 ||
+              Math.hypot(end.x - start.x, end.y - start.y) * zoom < 48 ||
               (routeDrag.current && routeDrag.current.index !== index)
             )
               return null;

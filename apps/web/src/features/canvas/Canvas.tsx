@@ -1,6 +1,7 @@
 import type {
   ArchitectureBoundary,
   ArchitectureElement,
+  ArchitectureOperation,
   ArchitectureRecord,
   ArchitectureRelationship,
   ControlPoint,
@@ -63,11 +64,13 @@ import {
 import "./annotationTranslations";
 import { BoundaryNode } from "./BoundaryNode";
 import { CanvasComments } from "./CanvasComments";
+import { type ConnectorAttachment, connectorBox } from "./ConnectorEndpointHandle";
 import { CreationToolbar } from "./CreationToolbar";
 import { buildPasteOperations, createDiagramClipboard, type DiagramCopyMode } from "./clipboard";
 import { commandWheelViewport } from "./commandWheel";
 import { ElementNode } from "./ElementNode";
 import { ElementTypePicker } from "./ElementTypePicker";
+import { borderEndpoint } from "./endpointGeometry";
 import {
   boundaryElementId,
   boundaryMemberIds,
@@ -87,6 +90,7 @@ import { inlineFrames } from "./inlineFrames";
 import { LabelPlacementProvider } from "./LabelPlacement";
 import { type ContextMenuItem, NodeContextMenu } from "./NodeContextMenu";
 import { RelationshipEdge } from "./RelationshipEdge";
+import { reconnectRelationshipOperations } from "./reconnectRelationship";
 import {
   captureRelationshipBends,
   movedRelationshipBends,
@@ -319,10 +323,10 @@ export function Canvas({
     if (!canvas) return;
     void flow.setViewport(
       getViewportForBounds(
-        canvasFitBounds(flow.getNodes()),
+        canvasFitBounds(flow.getNodes(), flow.getEdges()),
         canvas.clientWidth,
         canvas.clientHeight,
-        0.15,
+        0.05,
         1,
         CANVAS_FIT_PADDING,
       ),
@@ -355,10 +359,10 @@ export function Canvas({
     fittedLayoutRequest.current = layoutFitRequest;
     void flow.setViewport(
       getViewportForBounds(
-        canvasFitBounds(flow.getNodes()),
+        canvasFitBounds(flow.getNodes(), flow.getEdges()),
         width,
         height,
-        0.1,
+        0.05,
         1,
         CANVAS_FIT_PADDING,
       ),
@@ -542,34 +546,51 @@ export function Canvas({
           (handle) => handle.id === (edge.targetHandle ?? null),
         );
         if (!source || !target || !sourceHandle || !targetHandle) continue;
-        const point = (node: typeof source, handle: typeof sourceHandle) => ({
-          x:
-            node.internals.positionAbsolute.x +
-            handle.x +
-            (handle.position === "right"
-              ? handle.width
-              : handle.position === "left"
-                ? 0
-                : handle.width / 2),
-          y:
-            node.internals.positionAbsolute.y +
-            handle.y +
-            (handle.position === "bottom"
-              ? handle.height
-              : handle.position === "top"
-                ? 0
-                : handle.height / 2),
-        });
+        const presentation = edge.data?.placement?.presentation;
+        const point = (
+          node: typeof source,
+          handle: typeof sourceHandle,
+          endpoint: "source" | "target",
+        ) => {
+          const free = presentation?.[`${endpoint}Point`];
+          if (free) return free;
+          const box = connectorBox(node, node.internals.positionAbsolute);
+          if (box)
+            return borderEndpoint(
+              box,
+              handle.position,
+              presentation?.[`${endpoint}Fraction`] ??
+                (1 + (presentation?.[`${endpoint}Slot`] ?? 1)) / 4,
+            );
+          return {
+            x:
+              node.internals.positionAbsolute.x +
+              handle.x +
+              (handle.position === "right"
+                ? handle.width
+                : handle.position === "left"
+                  ? 0
+                  : handle.width / 2),
+            y:
+              node.internals.positionAbsolute.y +
+              handle.y +
+              (handle.position === "bottom"
+                ? handle.height
+                : handle.position === "top"
+                  ? 0
+                  : handle.height / 2),
+          };
+        };
         dragRoutes.current.set(edge.id, {
           bends: captureRelationshipBends(
-            point(source, sourceHandle),
-            point(target, targetHandle),
+            point(source, sourceHandle, "source"),
+            point(target, targetHandle, "target"),
             sourceHandle.position,
             targetHandle.position,
             saved,
           ),
-          source: edge.source,
-          target: edge.target,
+          source: presentation?.sourcePoint ? "" : edge.source,
+          target: presentation?.targetPoint ? "" : edge.target,
           sourceOrigin: { ...source.position },
           targetOrigin: { ...target.position },
           relationshipIds: edge.data?.relationshipIds ?? [relationshipIdOf(edge)],
@@ -1975,6 +1996,40 @@ export function Canvas({
                     (relationshipId) => ({ relationshipId, controlPoints }),
                   ),
                 ),
+              onEndpointChange:
+                edge.data.count === 1
+                  ? (endpoint: "source" | "target", attachment: ConnectorAttachment) => {
+                      if (!edge.data) return Promise.resolve();
+                      let operations: ArchitectureOperation[];
+                      try {
+                        operations = reconnectRelationshipOperations(
+                          view.id,
+                          edge.data.relationship,
+                          endpoint === "source" ? edge.source : edge.target,
+                          endpoint,
+                          attachment,
+                        );
+                      } catch (error) {
+                        toast.message(
+                          t(
+                            error instanceof Error && error.message === "self-endpoint"
+                              ? "relationshipPresentation.selfEndpointHint"
+                              : "relationshipPresentation.liftedEndpointHint",
+                          ),
+                        );
+                        return Promise.reject(error);
+                      }
+                      return applyOperations
+                        .mutateAsync({ label: t("relationshipPresentation.updated"), operations })
+                        .then(() =>
+                          queryClient.refetchQueries(
+                            { queryKey: queryKeys.view(view.id) },
+                            { cancelRefetch: false },
+                          ),
+                        )
+                        .then(() => undefined);
+                    }
+                  : undefined,
               onLabelOffsetChange: (
                 _relationshipId: string,
                 labelOffset: { x: number; y: number },
@@ -1988,7 +2043,7 @@ export function Canvas({
             }
           : undefined,
       })),
-    [edges, changeRelationshipPresentation, scenarioStep],
+    [edges, changeRelationshipPresentation, scenarioStep, applyOperations, t, view.id],
   );
 
   return (
@@ -2020,21 +2075,7 @@ export function Canvas({
             onNodeDragStop={onNodeDragStop}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
-            onReconnect={(edge, connection) => {
-              if (connection.source !== edge.source || connection.target !== edge.target) return;
-              const relationshipId = relationshipIdOf(edge);
-              void changeRelationshipPresentation([
-                {
-                  relationshipId,
-                  presentation: {
-                    sourceSide: sideFromHandle(connection.sourceHandle, "source"),
-                    targetSide: sideFromHandle(connection.targetHandle, "target"),
-                    sourceSlot: slotFromHandle(connection.sourceHandle),
-                    targetSlot: slotFromHandle(connection.targetHandle),
-                  },
-                },
-              ]).catch(() => undefined);
-            }}
+            edgesReconnectable={false}
             onSelectionChange={onSelectionChange}
             onNodeClick={onNodeClick}
             onNodeDoubleClick={(event, node) => {
@@ -2080,7 +2121,7 @@ export function Canvas({
             elevateNodesOnSelect={false}
             snapToGrid={view.settings.snapToGrid}
             snapGrid={[16, 16]}
-            minZoom={0.15}
+            minZoom={0.05}
             maxZoom={2.5}
             defaultViewport={initialViewport.current}
             fitView={!initialViewport.current}

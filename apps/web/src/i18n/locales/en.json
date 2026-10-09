@@ -784,7 +784,13 @@
     "targetSlot": "Target attachment",
     "slot0": "First quarter",
     "slot1": "Center",
-    "slot2": "Third quarter"
+    "slot2": "Third quarter",
+    "moveSource": "Move start point: {{label}}",
+    "moveTarget": "Move end point: {{label}}",
+    "moveEndpointHint": "Drag to an object border to attach, or empty canvas to leave loose. Escape cancels. Arrow keys move a loose end.",
+    "liftedEndpointHint": "Open the detail view to reconnect this hidden object. Moving its attachment in this view is still available.",
+    "looseEndpointHint": "Loose endpoints are saved in this view. The shared model still retains the relationship. Drag an endpoint onto an object to reconnect.",
+    "selfEndpointHint": "A connector needs two different objects. This endpoint kept its previous connection."
   },
   "dependencies": {
     "title": "Dependencies",
