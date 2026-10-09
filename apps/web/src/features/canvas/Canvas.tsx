@@ -36,6 +36,7 @@ import {
   SelectionMode,
   useNodes,
   useReactFlow,
+  ViewportPortal,
 } from "@xyflow/react";
 import { Maximize } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -90,6 +91,12 @@ import {
 import { inlineFrames } from "./inlineFrames";
 import { LabelPlacementProvider } from "./LabelPlacement";
 import { type ContextMenuItem, NodeContextMenu } from "./NodeContextMenu";
+import {
+  type AlignmentGuide,
+  type ConnectionAlignment,
+  connectionAlignmentSnap,
+  straightenedAutomaticBends,
+} from "./nodeAlignment";
 import { RelationshipEdge } from "./RelationshipEdge";
 import { reconnectRelationshipOperations } from "./reconnectRelationship";
 import {
@@ -230,11 +237,14 @@ export function Canvas({
   const layoutTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dragOrigins = useRef(new Map<string, { x: number; y: number }>());
   const renderedRoutes = useRef(new Map<string, ControlPoint[]>());
+  const dragConnections = useRef<ConnectionAlignment[]>([]);
+  const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const dragRoutes = useRef(
     new Map<
       string,
       {
         bends: ControlPoint[];
+        automaticAlignment?: ConnectionAlignment;
         source: string;
         target: string;
         sourceOrigin: ControlPoint;
@@ -455,8 +465,8 @@ export function Canvas({
       .filter(([elementId]) => view.elements.some((entry) => entry.elementId === elementId))
       .map(([elementId, position]) => ({
         elementId,
-        x: Math.round(position.x),
-        y: Math.round(position.y),
+        x: position.x,
+        y: position.y,
       }));
     const annotationEntries = pending.filter(([id]) => isAnnotationId(id));
     if (annotationEntries.length)
@@ -535,6 +545,7 @@ export function Canvas({
   const captureDragRoutes = useCallback(
     (movingIds: ReadonlySet<string>) => {
       dragRoutes.current = new Map();
+      dragConnections.current = [];
       for (const edge of flow.getEdges()) {
         if (!movingIds.has(edge.source) && !movingIds.has(edge.target)) continue;
         const saved = edge.data?.movementBends ?? edge.data?.placement?.controlPoints ?? [];
@@ -585,7 +596,28 @@ export function Canvas({
                   : handle.height / 2),
           };
         };
+        const rendered = renderedRoutes.current.get(edge.id);
+        let alignment: ConnectionAlignment | undefined;
+        if (
+          edge.data?.routing === "orthogonal" &&
+          !edge.hidden &&
+          !presentation?.sourcePoint &&
+          !presentation?.targetPoint
+        ) {
+          alignment = {
+            sourceId: edge.source,
+            targetId: edge.target,
+            source: rendered?.[0] ?? point(source, sourceHandle, "source"),
+            target: rendered?.at(-1) ?? point(target, targetHandle, "target"),
+            sourceOrigin: { ...source.position },
+            targetOrigin: { ...target.position },
+            sourceSide: sourceHandle.position,
+            targetSide: targetHandle.position,
+          };
+          dragConnections.current.push(alignment);
+        }
         dragRoutes.current.set(edge.id, {
+          automaticAlignment: saved.length === 0 ? alignment : undefined,
           bends:
             renderedRoutes.current.get(edge.id)?.slice(1, -1) ??
             captureRelationshipBends(
@@ -612,11 +644,14 @@ export function Canvas({
     for (const [id, route] of dragRoutes.current) {
       const source = positions.get(route.source) ?? route.sourceOrigin;
       const target = positions.get(route.target) ?? route.targetOrigin;
-      const bends = movedRelationshipBends(
+      const moved = movedRelationshipBends(
         route.bends,
         { x: source.x - route.sourceOrigin.x, y: source.y - route.sourceOrigin.y },
         { x: target.x - route.targetOrigin.x, y: target.y - route.targetOrigin.y },
       );
+      const bends = moved
+        ? (straightenedAutomaticBends(route.automaticAlignment, positions, moved) ?? moved)
+        : null;
       changes.set(id, bends ?? route.bends);
       if (!bends) continue;
       patches.push(
@@ -723,44 +758,61 @@ export function Canvas({
   const onNodeDrag = useCallback<OnNodeDrag<FlowNode>>(
     (_event, node, draggedNodes) => {
       const drag = boundaryDrag.current;
-      if (!drag || drag.id !== node.id) {
-        previewDraggedRoutes(new Map(draggedNodes.map((item) => [item.id, item.position])));
-        return;
+      const selected = draggedNodes.length ? draggedNodes : [node];
+      const grouped = drag && drag.id === node.id;
+      const positions = grouped
+        ? new Map([
+            ...boundaryMoveEntries(drag.placements, drag.members, {
+              x: node.position.x - drag.position.x,
+              y: node.position.y - drag.position.y,
+            }).map((entry) => [entry.elementId, { x: entry.x, y: entry.y }] as const),
+            ...drag.annotations.map(
+              (annotation) =>
+                [
+                  annotationNodeId(annotation.id),
+                  {
+                    x: annotation.x + node.position.x - drag.position.x,
+                    y: annotation.y + node.position.y - drag.position.y,
+                  },
+                ] as const,
+            ),
+          ])
+        : new Map(selected.map((item) => [item.id, { ...item.position }]));
+      const snap = connectionAlignmentSnap(dragConnections.current, positions, 6 / flow.getZoom());
+      setAlignmentGuides(snap.guides);
+      for (const [id, position] of positions) {
+        positions.set(id, { x: position.x + snap.delta.x, y: position.y + snap.delta.y });
       }
-      const entries = boundaryMoveEntries(drag.placements, drag.members, {
-        x: node.position.x - drag.position.x,
-        y: node.position.y - drag.position.y,
-      });
-      setSectionFrames(
-        translateSectionFrames(
-          drag.frames,
-          drag.id,
-          {
-            x: node.position.x - drag.position.x,
-            y: node.position.y - drag.position.y,
-          },
-          drag.nestedFrameIds,
-        ),
-      );
-      const positions = new Map([
-        ...entries.map((entry) => [entry.elementId, { x: entry.x, y: entry.y }] as const),
-        ...drag.annotations.map(
-          (annotation) =>
-            [
-              annotationNodeId(annotation.id),
-              {
-                x: annotation.x + node.position.x - drag.position.x,
-                y: annotation.y + node.position.y - drag.position.y,
-              },
-            ] as const,
-        ),
-      ]);
+      for (const item of selected) {
+        item.position = {
+          x: item.position.x + snap.delta.x,
+          y: item.position.y + snap.delta.y,
+        };
+        positions.set(item.id, item.position);
+      }
+      node.position = positions.get(node.id) ?? node.position;
+      if (grouped) {
+        setSectionFrames(
+          translateSectionFrames(
+            drag.frames,
+            drag.id,
+            {
+              x: node.position.x - drag.position.x,
+              y: node.position.y - drag.position.y,
+            },
+            drag.nestedFrameIds,
+          ),
+        );
+      }
       setNodes((current) =>
-        current.map((item) => ({ ...item, position: positions.get(item.id) ?? item.position })),
+        current.map((item) => ({
+          ...item,
+          position: positions.get(item.id) ?? item.position,
+        })),
       );
       previewDraggedRoutes(positions);
     },
-    [previewDraggedRoutes],
+    [flow, previewDraggedRoutes],
   );
 
   const onNodeDragStop = useCallback<OnNodeDrag<FlowNode>>(
@@ -768,6 +820,8 @@ export function Canvas({
       const capturedRoutes = dragRoutes.current;
       const drag = boundaryDrag.current;
       onNodeDrag(_event, node, draggedNodes);
+      setAlignmentGuides([]);
+      dragConnections.current = [];
       boundaryDrag.current = null;
       if (drag && drag.id === node.id) {
         const entries = boundaryMoveEntries(drag.placements, drag.members, {
@@ -918,10 +972,10 @@ export function Canvas({
       const changes = moved.flatMap((dragged) => {
         const before = dragOrigins.current.get(dragged.id);
         const after = {
-          x: Math.round(dragged.position.x),
-          y: Math.round(dragged.position.y),
+          x: dragged.position.x,
+          y: dragged.position.y,
         };
-        if (!before || (Math.round(before.x) === after.x && Math.round(before.y) === after.y)) {
+        if (!before || (before.x === after.x && before.y === after.y)) {
           return [];
         }
         return [{ elementId: dragged.id, before, after }];
@@ -2142,6 +2196,31 @@ export function Canvas({
             proOptions={{ hideAttribution: false }}
             deleteKeyCode={["Delete", "Backspace"]}
           >
+            {alignmentGuides.length > 0 && (
+              <ViewportPortal>
+                <svg
+                  aria-hidden="true"
+                  data-connection-alignment-guide="node"
+                  width="1"
+                  height="1"
+                  className="pointer-events-none absolute z-30 overflow-visible"
+                >
+                  {alignmentGuides.map((guide) => (
+                    <line
+                      key={`${guide.source.x}:${guide.source.y}:${guide.target.x}:${guide.target.y}`}
+                      x1={guide.source.x}
+                      y1={guide.source.y}
+                      x2={guide.target.x}
+                      y2={guide.target.y}
+                      stroke="var(--primary)"
+                      strokeDasharray="4 4"
+                      strokeWidth="1"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                </svg>
+              </ViewportPortal>
+            )}
             <Panel position="top-left" className="z-40">
               <ScenarioPanel
                 key={view.id}
