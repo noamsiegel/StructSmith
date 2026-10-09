@@ -78,7 +78,7 @@ and resets to Status on reload, without editing the model or coordinates.
   supported. Drag any selected object to move model objects, annotations and
   Sections together. Nested Sections and already-selected children move once.
   Section titles do not enter rename mode during a modified click.
-- Moving one connected object retains the connector's middle route, adjusting
+- Dragging one connected object retains the connector's middle route, adjusting
   its ends. Moving both endpoints together translates their saved bends.
   Automatic orthogonal routes become saved view geometry on the first drag;
   Reset appearance returns them to automatic routing. Positions, annotations,

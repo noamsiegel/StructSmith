@@ -19,6 +19,38 @@ this audit distinguishes actual browser observations from source-only support.
 
 ## October 8 acceptance evidence
 
+### Multi-selection and connector movement
+
+- `bun run check`, `bun run typecheck`, `bun run test`, `bun run build`,
+  `bun run build:local` and `bun run build:site` completed. The test suite
+  collected 334 tests with 2,318 assertions. Mutation checks detected missing
+  nested/independent selection members, floating-point delta equality, and
+  removal of the fixture's same-side connector. Existing Biome schema-version
+  and Vite bundle-size notices remain.
+- Native browser `tab.click(point, {key: 'shift'})` toggled model objects,
+  annotations and Section headers; modified title clicks did not start rename.
+  `tab.drag(...)` moved mixed model/note selections, disjoint Sections and nested
+  contents. Selecting a Section plus its child did not double-move the child.
+  Undo/Redo restored the frame and member coordinates together.
+- On the rebuilt service at `127.0.0.1:8090`, moving both endpoints by `(52, 42)`
+  moved the middle lane from `x1163.5` to `x1215.5`. Moving only the action
+  left `x1215.5` unchanged; Undo restored its coordinates and saved controls.
+  Reload retained saved geometry. A right/right automatic attachment kept its
+  lane at `x847.5` after moving only the source in development.
+- With the development API suspended using `kill -STOP`, two consecutive native
+  drags accumulated `(84, 60)`. After `kill -CONT`, GET
+  `/api/views/demo-native-flow` returned the same positions and bend lane
+  `x1247.5`, without rounding drift. The production build emitted no new browser
+  console errors on the exercised path. Browser network tracing was unavailable;
+  REST reads independently confirmed persisted state.
+- `bun scripts/smoke-local-helper.ts structsmith-fork:selection-movement`
+  covered HTML, authenticated Docker REST, host CLI, scoped MCP writes, streaming
+  and Stop. `/health` returned database/MCP `ok`. All five workspace IDs and all
+  four non-demo revisions survived the local service replacement. The demo was
+  reset through its snapshot-preserving command after acceptance.
+- Section clipboard copying, mobile, exports and a full browser lock-refusal
+  exercise remain unverified; existing lock-translation tests still pass.
+
 ### Native elements and view annotations
 
 Text, notes and tables belong to a view. Data, documents, start/end, fork/join
