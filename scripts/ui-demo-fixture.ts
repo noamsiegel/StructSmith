@@ -618,7 +618,7 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         {
           elementId: target,
           x: x + (!vertical && !reverse ? 600 : 0),
-          y: y + (vertical && !reverse ? 500 : 0),
+          y: y + (vertical && !reverse ? 500 : index === 4 ? 180 : 0),
         },
       );
       const id = `demo-edge-${interactionStyle}`;
@@ -660,7 +660,7 @@ export function buildUiDemoDocument(): WorkspaceDocument {
           labelPosition: 0.5,
           presentation: {
             sourceSide: sides[index % sides.length],
-            targetSide: targetSides[index % targetSides.length],
+            targetSide: index === 4 ? "right" : targetSides[index % targetSides.length],
             sourceSlot: index % 3,
             targetSlot: index % 3,
             strokeStyle: index % 3 === 0 ? "solid" : index % 3 === 1 ? "dashed" : "dotted",

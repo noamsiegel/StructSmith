@@ -275,6 +275,9 @@ describe("UI demo fixture", () => {
       ),
     ).toBe(true);
     const comments = byKey.get("demo-comments")?.settings.commentPins ?? [];
+    expect(
+      connectors.find((edge) => edge.relationshipId === "demo-edge-dependency")?.presentation,
+    ).toMatchObject({ sourceSide: "right", targetSide: "right" });
     expect(comments.some((pin) => pin.elementId && !pin.resolved && pin.replies.length === 2)).toBe(
       true,
     );

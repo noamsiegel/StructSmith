@@ -12,7 +12,7 @@ Start the service, then run from this checkout:
 
 ```sh
 bun run ui:demo
-bun run ui:demo http://127.0.0.1:5173
+bun run ui:demo http://localhost:5173
 bun run ui:demo --reset
 ```
 
@@ -49,4 +49,10 @@ actual interaction, reload, then inspect screenshot, console and request evidenc
 Check titles, connector labels, controls and popups for clipping and overlap.
 Repeat at a narrower desktop viewport when changing canvas chrome or dialogs.
 Reset after destructive exercises so the next session begins with known cases.
+For multi-selection, Shift-click model objects, notes and Section headers to
+add/remove them; move two connected endpoints, then one endpoint. Check that
+the middle route translates only with both endpoints. `demo-connectors` includes
+a right/right attachment case. In `demo-sections`, move outer plus nested or empty
+Sections and a selected child; verify each moves once. Undo/Redo and reload should
+restore positions, frames, membership and connector bends together.
 Exports, identity and mobile acceptance are outside this baseline's current scope.
