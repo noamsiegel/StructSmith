@@ -128,6 +128,36 @@ export function orthogonalRelationshipBends(
   });
 }
 
+/** Capture before moving endpoints; saved controls can contain intentional backtracking. */
+export function captureRelationshipBends(
+  source: ControlPoint,
+  target: ControlPoint,
+  sourcePosition: Position,
+  targetPosition: Position,
+  bends: readonly ControlPoint[] = [],
+): ControlPoint[] {
+  if (bends.length > 0) return bends.map((point) => ({ ...point }));
+  const route = orthogonalRelationshipBends(source, target, sourcePosition, targetPosition);
+  return route.length > 0
+    ? route
+    : [{ x: (source.x + target.x) / 2, y: (source.y + target.y) / 2 }];
+}
+
+/** A common endpoint delta moves the whole route; independent moves retain its middle. */
+export function movedRelationshipBends(
+  captured: readonly ControlPoint[],
+  sourceDelta: ControlPoint,
+  targetDelta: ControlPoint,
+): ControlPoint[] | null {
+  if (sourceDelta.x === 0 && sourceDelta.y === 0 && targetDelta.x === 0 && targetDelta.y === 0)
+    return null;
+  const together = sourceDelta.x === targetDelta.x && sourceDelta.y === targetDelta.y;
+  return captured.map((point) => ({
+    x: point.x + (together ? sourceDelta.x : 0),
+    y: point.y + (together ? sourceDelta.y : 0),
+  }));
+}
+
 export function closestRelationshipSegment(
   points: readonly ControlPoint[],
   point: ControlPoint,
