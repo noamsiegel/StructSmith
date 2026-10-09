@@ -59,7 +59,7 @@ test("tag focus retains connected context, suppresses unrelated cards and highli
   }
 });
 
-test("saved connector slots reach the rendered handles and preserve center defaults", () => {
+test("saved connector slots reach named handles while new center connections allocate automatically", () => {
   for (const direction of ["LR", "TB"] as const)
     for (const side of ["left", "right", "top", "bottom"] as const)
       for (const slot of [0, 1, 2]) {
@@ -67,8 +67,8 @@ test("saved connector slots reach the rendered handles and preserve center defau
         const target = targetHandleFor(side, direction, slot);
         expect(sideFromHandle(source, "source")).toBe(side);
         expect(sideFromHandle(target, "target")).toBe(side);
-        expect(slotFromHandle(source)).toBe(slot);
-        expect(slotFromHandle(target)).toBe(slot);
+        expect(slotFromHandle(source)).toBe(slot === 1 ? undefined : slot);
+        expect(slotFromHandle(target)).toBe(slot === 1 ? undefined : slot);
       }
   const { services, close } = createTestContext();
   try {

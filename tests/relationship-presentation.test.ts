@@ -218,9 +218,9 @@ test("manual routing uses saved bends and label position by path length", () => 
   expect(relationshipDash("async", undefined)).toBe("5 4");
 });
 
-test("all attachment sides keep existing defaults and map reconnect handles", () => {
-  expect(sourceHandleFor(undefined, "LR")).toBeUndefined();
-  expect(targetHandleFor(undefined, "LR")).toBeUndefined();
+test("all attachment sides keep their default directions and have unambiguous named handles", () => {
+  expect(sourceHandleFor(undefined, "LR")).toBe("source-r");
+  expect(targetHandleFor(undefined, "LR")).toBe("target-l");
   expect(sourceHandleFor(undefined, "TB")).toBe("b");
   expect(sourceHandleFor(null, "TB")).toBe("b");
   expect(targetHandleFor(null, "TB")).toBe("t");
