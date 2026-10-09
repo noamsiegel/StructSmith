@@ -341,6 +341,38 @@ describe("UI demo fixture", () => {
     );
   });
 
+  test("retains automatic alignment and the eight-pixel grid phase regression", () => {
+    const alignment = byKey.get("demo-connection-alignment");
+    const source = alignment?.elements.find(
+      (entry) => entry.elementId === "demo-alignment-source-1",
+    );
+    const target = alignment?.elements.find(
+      (entry) => entry.elementId === "demo-alignment-target-1",
+    );
+    expect({
+      grid: alignment?.settings.snapToGrid,
+      equalRows: source?.y === target?.y,
+      centerDifference: ((source?.height ?? 0) - (target?.height ?? 0)) / 2,
+      pinnedEnds: alignment?.relationships.find(
+        (entry) => entry.relationshipId === "demo-alignment-edge-1",
+      )?.presentation,
+      vertical: alignment?.relationships.find(
+        (entry) => entry.relationshipId === "demo-alignment-edge-2",
+      )?.presentation,
+    }).toEqual({
+      grid: true,
+      equalRows: true,
+      centerDifference: 8,
+      pinnedEnds: {
+        sourceSide: "right",
+        targetSide: "left",
+        sourceFraction: 0.5,
+        targetFraction: 0.5,
+      },
+      vertical: { sourceSide: "bottom", targetSide: "top" },
+    });
+  });
+
   test("covers colors, statuses, locked/hidden placements and scenario element/relationship steps", () => {
     const states = byKey.get("demo-states");
     expect(byId.get("demo-state-live")?.tags).toContain("status:live");

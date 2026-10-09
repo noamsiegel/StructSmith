@@ -72,7 +72,7 @@ export function straightenedAutomaticBends(
   if (
     bends.some(
       (point) =>
-        Math.abs(point[axis] - source[axis]) > 6 || point[along] < low || point[along] > high,
+        Math.abs(point[axis] - source[axis]) > 8 || point[along] < low || point[along] > high,
     )
   )
     return null;
@@ -84,13 +84,13 @@ export function connectionAlignmentSnap(
   connections: readonly ConnectionAlignment[],
   positions: ReadonlyMap<string, ControlPoint>,
   tolerance: number,
+  snappedPositions: ReadonlyMap<string, ControlPoint> = positions,
 ): { delta: ControlPoint; guides: AlignmentGuide[] } {
   const candidates: {
     axis: "x" | "y";
     offset: number;
-    source: ControlPoint;
-    target: ControlPoint;
-    movingSource: boolean;
+    connection: ConnectionAlignment;
+    movingId: string;
   }[] = [];
   for (const connection of connections) {
     const sourcePosition = positions.get(connection.sourceId);
@@ -101,22 +101,35 @@ export function connectionAlignmentSnap(
     if (!axis) continue;
     const offset = sourcePosition ? target[axis] - source[axis] : source[axis] - target[axis];
     if (Math.abs(offset) <= tolerance)
-      candidates.push({ axis, offset, source, target, movingSource: !!sourcePosition });
+      candidates.push({
+        axis,
+        offset,
+        connection,
+        movingId: sourcePosition ? connection.sourceId : connection.targetId,
+      });
   }
   const delta = { x: 0, y: 0 };
-  const guides: AlignmentGuide[] = [];
+  const aligned: ConnectionAlignment[] = [];
   for (const axis of ["x", "y"] as const) {
     const closest = candidates
       .filter((candidate) => candidate.axis === axis)
       .sort((a, b) => Math.abs(a.offset) - Math.abs(b.offset))[0];
     if (!closest) continue;
-    delta[axis] = closest.offset;
-    const source = { ...closest.source };
-    const target = { ...closest.target };
-    const coordinate = closest.movingSource ? target[axis] : source[axis];
-    source[axis] = coordinate;
-    target[axis] = coordinate;
-    guides.push({ source, target });
+    const raw = positions.get(closest.movingId);
+    const snapped = snappedPositions.get(closest.movingId);
+    if (!raw || !snapped) continue;
+    delta[axis] = closest.offset + raw[axis] - snapped[axis];
+    aligned.push(closest.connection);
   }
+  const finalPositions = new Map(
+    [...snappedPositions].map(([id, point]) => [
+      id,
+      {
+        x: point.x + delta.x,
+        y: point.y + delta.y,
+      },
+    ]),
+  );
+  const guides = aligned.map((connection) => movedEndpoints(connection, finalPositions));
   return { delta, guides };
 }

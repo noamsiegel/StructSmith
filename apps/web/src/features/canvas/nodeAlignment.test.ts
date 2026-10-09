@@ -68,6 +68,7 @@ test("moving a target snaps its endpoint, and unrelated moving objects share the
   expect(snap.delta).toEqual({ x: 0, y: -4.25 });
   expect(snap.guides[0]?.source.y).toBe(49);
   expect(snap.guides[0]?.target.y).toBe(49);
+  expect(snap.guides[0]?.target.x).toBe(417);
   expect(positions.get("target")).toEqual({ x: 416, y: 4.25 });
 });
 
@@ -122,7 +123,7 @@ test("authored middle bends and automatic obstacle detours remain unchanged", ()
     { x: 350, y: 49 },
   ];
   expect(straightenedAutomaticBends(undefined, positions, manual)).toBeNull();
-  expect(straightenedAutomaticBends(connection, positions, [{ x: 300, y: 56 }])).toBeNull();
+  expect(straightenedAutomaticBends(connection, positions, [{ x: 300, y: 58 }])).toBeNull();
   expect(straightenedAutomaticBends(connection, positions, [{ x: 450, y: 49 }])).toBeNull();
   expect(
     straightenedAutomaticBends(connection, new Map([["source", { x: 0, y: 1 }]]), manual),
@@ -145,5 +146,89 @@ test("automatic vertical tiny jog collapses only between facing top and bottom b
   expect(straightenedAutomaticBends(link, positions, bends)).toEqual([{ x: 103, y: 300 }]);
   expect(
     straightenedAutomaticBends({ ...link, targetSide: "bottom" }, positions, bends),
+  ).toBeNull();
+});
+
+test("translated card origins preserve actual attachment coordinates", () => {
+  const link = {
+    ...connection,
+    source: { x: 199, y: 149 },
+    target: { x: 401, y: 149 },
+    sourceOrigin: { x: 100, y: 100 },
+    targetOrigin: { x: 400, y: 100 },
+  };
+  expect(connectionAlignmentSnap([link], new Map([["source", { x: 116, y: 103 }]]), 6)).toEqual({
+    delta: { x: 0, y: -3 },
+    guides: [{ source: { x: 215, y: 149 }, target: { x: 401, y: 149 } }],
+  });
+  expect(connectionAlignmentSnap([link], new Map([["target", { x: 420, y: 97 }]]), 6)).toEqual({
+    delta: { x: 0, y: 3 },
+    guides: [{ source: { x: 199, y: 149 }, target: { x: 421, y: 149 } }],
+  });
+  expect(straightenedAutomaticBends(link, new Map(), [{ x: 150, y: 149 }])).toBeNull();
+});
+
+test("raw pointer alignment overrides only its guided axis despite the 16px grid phase", () => {
+  const link = { ...connection, target: { x: 401, y: 57 } };
+  const raw = new Map([["source", { x: 15, y: 8 }]]);
+  const grid = new Map([["source", { x: 16, y: 16 }]]);
+  const snap = connectionAlignmentSnap([link], raw, 6 / 2, grid);
+  expect(snap.delta).toEqual({ x: 0, y: -8 });
+  expect(snap.guides).toEqual([{ source: { x: 215, y: 57 }, target: { x: 401, y: 57 } }]);
+  const outside = connectionAlignmentSnap(
+    [link],
+    new Map([["source", { x: 15, y: 4 }]]),
+    6 / 2,
+    grid,
+  );
+  expect(outside).toEqual({ delta: { x: 0, y: 0 }, guides: [] });
+});
+
+test("raw pointer movement keeps both-moving groups on the grid and cleans aligned automatic jogs", () => {
+  const raw = new Map([
+    ["source", { x: 15, y: 8 }],
+    ["target", { x: 415, y: 8 }],
+  ]);
+  const grid = new Map([
+    ["source", { x: 16, y: 16 }],
+    ["target", { x: 416, y: 16 }],
+  ]);
+  expect(connectionAlignmentSnap([connection], raw, 6 / 2, grid)).toEqual({
+    delta: { x: 0, y: 0 },
+    guides: [],
+  });
+  const link = { ...connection, target: { x: 401, y: 53 } };
+  const rawSource = new Map([["source", { x: 15, y: 4 }]]);
+  const gridSource = new Map([["source", { x: 16, y: 0 }]]);
+  const snap = connectionAlignmentSnap([link], rawSource, 6 / 2, gridSource);
+  const adjusted = new Map([["source", { x: 16 + snap.delta.x, y: snap.delta.y }]]);
+  expect(
+    straightenedAutomaticBends(link, adjusted, [
+      { x: 300, y: 49 },
+      { x: 300, y: 53 },
+    ]),
+  ).toEqual([{ x: 308, y: 53 }]);
+});
+
+test("half-grid automatic jog cleans at exactly 8px while larger detours remain", () => {
+  const link = { ...connection, target: { x: 401, y: 57 } };
+  const positions = new Map([["source", { x: 0, y: 8 }]]);
+  expect(
+    straightenedAutomaticBends(link, positions, [
+      { x: 300, y: 49 },
+      { x: 300, y: 57 },
+    ]),
+  ).toEqual([{ x: 300, y: 57 }]);
+  expect(
+    straightenedAutomaticBends(link, positions, [
+      { x: 300, y: 48.99 },
+      { x: 300, y: 57 },
+    ]),
+  ).toBeNull();
+  expect(
+    straightenedAutomaticBends(undefined, positions, [
+      { x: 300, y: 49 },
+      { x: 300, y: 57 },
+    ]),
   ).toBeNull();
 });

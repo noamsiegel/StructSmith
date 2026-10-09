@@ -238,6 +238,7 @@ export function Canvas({
   const dragOrigins = useRef(new Map<string, { x: number; y: number }>());
   const renderedRoutes = useRef(new Map<string, ControlPoint[]>());
   const dragConnections = useRef<ConnectionAlignment[]>([]);
+  const dragPointer = useRef<{ point: ControlPoint; origin: ControlPoint } | null>(null);
   const [alignmentGuides, setAlignmentGuides] = useState<AlignmentGuide[]>([]);
   const dragRoutes = useRef(
     new Map<
@@ -685,8 +686,20 @@ export function Canvas({
     );
   }, []);
 
+  const pointerCanvasPoint = useCallback(
+    (event: MouseEvent | TouchEvent) => {
+      const point = "touches" in event ? (event.touches[0] ?? event.changedTouches[0]) : event;
+      return point
+        ? flow.screenToFlowPosition({ x: point.clientX, y: point.clientY }, { snapToGrid: false })
+        : null;
+    },
+    [flow],
+  );
+
   const onNodeDragStart = useCallback<OnNodeDrag<FlowNode>>(
-    (_event, node, draggedNodes) => {
+    (event, node, draggedNodes) => {
+      const point = pointerCanvasPoint(event);
+      dragPointer.current = point ? { point, origin: { ...node.position } } : null;
       // Finish a preceding keyboard move before starting a separate gesture.
       if (layoutTimer.current) clearTimeout(layoutTimer.current);
       flushLayout();
@@ -752,11 +765,12 @@ export function Canvas({
       flow,
       sectionFrames,
       captureDragRoutes,
+      pointerCanvasPoint,
     ],
   );
 
   const onNodeDrag = useCallback<OnNodeDrag<FlowNode>>(
-    (_event, node, draggedNodes) => {
+    (event, node, draggedNodes) => {
       const drag = boundaryDrag.current;
       const selected = draggedNodes.length ? draggedNodes : [node];
       const grouped = drag && drag.id === node.id;
@@ -778,7 +792,30 @@ export function Canvas({
             ),
           ])
         : new Map(selected.map((item) => [item.id, { ...item.position }]));
-      const snap = connectionAlignmentSnap(dragConnections.current, positions, 6 / flow.getZoom());
+      const pointer = pointerCanvasPoint(event);
+      const start = dragPointer.current;
+      const rawOffset =
+        pointer && start
+          ? {
+              x: pointer.x - start.point.x - (node.position.x - start.origin.x),
+              y: pointer.y - start.point.y - (node.position.y - start.origin.y),
+            }
+          : { x: 0, y: 0 };
+      const rawPositions = new Map(
+        [...positions].map(([id, position]) => [
+          id,
+          {
+            x: position.x + rawOffset.x,
+            y: position.y + rawOffset.y,
+          },
+        ]),
+      );
+      const snap = connectionAlignmentSnap(
+        dragConnections.current,
+        rawPositions,
+        6 / flow.getZoom(),
+        positions,
+      );
       setAlignmentGuides(snap.guides);
       for (const [id, position] of positions) {
         positions.set(id, { x: position.x + snap.delta.x, y: position.y + snap.delta.y });
@@ -812,7 +849,7 @@ export function Canvas({
       );
       previewDraggedRoutes(positions);
     },
-    [flow, previewDraggedRoutes],
+    [flow, pointerCanvasPoint, previewDraggedRoutes],
   );
 
   const onNodeDragStop = useCallback<OnNodeDrag<FlowNode>>(
@@ -821,6 +858,7 @@ export function Canvas({
       const drag = boundaryDrag.current;
       onNodeDrag(_event, node, draggedNodes);
       setAlignmentGuides([]);
+      dragPointer.current = null;
       dragConnections.current = [];
       boundaryDrag.current = null;
       if (drag && drag.id === node.id) {

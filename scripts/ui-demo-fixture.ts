@@ -758,6 +758,74 @@ export function buildUiDemoDocument(): WorkspaceDocument {
       ],
     );
 
+    const alignmentEntries: LayoutEntry[] = [];
+    const alignmentRelationships: {
+      relationshipId: string;
+      presentation: {
+        sourceSide: "right" | "bottom";
+        targetSide: "left" | "top";
+        sourceFraction?: number;
+        targetFraction?: number;
+      };
+    }[] = [];
+    for (let index = 0; index < 3; index++) {
+      const source = add({
+        id: `demo-alignment-source-${index}`,
+        kind: "action",
+        name: ["Automatic alignment", "Drag to align", "Vertical alignment"][index] as string,
+      });
+      const target = add({
+        id: `demo-alignment-target-${index}`,
+        kind: "action",
+        name: "Connected card",
+      });
+      alignmentEntries.push(
+        { elementId: source, x: 0, y: index * 256, width: 220, height: 160 },
+        {
+          elementId: target,
+          x: index === 2 ? 4 : 600,
+          y: index === 2 ? 900 : index * 256 + (index === 0 ? 2 : 0),
+          width: 220,
+          height: index === 1 ? 144 : 160,
+        },
+      );
+      const relationshipId = services.relationships.create(UI_DEMO_WORKSPACE_ID, {
+        id: `demo-alignment-edge-${index}`,
+        sourceElementId: source,
+        targetElementId: target,
+        description: [
+          "Two-pixel difference",
+          "Snap despite different heights",
+          "Four-pixel difference",
+        ][index],
+      }).result.id;
+      alignmentRelationships.push({
+        relationshipId,
+        presentation:
+          index === 2
+            ? { sourceSide: "bottom", targetSide: "top" }
+            : index === 1
+              ? {
+                  sourceSide: "right",
+                  targetSide: "left",
+                  sourceFraction: 0.5,
+                  targetFraction: 0.5,
+                }
+              : { sourceSide: "right", targetSide: "left", targetFraction: 0.5 },
+      });
+    }
+    const alignmentView = view(
+      "connection-alignment",
+      {
+        name: "04 - Connection alignment",
+        kind: "workflow",
+        scopeElementId: "demo-nav-connectors",
+        settings: { snapToGrid: true },
+      },
+      alignmentEntries,
+    );
+    services.views.saveLayout(UI_DEMO_WORKSPACE_ID, alignmentView, [], alignmentRelationships);
+
     const clearanceView = view(
       "label-clearance",
       {
