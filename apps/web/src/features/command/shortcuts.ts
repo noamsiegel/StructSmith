@@ -48,7 +48,7 @@ export const shortcuts: readonly Shortcut[] = [
     id: "multi-select",
     group: "canvas",
     labelKey: "shortcuts.addToSelection",
-    keys: ["primary", "$shortcuts.click"],
+    keys: ["Shift", "$shortcuts.click"],
   },
   {
     id: "marquee",

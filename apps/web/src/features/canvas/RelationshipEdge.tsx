@@ -69,7 +69,7 @@ function RelationshipEdgeComponent({
   const sourceArrow = presentation?.sourceArrow ?? "none";
   const targetArrow = presentation?.targetArrow ?? "arrowclosed";
   const pathOptions = { sourceX, sourceY, targetX, targetY, sourcePosition, targetPosition };
-  const savedBends = data?.placement?.controlPoints ?? [];
+  const savedBends = data?.movementBends ?? data?.placement?.controlPoints ?? [];
   const [routePreview, setRoutePreview] = useState<ControlPoint[] | null>(null);
   const [routeSaving, setRouteSaving] = useState(false);
   const routeDrag = useRef<{

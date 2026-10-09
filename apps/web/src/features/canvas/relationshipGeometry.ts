@@ -151,7 +151,9 @@ export function movedRelationshipBends(
 ): ControlPoint[] | null {
   if (sourceDelta.x === 0 && sourceDelta.y === 0 && targetDelta.x === 0 && targetDelta.y === 0)
     return null;
-  const together = sourceDelta.x === targetDelta.x && sourceDelta.y === targetDelta.y;
+  const together =
+    Math.abs(sourceDelta.x - targetDelta.x) < 1e-6 &&
+    Math.abs(sourceDelta.y - targetDelta.y) < 1e-6;
   return captured.map((point) => ({
     x: point.x + (together ? sourceDelta.x : 0),
     y: point.y + (together ? sourceDelta.y : 0),

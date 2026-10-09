@@ -134,7 +134,8 @@ function BoundaryNodeComponent({
             variant="ghost"
             className="nodrag nopan h-auto min-w-0 flex-1 justify-start whitespace-pre-line px-1 py-1 text-left text-xs leading-4 normal-case tracking-normal [overflow-wrap:anywhere]"
             title={t("sections.rename")}
-            onClick={() => {
+            onClick={(event) => {
+              if (event.shiftKey || event.metaKey || event.ctrlKey) return;
               cancelled.current = false;
               setName(data.name);
               setEditing(true);

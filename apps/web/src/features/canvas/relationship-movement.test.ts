@@ -63,6 +63,7 @@ test("moving both endpoints by the same delta translates every captured control"
     { x: 50, y: -25 },
     { x: 0, y: 100 },
     { x: -100, y: 0 },
+    { x: 40.00000000000001, y: 35 },
   ]) {
     expect(movedRelationshipBends(captured, delta, delta)).toEqual([
       { x: 150 + delta.x, y: delta.y },
@@ -72,6 +73,12 @@ test("moving both endpoints by the same delta translates every captured control"
   expect(captured).toEqual([
     { x: 150, y: 0 },
     { x: 150, y: 100 },
+  ]);
+  expect(
+    movedRelationshipBends(captured, { x: 40.00000000000001, y: 35 }, { x: 40, y: 35 }),
+  ).toEqual([
+    { x: 190, y: 35 },
+    { x: 190, y: 135 },
   ]);
 });
 
