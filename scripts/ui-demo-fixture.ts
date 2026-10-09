@@ -814,17 +814,94 @@ export function buildUiDemoDocument(): WorkspaceDocument {
               : { sourceSide: "right", targetSide: "left", targetFraction: 0.5 },
       });
     }
+    const routeSource = add({
+      id: "demo-route-source",
+      kind: "action",
+      name: "Upload documents",
+      description: "Short Section titles must not create invisible obstacles above this card.",
+    });
+    const routeTarget = add({
+      id: "demo-route-target",
+      kind: "outcome",
+      name: "Dated document filed",
+    });
+    alignmentEntries.push(
+      { elementId: routeSource, x: 1800, y: 400, width: 240, height: 184 },
+      { elementId: routeTarget, x: 2280, y: 80, width: 240, height: 104 },
+    );
+    services.relationships.create(UI_DEMO_WORKSPACE_ID, {
+      id: "demo-route-title-edge",
+      sourceElementId: routeSource,
+      targetElementId: routeTarget,
+      description: "Dated document filed",
+    });
+    services.relationships.create(UI_DEMO_WORKSPACE_ID, {
+      id: "demo-route-sidechange-edge",
+      sourceElementId: routeSource,
+      targetElementId: routeTarget,
+      description: "Drag target from right to bottom",
+    });
     const alignmentView = view(
       "connection-alignment",
       {
         name: "04 - Connection alignment",
         kind: "workflow",
         scopeElementId: "demo-nav-connectors",
-        settings: { snapToGrid: true },
+        settings: {
+          snapToGrid: true,
+          relationshipRouting: "orthogonal",
+          sectionFrames: {
+            "boundary:demo-route-section": { x: 1416, y: 384, width: 656, height: 300 },
+          },
+        },
       },
       alignmentEntries,
     );
-    services.views.saveLayout(UI_DEMO_WORKSPACE_ID, alignmentView, [], alignmentRelationships);
+    services.boundaries.create(UI_DEMO_WORKSPACE_ID, {
+      id: "demo-route-section",
+      viewId: alignmentView,
+      kind: "custom",
+      layer: "custom",
+      name: "Set up",
+      elementIds: [routeSource],
+    });
+    services.views.saveLayout(
+      UI_DEMO_WORKSPACE_ID,
+      alignmentView,
+      [],
+      [
+        ...alignmentRelationships,
+        {
+          relationshipId: "demo-route-title-edge",
+          presentation: {
+            sourceSide: "top",
+            sourceFraction: 0.5,
+            targetSide: "top",
+            targetPoint: { x: 1920, y: 129 },
+          },
+          controlPoints: [
+            { x: 1920, y: 376 },
+            { x: 1936, y: 376 },
+            { x: 1936, y: 324 },
+            { x: 1984, y: 324 },
+            { x: 1984, y: 129 },
+          ],
+        },
+        {
+          relationshipId: "demo-route-sidechange-edge",
+          presentation: {
+            sourceSide: "right",
+            sourceFraction: 0.5,
+            targetSide: "right",
+            targetFraction: 0.5,
+          },
+          controlPoints: [
+            { x: 2576, y: 492 },
+            { x: 2576, y: 132 },
+          ],
+        },
+      ],
+    );
 
     const clearanceView = view(
       "label-clearance",

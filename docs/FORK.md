@@ -80,6 +80,8 @@ and resets to Status on reload, without editing the model or coordinates.
   Section titles do not enter rename mode during a modified click.
 - Dragging one connected object retains the connector's middle route, adjusting
   its ends. Moving both endpoints together translates their saved bends.
+  Existing authored bends remain the saved route; automatic obstacle-repair
+  corners are not added to them during movement.
   Automatic orthogonal routes become saved view geometry on the first drag;
   Reset appearance returns them to automatic routing. Positions, annotations,
   Section frames and affected routes save as one undoable change.
@@ -88,6 +90,9 @@ and resets to Status on reload, without editing the model or coordinates.
   interiors remain traversable. Clear manual routes stay unchanged; invalid end
   bends and obstructed segments are repaired for display in the editor and previews,
   including existing/imported views. Saved positions and bends are not rewritten.
+  Automatic routes use endpoint intent only; generated corners do not constrain
+  the obstacle router. Section title obstacles match the visible compact header,
+  including its selected Fit control and full-width rename input.
   Loose ends still avoid their former objects. If overlapping/crowded objects leave
   no clear route, a red dashed connector and **Blocked route** label explain that
   the objects need separating. Straight and curved routing retain their existing
@@ -103,6 +108,9 @@ and resets to Status on reload, without editing the model or coordinates.
   perpendicular crossings remain possible. Hovering a path/label, or focusing a
   label, highlights the full connector. Fixed endpoint stubs or crowded diagrams
   can still share space when separation is impossible; card safety takes priority.
+- Moving an endpoint to another border, another object or between attached and
+  loose resets its old bends and calculates a new route. Moving along the same
+  border preserves the route. Inspector side changes follow the same rule.
 - Connected card dragging uses the pointer before grid snapping to align facing
   border attachments within six screen pixels, with a dotted alignment guide.
   The grid still applies on other axes. Selected objects and Section contents
@@ -132,6 +140,8 @@ and resets to Status on reload, without editing the model or coordinates.
   that segment while retaining its endpoints. Arrow keys move perpendicular to
   the segment; Shift moves ten units. Escape or pointer cancellation discards
   an in-progress drag. A completed gesture is one undoable saved change.
+  Segment edits save the authored bends and edited segment, leaving automatic
+  obstacle-repair corners derived rather than accumulating them as saved bends.
   Orthogonal routing uses horizontal/vertical legs and sharp right-angle corners,
   including saved routes after endpoint moves. Redundant collinear waypoints are
   omitted from rendering; labels and drag handles follow the same route. Saved

@@ -721,3 +721,59 @@ timestamp contained no warnings or errors.
 [Own screenshot](screenshots/connection-alignment-own.png).
 
 Touch gestures, exports and large-graph performance were not exercised.
+
+## Endpoint rerouting and accumulated corners - October 9, 2026
+
+The reported Own connectors retained obsolete bends after attachment changes.
+Segment and card drags also promoted display-only repair corners into saved
+intent. A Section's full-width short-title header created an invisible obstacle.
+Endpoint changes now clear bends when the border, object or attached/free state
+changes; same-border moves preserve bends. Inspector side changes use that rule.
+Segment edits save authored bends plus the edited segment, and card movement
+keeps existing authored bends. Compact Section headers measure their visible
+width, while selected Fit controls and rename inputs remain included.
+
+Final browser acceptance exposed a second generated-corner issue: the automatic
+return connector preserved a y207 corner although the padded insight card ended
+at y240, producing a 15 by 33px dogleg. Automatic connections now pass endpoints
+to the obstacle router; saved/preview bends still retain authored intent.
+
+On `http://127.0.0.1:8090`, `verifyTab.drag([1844.56,438.38],
+[1765.59,474.88])` moved the demo's right/right connector target to Bottom.
+REST document readback showed `controlPoints: []` and `targetSide: "bottom"`.
+`verifyTab.playwright.evaluate(routeScan)` reported a two-segment route before
+and after reload, with zero blocked routes or immediate retraces. Earlier native
+acceptance covered Undo, segment keyboard editing, card movement and inspector
+Bottom selection. Long Section titles, rename cancellation and the selected Fit
+button were exercised in `demo-sections`; measured title bounds remained outside
+the frame and narrow titles wrapped.
+[Endpoint drag and reload evidence](screenshots/route-repair-demo.png).
+
+`bun run check` and `bun run typecheck` exited zero. `bun run test` collected
+404 tests across 71 files: 404 passed, zero failed, 3785 assertions. Web, site,
+standalone launcher and Docker builds succeeded. Eight fixture mutations were
+caught. The rendered-path regression caught both restoring automatic generated
+corners and discarding authored bends; the production source was restored.
+
+The two reported Own connectors had their obsolete bends cleared through one
+revision-guarded, snapshot-backed REST command. All attachments, arrow styles,
+label offsets and other presentation remained unchanged. The repaired automatic
+return path is `2991,492 -> 3000,492 -> 3000,240 -> 1601,240 -> 1601,183`,
+four segments rather than six. The loose document connector is a single vertical
+segment. Reloaded Own geometry contained zero blocked routes or immediate
+retraces; console logs after the production reload contained no warnings/errors.
+[Own evidence](screenshots/route-repair-own.png).
+
+`docker build -t structsmith-fork:route-repair .` succeeded. Local replacement
+preserved loopback port 8090, environment and `structsmith-fork-data`. All six
+workspace documents compared identically before and after each replacement.
+Health reported database/MCP ok. The deployed image is
+`8a321fc25074d4e205469b3d6319acc2cd3ee7ba940ebbebfd2c11fdbd511310`.
+Rollback containers remain stopped. `bun scripts/smoke-local-helper.ts
+structsmith-fork:route-repair` verified HTML, authenticated Docker REST, host CLI,
+scoped MCP writes, streaming and Stop. The shared demo was reset with its existing
+snapshot mechanism after interaction checks.
+
+Exports, touch input and large-graph performance were not exercised. Existing
+intentional manual routes are retained; other old saved detours need an explicit
+endpoint change or Reset appearance to return to automatic routing.

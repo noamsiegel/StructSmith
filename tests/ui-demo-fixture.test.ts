@@ -373,6 +373,58 @@ describe("UI demo fixture", () => {
     });
   });
 
+  test("retains the short Section title, legacy bends and right-side endpoint drag fixture", () => {
+    const view = byKey.get("demo-connection-alignment");
+    if (!view) throw new Error("Missing connector alignment view");
+    const section = view.boundaries.find((entry) => entry.id === "demo-route-section");
+    const legacy = view.relationships.find(
+      (entry) => entry.relationshipId === "demo-route-title-edge",
+    );
+    const sidechange = view.relationships.find(
+      (entry) => entry.relationshipId === "demo-route-sidechange-edge",
+    );
+    expect({
+      settings: [view.settings.snapToGrid, view.settings.relationshipRouting],
+      section: [section?.name, section?.kind, section?.elementIds],
+      frame: view.settings.sectionFrames["boundary:demo-route-section"],
+      legacy: [legacy?.presentation, legacy?.controlPoints],
+      sidechange: [sidechange?.presentation, sidechange?.controlPoints],
+    }).toEqual({
+      settings: [true, "orthogonal"],
+      section: ["Set up", "custom", ["demo-route-source"]],
+      frame: { x: 1416, y: 384, width: 656, height: 300 },
+      legacy: [
+        {
+          sourceSide: "top",
+          sourceFraction: 0.5,
+          targetSide: "top",
+          targetPoint: { x: 1920, y: 129 },
+        },
+        [
+          { x: 1920, y: 376 },
+          { x: 1936, y: 376 },
+          { x: 1936, y: 324 },
+          { x: 1984, y: 324 },
+          { x: 1984, y: 129 },
+        ],
+      ],
+      sidechange: [
+        {
+          sourceSide: "right",
+          sourceFraction: 0.5,
+          targetSide: "right",
+          targetFraction: 0.5,
+        },
+        [
+          { x: 2576, y: 492 },
+          { x: 2576, y: 132 },
+        ],
+      ],
+    });
+    expect(byId.get("demo-route-source")?.kind).toBe("action");
+    expect(byId.get("demo-route-target")?.kind).toBe("outcome");
+  });
+
   test("covers colors, statuses, locked/hidden placements and scenario element/relationship steps", () => {
     const states = byKey.get("demo-states");
     expect(byId.get("demo-state-live")?.tags).toContain("status:live");
