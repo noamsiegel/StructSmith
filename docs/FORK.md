@@ -92,6 +92,17 @@ and resets to Status on reload, without editing the model or coordinates.
   no clear route, a red dashed connector and **Blocked route** label explain that
   the objects need separating. Straight and curved routing retain their existing
   behavior; they do not use orthogonal obstacle avoidance.
+- Automatic connector ends share border capacity across incoming and outgoing
+  relationships. They fill the center and quarter positions first, then subdivide
+  the largest remaining gaps without moving older automatic assignments. Explicit
+  saved fractions/slots and loose endpoints stay unchanged; new center-handle
+  connections remain automatic. Outer handles and dragged endpoints stay explicit.
+  Connection handles render above card content and accept connections from either
+  direction. Orthogonal automatic routes reserve parallel lanes twelve canvas
+  pixels apart and prefer fewer turns. Saved manual bends keep their routes;
+  perpendicular crossings remain possible. Hovering a path/label, or focusing a
+  label, highlights the full connector. Fixed endpoint stubs or crowded diagrams
+  can still share space when separation is impossible; card safety takes priority.
 - Cards keep a consistent default width and grow vertically to fit wrapped
   titles, technology and displayed descriptions. Saved heights are minimums,
   so a short saved card cannot clip new text. Wider saved cards remain supported.

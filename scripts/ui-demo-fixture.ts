@@ -711,6 +711,53 @@ export function buildUiDemoDocument(): WorkspaceDocument {
       );
     }
 
+    const laneHub = add({
+      id: "demo-lane-hub",
+      kind: "action",
+      name: "Shared hub",
+      description:
+        "Automatic ends share three slots, then divide border gaps. Hover a line to trace it.",
+    });
+    const laneEntries: LayoutEntry[] = [{ elementId: laneHub, x: 0, y: 320, height: 320 }];
+    const laneEdges = Array.from({ length: 8 }, (_, index) => {
+      const target = add({
+        id: `demo-lane-target-${index}`,
+        kind: "outcome",
+        name: `Branch ${index + 1}`,
+      });
+      laneEntries.push({ elementId: target, x: 900, y: index * 150 });
+      return services.relationships.create(UI_DEMO_WORKSPACE_ID, {
+        id: `demo-lane-edge-${index}`,
+        sourceElementId: laneHub,
+        targetElementId: target,
+        description: index === 7 ? "Pinned manual route" : `Handoff ${index + 1}`,
+      }).result.id;
+    });
+    const laneView = view(
+      "connector-lanes",
+      {
+        name: "04 - Connector lanes and overflow",
+        kind: "workflow",
+        scopeElementId: "demo-nav-connectors",
+      },
+      laneEntries,
+    );
+    services.views.saveLayout(
+      UI_DEMO_WORKSPACE_ID,
+      laneView,
+      [],
+      [
+        {
+          relationshipId: laneEdges[7] as string,
+          presentation: { sourceFraction: 0.25, targetFraction: 0.5, strokeStyle: "dashed" },
+          controlPoints: [
+            { x: 500, y: 400 },
+            { x: 500, y: 1098 },
+          ],
+        },
+      ],
+    );
+
     const clearanceView = view(
       "label-clearance",
       {

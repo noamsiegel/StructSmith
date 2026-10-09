@@ -27,6 +27,19 @@ const byId = new Map(document.elements.map((element) => [element.id, element]));
 const byKey = new Map(document.views.map((view) => [view.key, view]));
 
 describe("UI demo fixture", () => {
+  test("includes eight fan-out connectors and a pinned manual lane", () => {
+    const view = byKey.get("demo-connector-lanes");
+    if (!view) throw new Error("Missing connector lane fixture");
+    const edges = document.relationships.filter((edge) => edge.sourceElementId === "demo-lane-hub");
+    expect(edges.length).toBe(8);
+    expect(view.elements.length).toBe(9);
+    const pinned = view.relationships.find((edge) => edge.relationshipId === "demo-lane-edge-7");
+    expect(pinned?.presentation?.sourceFraction).toBe(0.25);
+    expect(pinned?.controlPoints).toEqual([
+      { x: 500, y: 400 },
+      { x: 500, y: 1098 },
+    ]);
+  });
   test("covers the right-border return route with invalid saved bends and expanded obstacles", () => {
     const view = byKey.get("demo-connectors");
     if (!view) throw new Error("Missing connector view");

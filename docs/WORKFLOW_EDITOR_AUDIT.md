@@ -606,6 +606,63 @@ and native-agent launcher smoke were not exercised. Straight/curved routes do
 not use obstacle avoidance. Distinct attachment slots and parallel lane allocation
 remain separate work; this fix prevents card crossings, not connector overlaps.
 
+## Connector spacing acceptance (2026-10-09)
+
+Reproduced Own's overlapping 44.5px outgoing and 28.5px incoming connector
+segments with `ownRoutingTab.playwright.evaluate(scanConnectorLanes)`.
+Automatic border positions now share capacity across incoming/outgoing connectors,
+use center/quarter positions before subdividing gaps, and preserve chronological
+assignments on append. Manual fractions, slots, loose ends and saved bends remain
+explicit. The shared editor/preview renderer reserves parallel orthogonal lanes
+with twelve canvas pixels of separation and a preference for fewer turns.
+Perpendicular crossings and unavoidable fixed endpoint stubs remain possible;
+when spacing has no valid solution, the already card-safe route is retained.
+Hovering the path/label or focusing its label highlights the full path and arrows.
+
+The demo includes `demo-connector-lanes`: eight connections, overflow positions
+and a pinned manual route. `routingDevTab.drag` moved Branch 7 horizontally while
+retaining its displayed lane at x=865. REST document reads confirmed saved bends
+`[{x:865,y:380.625},{x:865,y:952}]`. Undo and reload restored the baseline with
+zero overlapping segments. A many-turn overflow staircase observed in the browser
+was reduced to a two-turn path and added as a focused router regression.
+
+Creation testing found card content intercepting connection handles. Handles now
+render above it, have distinct center IDs and accept either handle direction.
+Center connections leave slot allocation automatic; outer slots remain explicit.
+Two precise handle clicks created an incoming ninth connection, `rel-ji4d0i`.
+REST confirmed presentation `{sourceSide:"right",targetSide:"right"}` with no
+fixed slots. Its incoming border y=420.375 was distinct, all existing assignments
+remained stable, and the browser reported zero overlaps/card crossings.
+The dedicated demo was snapshotted/reset after these exercises.
+
+After deployment, `ownRoutingTab.reload()` and browser scanners reported eight
+labels, 32 segments, zero overlaps and zero routing violations. The deployed demo
+reported eight labels, 24 segments and zero overlaps/violations.
+Hovering Handoff 7 produced a 2.8px highlighted path and primary-color halo.
+Console logs filtered to the deployed reload timestamp contained no warnings or
+errors in either view. [Own screenshot](screenshots/connector-spacing-own.jpg)
+and [demo screenshot](screenshots/connector-spacing-demo.jpg).
+
+`bun run test`: 381 pass, zero failures, 3585 assertions across 70 files.
+`bun run check`, `bun run typecheck`, web/site/launcher builds and
+`docker build -t structsmith-fork:connector-spacing .` succeeded.
+`bun scripts/smoke-local-helper.ts structsmith-fork:connector-spacing` verified
+HTML, authenticated Docker REST, fake host CLI, scoped MCP writes, streaming and
+Stop against the compiled launcher and real container. Six attachment mutations
+and seven lane/creation/fixture mutations failed regression tests and were restored.
+Independent source review found no concrete integration defects. Existing Biome
+schema, large-bundle and Docker AUTH_MODE-name advisories remain informational.
+
+Running image: `68523eea1c5bfe329b9b089c6aab3db7766cd70c81287f3df4b253625172adb0`.
+Health reported ok; all six REST workspace documents were identical across the
+replacement. The existing loopback port, auth/MCP settings and data/agent-chat
+volume were preserved. Prior container:
+`structsmith-before-connector-spacing-20261009`.
+Browser network tracing remains unavailable; REST persistence and the native
+launcher/MCP smoke supplied request evidence. Exports, mobile and performance on
+very large graphs were not exercised. Automatic lane separation applies to
+orthogonal routes; manually pinned overlapping paths are deliberately retained.
+
 ## Reference documentation
 
 These links underpin the optional ideas, not claims that the fork implements them:
