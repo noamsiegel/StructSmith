@@ -3,13 +3,88 @@ import type {
   ArchitectureElement,
   ArchitectureOperation,
   SectionFrame,
+  ViewAnnotation,
 } from "@structsmith/contracts";
 import {
   BOUNDARY_PADDING,
   type BoundaryNodeData,
   type BoundarySource,
+  boundaryMemberIds,
   type FlowNode,
 } from "./graph";
+
+export function selectedGroupMovement(
+  selected: readonly FlowNode[],
+  sectionNodes: readonly FlowNode[],
+  elements: ReadonlyMap<string, ArchitectureElement>,
+  boundaries: readonly ArchitectureBoundary[],
+  layer: ArchitectureBoundary["layer"],
+  expandedIds: ReadonlySet<string>,
+  annotations: readonly ViewAnnotation[],
+): { members: Set<string>; annotations: ViewAnnotation[]; frameIds: Set<string> } {
+  const members = new Set<string>();
+  const selectedAnnotationIds = new Set<string>();
+  const sectionIds = new Set<string>();
+  const frameIds = new Set<string>();
+  for (const node of selected) {
+    if (node.type === "element") members.add(node.id);
+    else if (node.type === "annotation") selectedAnnotationIds.add(node.data.annotation.id);
+    else if (node.type === "boundary") {
+      for (const id of boundaryMemberIds(node.data, elements, boundaries, layer, expandedIds))
+        members.add(id);
+      if (
+        node.data.section &&
+        node.data.boundaryId &&
+        boundaries.some(
+          (boundary) =>
+            boundary.id === node.data.boundaryId &&
+            boundary.kind === "custom" &&
+            boundary.layer === layer,
+        )
+      ) {
+        sectionIds.add(node.data.boundaryId);
+        frameIds.add(node.id);
+      }
+    }
+  }
+  for (const section of boundaries.filter(
+    (boundary) => boundary.kind === "custom" && boundary.layer === layer,
+  )) {
+    let parent: ArchitectureBoundary | undefined = section;
+    const visited = new Set<string>();
+    while (parent && !visited.has(parent.id)) {
+      if (sectionIds.has(parent.id)) {
+        sectionIds.add(section.id);
+        break;
+      }
+      visited.add(parent.id);
+      parent = boundaries.find(
+        (boundary) =>
+          boundary.id === parent?.parentBoundaryId &&
+          boundary.kind === "custom" &&
+          boundary.layer === layer,
+      );
+    }
+  }
+  for (const node of sectionNodes) {
+    if (
+      node.type === "boundary" &&
+      node.data.section &&
+      node.data.boundaryId &&
+      sectionIds.has(node.data.boundaryId)
+    )
+      frameIds.add(node.id);
+  }
+  return {
+    members,
+    annotations: annotations.filter(
+      (annotation) =>
+        selectedAnnotationIds.has(annotation.id) ||
+        (annotation.sectionId && sectionIds.has(annotation.sectionId)),
+    ),
+    frameIds,
+  };
+}
 
 export function sectionFrameEntries(nodes: readonly FlowNode[]): Record<string, SectionFrame> {
   return Object.fromEntries(
