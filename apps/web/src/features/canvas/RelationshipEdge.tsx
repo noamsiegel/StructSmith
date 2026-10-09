@@ -235,7 +235,8 @@ function RelationshipEdgeComponent({
     () => (showLabel ? { points: labelRoute, desired: labelPoint, ...labelSize } : null),
     [showLabel, labelRoute, labelPoint, labelSize],
   );
-  const clearPoint = useLabelPlacement(id, request) ?? labelPoint;
+  const placement = useLabelPlacement(id, request);
+  const clearPoint = placement.point ?? labelPoint;
   const labelX = clearPoint.x;
   const labelY = clearPoint.y;
   const leaderAnchor = closestLabelRoutePoint(labelRoute, clearPoint);
@@ -313,15 +314,45 @@ function RelationshipEdgeComponent({
         />
       </g>
       {showLabel && leader && (
-        <path
-          d={`M ${leaderAnchor.x},${leaderAnchor.y} L ${labelX},${leaderAnchor.y} L ${labelX},${labelY}`}
-          fill="none"
-          stroke={stroke}
-          strokeWidth="1"
-          strokeDasharray="2 3"
-          pointerEvents="none"
-          data-label-leader={id}
-        />
+        <>
+          <defs>
+            <mask
+              id={`${markerId}-leader-mask`}
+              maskUnits="userSpaceOnUse"
+              x={Math.min(leaderAnchor.x, labelX) - 2}
+              y={Math.min(leaderAnchor.y, labelY) - 2}
+              width={Math.abs(labelX - leaderAnchor.x) + 4}
+              height={Math.abs(labelY - leaderAnchor.y) + 4}
+            >
+              <rect
+                x={Math.min(leaderAnchor.x, labelX) - 2}
+                y={Math.min(leaderAnchor.y, labelY) - 2}
+                width={Math.abs(labelX - leaderAnchor.x) + 4}
+                height={Math.abs(labelY - leaderAnchor.y) + 4}
+                fill="white"
+              />
+              <path
+                d={placement.headers
+                  .map(
+                    (header) =>
+                      `M ${header.x},${header.y} h ${header.width} v ${header.height} h ${-header.width} Z`,
+                  )
+                  .join(" ")}
+                fill="black"
+              />
+            </mask>
+          </defs>
+          <path
+            d={`M ${leaderAnchor.x},${leaderAnchor.y} L ${labelX},${leaderAnchor.y} L ${labelX},${labelY}`}
+            fill="none"
+            stroke={stroke}
+            strokeWidth="1"
+            strokeDasharray="2 3"
+            pointerEvents="none"
+            data-label-leader={id}
+            mask={`url(#${markerId}-leader-mask)`}
+          />
+        </>
       )}
       {showLabel && (
         <EdgeLabelRenderer>

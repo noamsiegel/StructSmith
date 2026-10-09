@@ -45,6 +45,7 @@ export function labelObstacles(
 
 const LabelPlacementContext = createContext<{
   positions: ReadonlyMap<string, ControlPoint>;
+  headers: readonly LabelBox[];
   register: (id: string, request: LabelRequest | null) => void;
   registerHeader: (id: string, height: number | null) => void;
 } | null>(null);
@@ -94,9 +95,17 @@ export function LabelPlacementProvider({
     }
     return positions;
   }, [nodes, requests, headerHeights]);
+  const headers = useMemo(
+    () =>
+      labelObstacles(
+        nodes.filter((node) => node.type === "boundary"),
+        headerHeights,
+      ),
+    [nodes, headerHeights],
+  );
   const value = useMemo(
-    () => ({ positions, register, registerHeader }),
-    [positions, register, registerHeader],
+    () => ({ positions, headers, register, registerHeader }),
+    [positions, headers, register, registerHeader],
   );
   return <LabelPlacementContext.Provider value={value}>{children}</LabelPlacementContext.Provider>;
 }
@@ -123,12 +132,12 @@ export function useLabelHeader(id: string) {
   return headerRef;
 }
 
-export function useLabelPlacement(id: string, request: LabelRequest | null): ControlPoint | null {
+export function useLabelPlacement(id: string, request: LabelRequest | null) {
   const context = useContext(LabelPlacementContext);
   const register = context?.register;
   useLayoutEffect(() => {
     register?.(id, request);
   }, [id, request, register]);
   useLayoutEffect(() => () => register?.(id, null), [id, register]);
-  return context?.positions.get(id) ?? null;
+  return { point: context?.positions.get(id) ?? null, headers: context?.headers ?? [] };
 }
