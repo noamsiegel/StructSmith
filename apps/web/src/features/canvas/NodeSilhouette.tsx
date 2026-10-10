@@ -36,15 +36,21 @@ export function NodeSilhouette({
         vectorEffect="non-scaling-stroke"
       />
     ) : shape === "bar" ? (
-      <rect x={1} y={10} width={width - 2} height={12} vectorEffect="non-scaling-stroke" />
+      <rect
+        x={1}
+        y={10}
+        width={Math.max(0, width - 2)}
+        height={12}
+        vectorEffect="non-scaling-stroke"
+      />
     ) : outline ? (
       <path d={outline} vectorEffect="non-scaling-stroke" />
     ) : (
       <rect
         x={1}
         y={1}
-        width={width - 2}
-        height={height - 2}
+        width={Math.max(0, width - 2)}
+        height={Math.max(0, height - 2)}
         rx={shape === "terminal" ? 24 : 5}
         vectorEffect="non-scaling-stroke"
       />
