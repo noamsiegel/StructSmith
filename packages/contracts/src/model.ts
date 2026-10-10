@@ -245,6 +245,23 @@ export const ViewScenarioStepSchema = z.object({
     .describe(
       "Reply over relationshipId: playback shows the message travelling against the connection's direction, without changing the connection.",
     ),
+  viewId: IdSchema.optional().describe(
+    "Another view of this workspace where the step happens, such as a Subprocess's detail view. Playback opens that view and later steps return. Omit it for the scenario's own view.",
+  ),
+  highlightElementIds: z
+    .array(IdSchema)
+    .max(50)
+    .optional()
+    .describe(
+      "Further elements this step lights up together with its element, on the step's view.",
+    ),
+  highlightRelationshipIds: z
+    .array(IdSchema)
+    .max(50)
+    .optional()
+    .describe(
+      "Further connections this step lights up, for example messages sent in parallel. Both ends must be on the step's view.",
+    ),
   title: z.string().trim().min(1).max(200),
   description: z.string().max(2000).optional(),
 });

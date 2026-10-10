@@ -141,7 +141,8 @@ export const MCP_TOOLS: readonly McpToolInfo[] = [
   },
   {
     name: "scenario_get",
-    description: "Read one scenario and its ordered steps by view and scenario id.",
+    description:
+      "Read one scenario and its ordered steps by view and scenario id, or with format mermaid as a Mermaid sequence diagram.",
     mutating: false,
   },
   {

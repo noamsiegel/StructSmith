@@ -29,14 +29,23 @@ class RefTable {
 }
 
 /** Steps may name elements and connections created earlier in the same batch. */
-function resolveScenarioSteps<T extends { elementId?: string; relationshipId?: string }>(
-  refs: RefTable,
-  steps: readonly T[],
-): T[] {
+function resolveScenarioSteps<
+  T extends {
+    elementId?: string;
+    relationshipId?: string;
+    viewId?: string;
+    highlightElementIds?: string[];
+    highlightRelationshipIds?: string[];
+  },
+>(refs: RefTable, steps: readonly T[]): T[] {
   return steps.map((step) => ({
     ...step,
     elementId: refs.resolve(step.elementId),
     relationshipId: refs.resolve(step.relationshipId),
+    viewId: refs.resolve(step.viewId),
+    highlightElementIds: step.highlightElementIds && refs.resolveAll(step.highlightElementIds),
+    highlightRelationshipIds:
+      step.highlightRelationshipIds && refs.resolveAll(step.highlightRelationshipIds),
   }));
 }
 

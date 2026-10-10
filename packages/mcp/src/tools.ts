@@ -32,7 +32,7 @@ import {
   UpdateWorkspaceSchema,
   ViewRelationshipPatchSchema,
 } from "@structsmith/contracts";
-import { badRequest, type Services } from "@structsmith/domain";
+import { badRequest, type Services, scenarioToMermaid } from "@structsmith/domain";
 import { z } from "zod";
 import { MCP_TOOLS } from "./catalog";
 import { GUIDE_TOPICS, guideHome, guideTopic } from "./guide";
@@ -642,15 +642,23 @@ export function registerTools(mcp: McpServer, services: Services, options: McpTo
     "scenario_get",
     {
       description: describe("scenario_get"),
-      inputSchema: { viewId, scenarioId: z.string().min(1) },
+      inputSchema: {
+        viewId,
+        scenarioId: z.string().min(1),
+        format: z
+          .enum(["json", "mermaid"])
+          .default("json")
+          .describe("mermaid returns the walkthrough as a Mermaid sequenceDiagram."),
+      },
       annotations: readOnlyAnnotations,
     },
-    ({ viewId, scenarioId }) => {
-      const scenario = services.views
-        .get(viewId)
-        .settings.scenarios.find((item) => item.id === scenarioId);
+    ({ viewId, scenarioId, format }) => {
+      const view = services.views.get(viewId);
+      const scenario = view.settings.scenarios.find((item) => item.id === scenarioId);
       if (!scenario) throw badRequest(`Scenario "${scenarioId}" does not exist on this view.`);
-      return json(scenario);
+      return format === "mermaid"
+        ? plain(scenarioToMermaid(scenario, services.model.get(view.workspaceId).elements))
+        : json(scenario);
     },
   );
 

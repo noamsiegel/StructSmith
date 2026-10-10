@@ -54,6 +54,22 @@ test("MCP scenario tools author, validate, resolve and undo walkthroughs", async
     expect(created.scenarios).toEqual([{ id, name: "Sign in", steps }]);
     expect(await call("scenario_list")).toEqual(created.scenarios);
     expect(await call("scenario_get", { scenarioId: id })).toEqual(created.scenarios[0]);
+    const mermaid = await client.callTool({
+      name: "scenario_get",
+      arguments: { ...base, scenarioId: id, format: "mermaid" },
+    });
+    expect((mermaid.content as Array<{ text: string }>)[0]?.text).toBe(
+      [
+        "sequenceDiagram",
+        "  title Sign in",
+        "  participant p1 as Browser",
+        "  participant p2 as API",
+        "  Note over p1: Submit",
+        "  p1->>p2: Check password",
+        "  p2-->>p1: Session cookie",
+        "  Note over p1,p2: Signed in",
+      ].join("\n"),
+    );
 
     await expect(
       call("scenario_create", {

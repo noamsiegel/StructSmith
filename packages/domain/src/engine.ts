@@ -689,11 +689,24 @@ function validateExplorationSettings(
     );
     validateViewScenarios(
       changed,
-      elementIds,
+      { viewId: view.id, elementIds, views: scenarioViews(repos, workspace.id) },
       repos.elements.listByWorkspace(workspace.id),
       repos.relationships.listByWorkspace(workspace.id),
     );
   }
+}
+
+/** Every view's elements, for scenario steps that continue on another view. */
+function scenarioViews(repos: Repositories, workspaceId: string) {
+  return new Map(
+    repos.views.listByWorkspace(workspaceId).map((view) => [
+      view.id,
+      {
+        name: view.name,
+        elementIds: repos.views.listElements(view.id).map((row) => row.elementId),
+      },
+    ]),
+  );
 }
 
 function detachViewComments(

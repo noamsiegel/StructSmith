@@ -4,6 +4,7 @@ import { validateDocument } from "@structsmith/domain";
 import {
   clearInvalidScenarioArrivals,
   scenarioProblems,
+  scenarioToMermaid,
   validateViewScenarios,
 } from "../packages/domain/src/scenarios";
 import { createTestContext, createWorkspace } from "./helpers";
@@ -45,7 +46,7 @@ describe("scenario references", () => {
 
   test("rejects elements outside the view or deleted from the workspace", () => {
     expect(() => validateViewScenarios([scenario], ["a"], elements, relationships)).toThrow(
-      '"B" must exist in this workspace and view. Add it to the view, or author the scenario on a detail view',
+      '"B" must exist in this workspace and view. Add it to the view, or place the step on a detail view',
     );
     expect(() =>
       validateViewScenarios([scenario], ["a", "b"], [{ id: "a", name: "A" }], relationships),
@@ -364,4 +365,194 @@ test("responses and note steps survive native export/import and snapshot restore
   } finally {
     close();
   }
+});
+
+test("a step can continue on another view and light up several things at once", () => {
+  const { services, close } = createTestContext();
+  try {
+    const workspace = createWorkspace(services);
+    const make = (name: string, parentId?: string) =>
+      services.elements.create(workspace.id, {
+        name,
+        kind: parentId ? "action" : "workflowGroup",
+        ...(parentId ? { parentId } : {}),
+      }).result;
+    const group = make("Onboard");
+    const other = make("Upload");
+    const child = make("Verify email", group.id);
+    const second = make("Set password", group.id);
+    const handoff = services.relationships.create(workspace.id, {
+      sourceElementId: group.id,
+      targetElementId: other.id,
+    }).result;
+    const inner = services.relationships.create(workspace.id, {
+      sourceElementId: child.id,
+      targetElementId: second.id,
+    }).result;
+    const home = services.views.create(workspace.id, {
+      name: "Home",
+      kind: "workflow",
+      elementIds: [group.id, other.id],
+    }).result;
+    const detail = services.views.create(workspace.id, {
+      name: "Onboard details",
+      kind: "workflow",
+      scopeElementId: group.id,
+      elementIds: [child.id, second.id, other.id],
+    }).result;
+    const add = (steps: unknown[]) =>
+      services.model.applyOperations(
+        workspace.id,
+        {
+          operations: [
+            { op: "addViewScenario", viewId: home.id, data: { name: "Walk", steps } as never },
+          ],
+        },
+        "mcp",
+      );
+    const valid = [
+      {
+        title: "Who is involved",
+        highlightElementIds: [group.id, other.id],
+        highlightRelationshipIds: [handoff.id],
+      },
+      { elementId: group.id, title: "Start onboarding" },
+      { elementId: child.id, viewId: detail.id, title: "Inside: verify email" },
+      {
+        elementId: second.id,
+        viewId: detail.id,
+        relationshipId: inner.id,
+        title: "Then a password",
+      },
+      { elementId: group.id, viewId: home.id, title: "Back on the overview" },
+      // Naming the scenario's own view is the same as omitting it, so this arrival is valid.
+      { elementId: other.id, relationshipId: handoff.id, title: "Hand off to upload" },
+    ];
+    add(valid);
+    expect(services.views.get(home.id).settings.scenarios[0]?.steps).toEqual(valid);
+
+    for (const [steps, message] of [
+      [
+        [{ elementId: child.id, title: "Not on home" }],
+        '"Verify email" must exist in this workspace and view',
+      ],
+      [
+        [{ elementId: group.id, viewId: detail.id, title: "Wrong view" }],
+        'must exist in view "Onboard details"',
+      ],
+      [
+        [{ elementId: other.id, title: "x", highlightElementIds: [child.id] }],
+        '"Verify email" must exist',
+      ],
+      [
+        [{ title: "x", highlightRelationshipIds: [inner.id] }],
+        "a highlighted connection must have both ends",
+      ],
+      [
+        [{ title: "x", viewId: "missing-view" }],
+        'the step\'s view "missing-view" no longer exists',
+      ],
+      [
+        [
+          { elementId: group.id, title: "a" },
+          { elementId: other.id, viewId: detail.id, relationshipId: handoff.id, title: "b" },
+        ],
+        "this step and the previous one are on different views",
+      ],
+    ] as const)
+      expect(() => add(steps as unknown as unknown[])).toThrow(message);
+
+    // Deleting a view a step relies on keeps the scenario and reports it.
+    services.views.delete(workspace.id, detail.id);
+    expect(
+      validateDocument(services.model.getDocument(workspace.id))
+        .issues.filter((issue) => issue.code === "SCENARIO_VIEW_MISSING")
+        .map((issue) => issue.viewId),
+    ).toEqual([home.id, home.id]);
+  } finally {
+    close();
+  }
+});
+
+test("cross-view steps and highlights survive cloning with remapped IDs", () => {
+  const { services, close, workspace, view, client, api, call } = scenarioWorkspace();
+  try {
+    const detail = services.views.create(workspace.id, {
+      name: "API detail",
+      kind: "workflow",
+      elementIds: [api.id],
+    }).result;
+    const steps = [
+      {
+        title: "Overview",
+        highlightElementIds: [client.id, api.id],
+        highlightRelationshipIds: [call.id],
+      },
+      { elementId: api.id, viewId: detail.id, title: "Inside the API" },
+    ];
+    services.model.applyOperations(
+      workspace.id,
+      {
+        operations: [
+          { op: "addViewScenario", viewId: view.id, data: { id: "x", name: "X", steps } },
+        ],
+      },
+      "ui",
+    );
+    const copy = services.imports.importDocument(services.model.getDocument(workspace.id), {
+      mode: "new",
+      name: "Copy",
+    });
+    const model = services.model.get(copy.id);
+    const id = (name: string) => model.elements.find((element) => element.name === name)?.id;
+    const views = services.views.listDetailed(copy.id);
+    const copied = views.find((item) => item.name === "Flow")?.settings.scenarios[0]?.steps;
+    expect(copied as unknown).toEqual([
+      {
+        title: "Overview",
+        highlightElementIds: [id(client.name), id(api.name)],
+        highlightRelationshipIds: [model.relationships[0]?.id],
+      },
+      {
+        elementId: id(api.name),
+        viewId: views.find((item) => item.name === "API detail")?.id,
+        title: "Inside the API",
+      },
+    ]);
+  } finally {
+    close();
+  }
+});
+
+test("a scenario exports as a Mermaid sequence diagram", () => {
+  expect(
+    scenarioToMermaid(
+      {
+        name: "Sign in; fast #1",
+        steps: [
+          { title: "Context" },
+          { elementId: "browser", title: "Submit" },
+          { elementId: "api", relationshipId: "login", title: "Check\npassword" },
+          { elementId: "browser", relationshipId: "login", response: true, title: "Cookie" },
+          { title: "Done" },
+        ],
+      },
+      [
+        { id: "browser", name: "Browser" },
+        { id: "api", name: "API" },
+      ],
+    ),
+  ).toBe(
+    [
+      "sequenceDiagram",
+      "  title Sign in#59; fast #35;1",
+      "  participant p1 as Browser",
+      "  participant p2 as API",
+      "  Note over p1,p2: Context",
+      "  Note over p1: Submit",
+      "  p1->>p2: Check password",
+      "  p2-->>p1: Cookie",
+      "  Note over p1,p2: Done",
+    ].join("\n"),
+  );
 });

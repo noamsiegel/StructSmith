@@ -144,7 +144,16 @@ export function resolveReference(
         })),
         problems: scenarioProblems(
           [target],
-          view.elements.map((entry) => entry.elementId),
+          {
+            viewId: view.id,
+            elementIds: view.elements.map((entry) => entry.elementId),
+            views: new Map(
+              document.views.map((other) => [
+                other.id,
+                { name: other.name, elementIds: other.elements.map((entry) => entry.elementId) },
+              ]),
+            ),
+          },
           document.elements,
           document.relationships,
         ),

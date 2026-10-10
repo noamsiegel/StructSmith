@@ -117,6 +117,12 @@ export function validateDocument(document: WorkspaceDocument): ValidationResult 
     }
   }
 
+  const viewElements = new Map(
+    views.map((view) => [
+      view.id,
+      { name: view.name, elementIds: view.elements.map((entry) => entry.elementId) },
+    ]),
+  );
   const seenViewKeys = new Set<string>();
   for (const view of views) {
     const parsedAnnotations = ViewSettingsSchema.shape.annotations.safeParse(
@@ -152,7 +158,11 @@ export function validateDocument(document: WorkspaceDocument): ValidationResult 
     // Saved scenarios outlive model edits so authors can repair them; report what broke.
     for (const problem of scenarioProblems(
       view.settings.scenarios,
-      view.elements.map((entry) => entry.elementId),
+      {
+        viewId: view.id,
+        elementIds: view.elements.map((entry) => entry.elementId),
+        views: viewElements,
+      },
       elements,
       relationships,
     )) {

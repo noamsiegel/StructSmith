@@ -145,6 +145,9 @@ export class ImportService {
                 steps: scenario.steps.map((step) => ({
                   ...step,
                   elementId: step.elementId ? mapId(step.elementId) : undefined,
+                  viewId: step.viewId ? mapId(step.viewId) : undefined,
+                  highlightElementIds: step.highlightElementIds?.map(mapId),
+                  highlightRelationshipIds: step.highlightRelationshipIds?.map(mapId),
                   relationshipId: step.relationshipId ? mapId(step.relationshipId) : undefined,
                 })),
               })),
