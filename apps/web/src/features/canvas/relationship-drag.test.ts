@@ -3,12 +3,14 @@ import type { ControlPoint } from "@structsmith/contracts";
 import { Position } from "@xyflow/react";
 import { createTestContext, createWorkspace } from "../../../../../tests/helpers";
 import { buildGraph } from "./graph";
+import { safeOrthogonalRoute } from "./orthogonalRouting";
 import {
   closestRelationshipSegment,
   manualRelationshipPath,
   moveRelationshipSegment,
   orthogonalRelationshipBends,
   slidingRelationshipLabel,
+  snapRelationshipSegmentDelta,
 } from "./relationshipGeometry";
 
 test("saved orthogonal routes follow moved endpoints without diagonal legs or redundant handles", () => {
@@ -433,4 +435,28 @@ test("close facing borders do not produce connector backtracking through the car
       expect(point[axis]).toBeLessThanOrEqual(Math.max(source[axis], target[axis]));
     }
   }
+});
+
+test("dragging a jog onto its neighbouring segment collapses both bends, never onto an endpoint border", () => {
+  const source = { point: { x: 0, y: 100 }, side: "right" as const };
+  const target = { point: { x: 400, y: 300 }, side: "left" as const };
+  const points = [
+    source.point,
+    { x: 100, y: 100 },
+    { x: 100, y: 104 },
+    { x: 300, y: 104 },
+    { x: 300, y: 300 },
+    target.point,
+  ];
+  const delta = snapRelationshipSegmentDelta(points, 2, { x: 0, y: -2 }, 6);
+  expect(delta).toEqual({ x: 0, y: -4 });
+  const bends = moveRelationshipSegment(points, 2, delta);
+  expect(safeOrthogonalRoute(source, target, [source.point, ...bends, target.point], [])).toEqual({
+    points: [source.point, { x: 300, y: 100 }, { x: 300, y: 300 }, target.point],
+    blocked: false,
+  });
+  expect(snapRelationshipSegmentDelta(points, 2, { x: 0, y: 3 }, 6)).toEqual({ x: 0, y: 3 });
+  // Segment 1's outer neighbour is the source anchor: aligning would run along its border.
+  expect(snapRelationshipSegmentDelta(points, 1, { x: -98, y: 0 }, 6)).toEqual({ x: -98, y: 0 });
+  expect(snapRelationshipSegmentDelta(points, 1, { x: 197, y: 0 }, 6)).toEqual({ x: 200, y: 0 });
 });

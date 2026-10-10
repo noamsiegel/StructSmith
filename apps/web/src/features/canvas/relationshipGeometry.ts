@@ -248,6 +248,35 @@ export function slidingRelationshipLabel(
     : anchor;
 }
 
+/**
+ * Snap a dragged segment onto the next parallel segment on either side, so the
+ * jog between them collapses. Endpoint anchors are skipped: aligning with them
+ * would lay the segment along the attached border.
+ */
+export function snapRelationshipSegmentDelta(
+  points: readonly ControlPoint[],
+  index: number,
+  delta: ControlPoint,
+  tolerance: number,
+): ControlPoint {
+  const start = points[index];
+  const end = points[index + 1];
+  if (!start || !end || (start.x !== end.x && start.y !== end.y)) return delta;
+  const axis = start.y === end.y ? "y" : "x";
+  const moved = start[axis] + delta[axis];
+  let best = delta[axis];
+  let distance = tolerance;
+  for (const neighbour of [points[index - 1], points[index + 2]]) {
+    if (!neighbour || neighbour === points[0] || neighbour === points[points.length - 1]) continue;
+    const gap = Math.abs(neighbour[axis] - moved);
+    if (gap <= distance) {
+      best = neighbour[axis] - start[axis];
+      distance = gap;
+    }
+  }
+  return { ...delta, [axis]: best };
+}
+
 /** Move a segment perpendicular to its axis; endpoint anchors never move. */
 export function moveRelationshipSegment(
   points: readonly ControlPoint[],

@@ -10,7 +10,7 @@ import { RelationshipArrow, RelationshipEdge } from "./RelationshipEdge";
 import type { ImplementationStatus } from "./statusOverlay";
 import "../../i18n";
 
-test("automatic Own return path avoids a generated-corner dogleg while authored bends remain", () => {
+test("automatic Own return path crosses other cards without detours while authored bends remain", () => {
   const { services, close } = createTestContext();
   try {
     const workspace = createWorkspace(services);
@@ -92,7 +92,8 @@ test("automatic Own return path avoids a generated-corner dogleg while authored 
           ),
         ),
       );
-    expect(render([])).toContain('d="M 2991,492 L 3000,492 L 3000,240 L 1601,240 L 1601,183"');
+    // FigJam-like: "Act on insights" sits between the endpoints; the route crosses it.
+    expect(render([])).toContain('d="M 2991,492 L 3015,492 L 3015,207 L 1601,207 L 1601,183"');
     expect(
       render([
         { x: 3100, y: 492 },

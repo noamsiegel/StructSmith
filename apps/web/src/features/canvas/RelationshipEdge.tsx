@@ -29,9 +29,9 @@ import {
 } from "./ConnectorEndpointHandle";
 import { borderEndpoint, type EndpointSide, snapAlignedBorderEndpoint } from "./endpointGeometry";
 import type { FlowEdge, FlowNode, RelationshipEdgeData } from "./graph";
-import { useConnectorLanes, useLabelPlacement, useRoutingObstacles } from "./LabelPlacement";
+import { useLabelPlacement } from "./LabelPlacement";
 import { closestLabelRoutePoint } from "./labelClearance";
-import { safeOrthogonalRoute } from "./orthogonalRouting";
+import { type RouteObstacle, safeOrthogonalRoute } from "./orthogonalRouting";
 import {
   closestRelationshipSegment,
   manualRelationshipPath,
@@ -40,6 +40,7 @@ import {
   relationshipDash,
   sideFromHandle,
   slidingRelationshipLabel,
+  snapRelationshipSegmentDelta,
 } from "./relationshipGeometry";
 import { statusColor, statusStroke } from "./statusOverlay";
 
@@ -129,7 +130,6 @@ function RelationshipEdgeComponent({
 }: EdgeProps & { data?: RelationshipEdgeData }) {
   const { t } = useTranslation();
   const flow = useReactFlow<FlowNode, FlowEdge>();
-  const obstacles = useRoutingObstacles();
   const { zoom } = useViewport();
   const markerId = `relationship-${useId().replace(/[^a-zA-Z0-9_-]/g, "")}`;
   const activeElementId = useEditorStore((state) =>
@@ -287,7 +287,8 @@ function RelationshipEdgeComponent({
           authoredBends,
         )
       : [];
-    const boxes = obstacles.filter((box) => box.id !== from.elementId && box.id !== to.elementId);
+    // FigJam-like: only the connected cards are obstacles; crossing other objects is allowed.
+    const boxes: RouteObstacle[] = [];
     for (const endpoint of [from, to]) {
       if (!endpoint.elementId) continue;
       const node = flow.getInternalNode(endpoint.elementId);
@@ -299,7 +300,6 @@ function RelationshipEdgeComponent({
     orthogonal,
     routePreview,
     savedBends,
-    obstacles,
     start.point.x,
     start.point.y,
     start.side,
@@ -310,46 +310,7 @@ function RelationshipEdgeComponent({
     end.elementId,
     flow,
   ]);
-  const laneRequest = useMemo(
-    () =>
-      orthogonal && !route.blocked
-        ? {
-            source: {
-              point: { x: start.point.x, y: start.point.y },
-              side: start.side,
-              elementId: start.elementId,
-            },
-            target: {
-              point: { x: end.point.x, y: end.point.y },
-              side: end.side,
-              elementId: end.elementId,
-            },
-            points: route.points,
-            obstacles,
-            manual: savedBends.length > 0 || routePreview !== null || endpointSaving,
-            createdAt: data?.relationship.createdAt ?? "",
-          }
-        : null,
-    [
-      orthogonal,
-      route,
-      start.point.x,
-      start.point.y,
-      start.side,
-      start.elementId,
-      end.point.x,
-      end.point.y,
-      end.side,
-      end.elementId,
-      obstacles,
-      savedBends.length,
-      routePreview,
-      endpointSaving,
-      data?.relationship.createdAt,
-    ],
-  );
-  const lanePoints = useConnectorLanes(id, laneRequest);
-  const routePoints = lanePoints ?? route.points;
+  const routePoints = route.points;
   const bends = routePoints.slice(1, -1);
   const labelPosition = data?.placement?.labelPosition ?? 0.5;
   const [path, defaultX, defaultY] =
@@ -411,7 +372,12 @@ function RelationshipEdgeComponent({
     const gesture = routeDrag.current;
     if (!gesture || gesture.keyboard) return;
     const point = flow.screenToFlowPosition({ x: event.clientX, y: event.clientY });
-    gesture.delta = { x: point.x - gesture.start.x, y: point.y - gesture.start.y };
+    gesture.delta = snapRelationshipSegmentDelta(
+      gesture.points,
+      gesture.index,
+      { x: point.x - gesture.start.x, y: point.y - gesture.start.y },
+      6 / zoom,
+    );
     gesture.current = moveRelationshipSegment(gesture.points, gesture.index, gesture.delta);
     setRoutePreview(gesture.current);
   };

@@ -85,17 +85,15 @@ and resets to Status on reload, without editing the model or coordinates.
   Automatic orthogonal routes become saved view geometry on the first drag;
   Reset appearance returns them to automatic routing. Positions, annotations,
   Section frames and affected routes save as one undoable change.
-- Orthogonal connectors approach attached borders from outside and avoid measured
-  cards, annotations and group titles with eight pixels of padding. Section
-  interiors remain traversable. Clear manual routes stay unchanged; invalid end
-  bends and obstructed segments are repaired for display in the editor and previews,
-  including existing/imported views. Saved positions and bends are not rewritten.
-  Automatic routes use endpoint intent only; generated corners do not constrain
-  the obstacle router. Section title obstacles match the visible compact header,
-  including its selected Fit control and full-width rename input.
-  Loose ends still avoid their former objects. If overlapping/crowded objects leave
-  no clear route, a red dashed connector and **Blocked route** label explain that
-  the objects need separating. Straight and curved routing retain their existing
+- Orthogonal connectors route like FigJam: they approach attached borders from
+  outside and keep eight pixels clear of their own source and target cards, but
+  cross other cards, annotations, Section titles and connectors instead of adding
+  detours. Clear manual routes stay unchanged; end bends that would pass through
+  their own card are repaired for display in the editor and previews, including
+  existing/imported views. Saved positions and bends are not rewritten.
+  Automatic routes use endpoint intent only. If the source and target overlap so
+  no clear route exists, a red dashed connector and **Blocked route** label
+  explain that the objects need separating. Straight and curved routing retain their existing
   behavior; they do not use orthogonal obstacle avoidance.
 - Automatic connector ends share border capacity across incoming and outgoing
   relationships. They fill the center and quarter positions first, then subdivide
@@ -103,11 +101,9 @@ and resets to Status on reload, without editing the model or coordinates.
   saved fractions/slots and loose endpoints stay unchanged; new center-handle
   connections remain automatic. Outer handles and dragged endpoints stay explicit.
   Connection handles render above card content and accept connections from either
-  direction. Orthogonal automatic routes reserve parallel lanes twelve canvas
-  pixels apart and prefer fewer turns. Saved manual bends keep their routes;
-  perpendicular crossings remain possible. Hovering a path/label, or focusing a
-  label, highlights the full connector. Fixed endpoint stubs or crowded diagrams
-  can still share space when separation is impossible; card safety takes priority.
+  direction. Automatic routes may overlap, so several connectors can share one
+  visible trunk. Hovering a path/label, or focusing a label, highlights the full
+  connector.
 - Moving an endpoint to another border, another object or between attached and
   loose resets its old bends and calculates a new route. Moving along the same
   border preserves the route. Inspector side changes follow the same rule.
@@ -137,7 +133,8 @@ and resets to Status on reload, without editing the model or coordinates.
   horizontal and snaps to the route. Arrow keys move along its leg; Shift moves
   ten units. Default placement favors horizontal legs.
 - Select a connector to show segment handles. Drag the line or a handle to move
-  that segment while retaining its endpoints. Arrow keys move perpendicular to
+  that segment while retaining its endpoints. Within six screen pixels of the next
+  parallel segment it snaps into line, and the jog between them disappears. Arrow keys move perpendicular to
   the segment; Shift moves ten units. Escape or pointer cancellation discards
   an in-progress drag. A completed gesture is one undoable saved change.
   Segment edits save the authored bends and edited segment, leaving automatic

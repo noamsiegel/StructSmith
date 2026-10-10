@@ -64,36 +64,13 @@ function compact(
   return result;
 }
 
-function laneClear(a: ControlPoint, b: ControlPoint, lanes: readonly ControlPoint[][]): boolean {
-  return lanes.every((points) =>
-    points.slice(1).every((end, index) => {
-      const begin = points[index] as ControlPoint;
-      if (a.y === b.y && begin.y === end.y)
-        return (
-          Math.abs(a.y - begin.y) >= 12 - 1e-6 ||
-          Math.max(a.x, b.x) <= Math.min(begin.x, end.x) + 1e-6 ||
-          Math.min(a.x, b.x) >= Math.max(begin.x, end.x) - 1e-6
-        );
-      if (a.x === b.x && begin.x === end.x)
-        return (
-          Math.abs(a.x - begin.x) >= 12 - 1e-6 ||
-          Math.max(a.y, b.y) <= Math.min(begin.y, end.y) + 1e-6 ||
-          Math.min(a.y, b.y) >= Math.max(begin.y, end.y) - 1e-6
-        );
-      return true;
-    }),
-  );
-}
-
-/** Obstacle borders and neighboring lanes form the search grid. */
+/** Obstacle borders form the search grid. */
 function detour(
   start: ControlPoint,
   end: ControlPoint,
   boxes: readonly LabelBox[],
-  lanes: readonly ControlPoint[][] = [],
 ): ControlPoint[] | null {
-  const available = (a: ControlPoint, b: ControlPoint) =>
-    clear(a, b, boxes) && laneClear(a, b, lanes);
+  const available = (a: ControlPoint, b: ControlPoint) => clear(a, b, boxes);
   for (const points of [
     [start, end],
     [start, { x: end.x, y: start.y }, end],
@@ -102,22 +79,12 @@ function detour(
     if (points.slice(1).every((point, index) => available(points[index] as ControlPoint, point)))
       return compact(points);
   }
-  const xs = [
-    ...new Set([
-      start.x,
-      end.x,
-      ...boxes.flatMap((b) => [b.x, b.x + b.width]),
-      ...lanes.flatMap((points) => points.flatMap((p) => [p.x - 12, p.x, p.x + 12])),
-    ]),
-  ].sort((a, b) => a - b);
-  const ys = [
-    ...new Set([
-      start.y,
-      end.y,
-      ...boxes.flatMap((b) => [b.y, b.y + b.height]),
-      ...lanes.flatMap((points) => points.flatMap((p) => [p.y - 12, p.y, p.y + 12])),
-    ]),
-  ].sort((a, b) => a - b);
+  const xs = [...new Set([start.x, end.x, ...boxes.flatMap((b) => [b.x, b.x + b.width])])].sort(
+    (a, b) => a - b,
+  );
+  const ys = [...new Set([start.y, end.y, ...boxes.flatMap((b) => [b.y, b.y + b.height])])].sort(
+    (a, b) => a - b,
+  );
   const point = (id: number): ControlPoint => ({
     x: xs[Math.floor(id / 3) % xs.length] as number,
     y: ys[Math.floor(id / (3 * xs.length))] as number,
@@ -187,8 +154,7 @@ function detour(
       const id = (ny * xs.length + nx) * 3 + direction;
       const b = point(id);
       if (!available(a, b)) continue;
-      const turn = lanes.length && current.id % 3 && current.id % 3 !== direction ? 24 : 0;
-      const cost = current.cost + Math.abs(a.x - b.x) + Math.abs(a.y - b.y) + turn;
+      const cost = current.cost + Math.abs(a.x - b.x) + Math.abs(a.y - b.y);
       if (cost >= (costs.get(id) ?? Infinity)) continue;
       costs.set(id, cost);
       previous.set(id, current.id);
@@ -204,7 +170,6 @@ export function safeOrthogonalRoute(
   target: RouteEndpoint,
   points: readonly ControlPoint[],
   obstacles: readonly RouteObstacle[],
-  lanes: readonly ControlPoint[][] = [],
 ): { points: ControlPoint[]; blocked: boolean } {
   const boxes = obstacles.map((box) => ({
     ...box,
@@ -218,7 +183,6 @@ export function safeOrthogonalRoute(
     normalized.length > 1 &&
     outward(source, normalized[1] as ControlPoint) &&
     outward(target, normalized[normalized.length - 2] as ControlPoint) &&
-    normalized.slice(1).every((b, i) => laneClear(normalized[i] as ControlPoint, b, lanes)) &&
     normalized.slice(1).every((b, index) =>
       clear(
         normalized[index] as ControlPoint,
@@ -281,7 +245,7 @@ export function safeOrthogonalRoute(
     )
   )
     return { points: [...points], blocked: true };
-  const hints = (lanes.length ? [] : points)
+  const hints = points
     .slice(
       outward(source, points[1] ?? target.point) ? 1 : 2,
       outward(target, points[points.length - 2] ?? source.point) ? -1 : -2,
@@ -289,7 +253,7 @@ export function safeOrthogonalRoute(
     .filter((p) => !boxes.some((box) => inside(p, box)));
   const route = [source.point, start];
   for (const next of [...hints, end]) {
-    const part = detour(route[route.length - 1] as ControlPoint, next, boxes, lanes);
+    const part = detour(route[route.length - 1] as ControlPoint, next, boxes);
     if (!part) return { points: [...points], blocked: true };
     route.push(...part.slice(1));
   }

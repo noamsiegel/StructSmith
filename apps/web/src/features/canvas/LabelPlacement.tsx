@@ -11,39 +11,6 @@ import {
 } from "react";
 import { boundaryHeaderHeight, type FlowNode } from "./graph";
 import { clearRelationshipLabel, type LabelBox } from "./labelClearance";
-import { type RouteEndpoint, type RouteObstacle, safeOrthogonalRoute } from "./orthogonalRouting";
-
-interface RoutingRequest {
-  source: RouteEndpoint;
-  target: RouteEndpoint;
-  points: ControlPoint[];
-  obstacles: readonly RouteObstacle[];
-  manual: boolean;
-  createdAt: string;
-}
-
-export function spaceConnectorRoutes(requests: ReadonlyMap<string, RoutingRequest>) {
-  const result = new Map<string, ControlPoint[]>();
-  const lanes: ControlPoint[][] = [];
-  const ordered = [...requests].sort(
-    ([, a], [, b]) => Number(b.manual) - Number(a.manual) || a.createdAt.localeCompare(b.createdAt),
-  );
-  for (const [id, request] of ordered) {
-    const spaced = request.manual
-      ? null
-      : safeOrthogonalRoute(
-          request.source,
-          request.target,
-          request.points,
-          request.obstacles,
-          lanes,
-        );
-    const points = spaced && !spaced.blocked ? spaced.points : request.points;
-    result.set(id, points);
-    lanes.push(points);
-  }
-  return result;
-}
 
 interface LabelRequest {
   showLabel: boolean;
@@ -80,10 +47,7 @@ export function labelObstacles(
 
 const LabelPlacementContext = createContext<{
   positions: ReadonlyMap<string, ControlPoint>;
-  routes: ReadonlyMap<string, ControlPoint[]>;
-  registerRoute: (id: string, request: RoutingRequest | null) => void;
   headers: readonly LabelBox[];
-  routingObstacles: readonly RouteObstacle[];
   register: (id: string, request: LabelRequest | null) => void;
   registerHeader: (id: string, size: Pick<LabelBox, "width" | "height"> | null) => void;
 } | null>(null);
@@ -95,17 +59,6 @@ export function LabelPlacementProvider({
   nodes: readonly FlowNode[];
   children: ReactNode;
 }) {
-  const [routeRequests, setRouteRequests] = useState(new Map<string, RoutingRequest>());
-  const registerRoute = useCallback((id: string, request: RoutingRequest | null) => {
-    setRouteRequests((current) => {
-      if (JSON.stringify(current.get(id) ?? null) === JSON.stringify(request)) return current;
-      const next = new Map(current);
-      if (request) next.set(id, request);
-      else next.delete(id);
-      return next;
-    });
-  }, []);
-  const routes = useMemo(() => spaceConnectorRoutes(routeRequests), [routeRequests]);
   const [requests, setRequests] = useState(new Map<string, LabelRequest>());
   const [headerSizes, setHeaderSizes] = useState(
     new Map<string, Pick<LabelBox, "width" | "height">>(),
@@ -162,30 +115,14 @@ export function LabelPlacementProvider({
       ),
     [nodes, headerSizes],
   );
-  const routingObstacles = useMemo(
-    () =>
-      nodes
-        .filter((node) => !node.hidden)
-        .flatMap((node) =>
-          labelObstacles([node], headerSizes).map((box) => ({ id: node.id, ...box })),
-        ),
-    [nodes, headerSizes],
-  );
-  const routingCache = useRef(routingObstacles);
-  if (JSON.stringify(routingCache.current) !== JSON.stringify(routingObstacles))
-    routingCache.current = routingObstacles;
-  const stableRoutingObstacles = routingCache.current;
   const value = useMemo(
     () => ({
       positions,
-      routes,
-      registerRoute,
       headers,
-      routingObstacles: stableRoutingObstacles,
       register,
       registerHeader,
     }),
-    [positions, routes, registerRoute, headers, stableRoutingObstacles, register, registerHeader],
+    [positions, headers, register, registerHeader],
   );
   return <LabelPlacementContext.Provider value={value}>{children}</LabelPlacementContext.Provider>;
 }
@@ -221,18 +158,4 @@ export function useLabelPlacement(id: string, request: LabelRequest | null) {
   }, [id, request, register]);
   useLayoutEffect(() => () => register?.(id, null), [id, register]);
   return { point: context?.positions.get(id) ?? null, headers: context?.headers ?? [] };
-}
-
-export function useRoutingObstacles() {
-  return useContext(LabelPlacementContext)?.routingObstacles ?? [];
-}
-
-export function useConnectorLanes(id: string, request: RoutingRequest | null) {
-  const context = useContext(LabelPlacementContext);
-  const register = context?.registerRoute;
-  useLayoutEffect(() => {
-    register?.(id, request);
-  }, [id, request, register]);
-  useLayoutEffect(() => () => register?.(id, null), [id, register]);
-  return context?.routes.get(id) ?? null;
 }
