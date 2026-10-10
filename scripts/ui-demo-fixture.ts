@@ -457,6 +457,56 @@ export function buildUiDemoDocument(): WorkspaceDocument {
         scopeElementId: "demo-nav-sections",
         settings: {
           preferredDetailViews: { "demo-section-process": "demo-process" },
+          // Exercises intro highlights, a step inside the Subprocess's detail view,
+          // parallel highlights there and the return to this view.
+          scenarios: [
+            {
+              id: "demo-scenario-drill",
+              name: "Process a request end to end",
+              steps: [
+                {
+                  title: "Who takes part",
+                  description: "An introduction lights up every step on this view.",
+                  highlightElementIds: [
+                    "demo-section-input",
+                    "demo-section-check",
+                    "demo-section-process",
+                    "demo-section-result",
+                  ],
+                },
+                { elementId: "demo-section-input", title: "A request arrives" },
+                {
+                  elementId: "demo-section-check",
+                  relationshipId: "demo-drill-edge-0",
+                  title: "Inspect it",
+                },
+                {
+                  elementId: "demo-section-process",
+                  relationshipId: "demo-drill-edge-1",
+                  title: "Ready, so process it",
+                },
+                {
+                  elementId: "demo-process-start",
+                  viewId: "demo-process",
+                  title: "Inside the Subprocess: prepare the job",
+                },
+                {
+                  elementId: "demo-process-validate",
+                  viewId: "demo-process",
+                  relationshipId: "demo-drill-edge-3",
+                  title: "Verify identity",
+                },
+                {
+                  elementId: "demo-process-deliver",
+                  viewId: "demo-process",
+                  relationshipId: "demo-drill-edge-7",
+                  highlightRelationshipIds: ["demo-drill-edge-4"],
+                  title: "Deliver and store in parallel",
+                },
+                { elementId: "demo-section-result", title: "Back on the overview: complete" },
+              ],
+            },
+          ],
           sectionFrames: {
             "boundary:demo-section-outer": { x: -60, y: -70, width: 2130, height: 570 },
             "boundary:demo-section-inner": { x: -25, y: -20, width: 1060, height: 390 },

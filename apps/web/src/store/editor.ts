@@ -30,6 +30,16 @@ export interface DiagramClipboard {
   pasteCount: number;
 }
 
+/** A walkthrough in progress; it outlives view changes because steps can open other views. */
+export interface ScenarioPlayback {
+  /** The view that owns the scenario. */
+  ownerViewId: string;
+  scenarioId: string;
+  index: number;
+  /** Past the last step: the panel shows the end card. */
+  finished?: boolean;
+}
+
 export type ExplorerTab = "model" | "views" | "presales";
 export type BottomPanel = "issues" | "activity" | "snapshots" | null;
 
@@ -58,9 +68,11 @@ interface EditorState {
   paletteOpen: boolean;
   paletteBoundaryId: string | null;
   connectFrom: string | null;
-  focusRequest: { elementId: string; nonce: number } | null;
-  /** A copied scenario reference asks the view's scenario panel to start that walkthrough. */
-  scenarioRequest: string | null;
+  /** Fit the camera to an element (and optionally others), selecting it unless select is false. */
+  focusRequest: { elementId: string; also?: string[]; select?: boolean; nonce: number } | null;
+  playback: ScenarioPlayback | null;
+  /** Viewer mode: editing chrome and side panels are hidden while a walkthrough plays. */
+  presenting: boolean;
   pendingSave: number;
   clipboard: DiagramClipboard | null;
 
@@ -75,8 +87,9 @@ interface EditorState {
   setPaletteOpen: (open: boolean) => void;
   openElementPalette: (boundaryId?: string | null) => void;
   setConnectFrom: (elementId: string | null) => void;
-  requestFocus: (elementId: string) => void;
-  requestScenario: (scenarioId: string | null) => void;
+  requestFocus: (elementId: string, options?: { also?: string[]; select?: boolean }) => void;
+  setPlayback: (playback: ScenarioPlayback | null) => void;
+  setPresenting: (presenting: boolean) => void;
   beginSave: () => void;
   endSave: () => void;
   setClipboard: (clipboard: DiagramClipboard | null) => void;
@@ -94,7 +107,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   paletteBoundaryId: null,
   connectFrom: null,
   focusRequest: null,
-  scenarioRequest: null,
+  playback: null,
+  presenting: false,
   pendingSave: 0,
   clipboard: null,
 
@@ -117,8 +131,12 @@ export const useEditorStore = create<EditorState>((set) => ({
     set({ paletteOpen, ...(paletteOpen ? {} : { paletteBoundaryId: null }) }),
   openElementPalette: (paletteBoundaryId = null) => set({ paletteOpen: true, paletteBoundaryId }),
   setConnectFrom: (connectFrom) => set({ connectFrom }),
-  requestFocus: (elementId) => set({ focusRequest: { elementId, nonce: Date.now() } }),
-  requestScenario: (scenarioRequest) => set({ scenarioRequest }),
+  requestFocus: (elementId, options) =>
+    set({ focusRequest: { elementId, ...options, nonce: Date.now() } }),
+  // Presenting only makes sense during a walkthrough, so stopping one ends it too.
+  setPlayback: (playback) =>
+    set((state) => ({ playback, presenting: playback ? state.presenting : false })),
+  setPresenting: (presenting) => set({ presenting }),
   beginSave: () => set((state) => ({ pendingSave: state.pendingSave + 1 })),
   endSave: () => set((state) => ({ pendingSave: Math.max(0, state.pendingSave - 1) })),
   setClipboard: (clipboard) => set({ clipboard }),

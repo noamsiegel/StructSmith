@@ -20,6 +20,9 @@ export function visitView(
   targetId: string,
 ): ViewNavigation {
   if (current.viewId === targetId) return state;
+  // Revisiting a view already in the trail returns to it, so breadcrumbs never repeat a view.
+  const earlier = state.back.findIndex((entry) => entry.viewId === targetId);
+  if (earlier >= 0) return returnToView(state, current, earlier);
   return {
     back: [...state.back, current].slice(-50),
     saved: { ...state.saved, [current.viewId]: current },

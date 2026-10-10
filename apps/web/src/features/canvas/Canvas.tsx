@@ -11,7 +11,6 @@ import type {
   ViewDetail,
   ViewElement,
   ViewRelationshipPatch,
-  ViewScenarioStep,
   Workspace,
 } from "@structsmith/contracts";
 import { deriveExpandedView, estimateElementSize } from "@structsmith/domain";
@@ -54,6 +53,7 @@ import type { ViewLocation } from "../navigation/history";
 import { InlineExpansionContext } from "../navigation/InlineExpansion";
 import { useCopyAgentReference } from "../reference/useCopyAgentReference";
 import { ScenarioPanel } from "../scenarios/ScenarioPanel";
+import type { ScenarioSpotlight } from "../scenarios/spotlight";
 import { AnnotationEditor } from "./AnnotationEditor";
 import { AnnotationNode } from "./AnnotationNode";
 import {
@@ -140,7 +140,6 @@ interface CanvasProps {
   statusOverlay: StatusOverlay;
   tagFocus: string | null;
   onOpenDetails: (elementId: string) => void;
-  onOpenScenario: (viewId: string, scenarioId: string) => void;
   canOpenDetails: (elementId: string) => boolean;
 }
 
@@ -157,7 +156,6 @@ export function Canvas({
   tagFocus,
   onOpenDetails,
   canOpenDetails,
-  onOpenScenario,
 }: CanvasProps) {
   const { t } = useTranslation();
   const { t: ta } = useTranslation("annotations");
@@ -181,7 +179,8 @@ export function Canvas({
 
   const [editingAnnotationId, setEditingAnnotationId] = useState<string | null>(null);
   const [previewElementId, setPreviewElementId] = useState<string | null>(null);
-  const [scenarioStep, setScenarioStep] = useState<ViewScenarioStep | null>(null);
+  const [spotlight, setSpotlight] = useState<ScenarioSpotlight | null>(null);
+  const presenting = useEditorStore((state) => state.presenting);
   const expansion = useMemo(
     () => deriveExpandedView(view, elements, NO_INLINE_EXPANSIONS),
     [view, elements],
@@ -196,13 +195,24 @@ export function Canvas({
     });
     return { ...built, ...focusGraphByTag(built.nodes, built.edges, tagFocus) };
   }, [expansion.view, elements, relationships, records, statusOverlay, tagFocus]);
-  const onScenarioStep = useCallback(
-    (step: ViewScenarioStep | null) => {
-      setScenarioStep(step);
-      if (step?.elementId) {
-        select({ type: "element", id: step.elementId });
-        useEditorStore.getState().requestFocus(step.elementId);
-      }
+  const spotlightCamera = useRef("");
+  const onSpotlight = useCallback(
+    (next: ScenarioSpotlight | null) => {
+      setSpotlight(next);
+      const lit = next ? [...next.elementIds] : [];
+      const focus = next?.focusElementId ?? lit[0];
+      // Model refreshes rebuild the spotlight; only a different step moves the camera.
+      const camera = next ? `${next.current}:${focus}:${lit.join()}` : "";
+      if (camera === spotlightCamera.current) return;
+      spotlightCamera.current = camera;
+      if (!next || !focus) return;
+      // Presenting keeps the inspector and editing toolbars out of the way: move the camera only.
+      const pick = !useEditorStore.getState().presenting && Boolean(next.focusElementId);
+      if (pick) select({ type: "element", id: focus });
+      useEditorStore.getState().requestFocus(focus, {
+        also: lit.filter((id) => id !== focus),
+        select: pick,
+      });
     },
     [select],
   );
@@ -356,22 +366,22 @@ export function Canvas({
    * alone cannot show it.
    */
   const focusElement = useCallback(
-    (request: { elementId: string; nonce: number }) => {
+    (request: { elementId: string; also?: string[]; select?: boolean; nonce: number }) => {
       // One-shot: a handled request must not refocus when another view loads.
       useEditorStore.setState((state) =>
         state.focusRequest?.nonce === request.nonce ? { focusRequest: null } : state,
       );
-      const node = flow.getNode(request.elementId);
-      if (node)
+      const targets = [request.elementId, ...(request.also ?? [])].filter((id) => flow.getNode(id));
+      if (targets.length)
         void flow.fitView({
-          nodes: [{ id: node.id }],
+          nodes: targets.map((id) => ({ id })),
           duration: 350,
           maxZoom: 1.2,
           padding: CANVAS_FIT_PADDING,
         });
       setNodes((current) =>
         current.map((candidate) => {
-          const shouldSelect = candidate.id === request.elementId;
+          const shouldSelect = request.select !== false && candidate.id === request.elementId;
           return candidate.selected === shouldSelect
             ? candidate
             : { ...candidate, selected: shouldSelect };
@@ -2010,14 +2020,33 @@ export function Canvas({
     return applyNodeColors(
       [...frames, ...expandedFrames, ...nodes.filter((node) => !transformed.has(node.id))].map(
         (node): FlowNode => {
-          const focused = scenarioStep?.elementId === node.id;
+          const focused = spotlight?.elementIds.has(node.id) === true;
+          // A step that lights something dims the rest; boundaries stay as context.
+          const dimmed =
+            Boolean(spotlight?.elementIds.size) && !focused && node.type !== "boundary";
+          const style = dimmed ? { ...node.style, opacity: 0.3 } : node.style;
           // Elements outline their own silhouette (a diamond stays a diamond); other nodes are rectangles.
-          if (node.type === "element")
-            return focused ? { ...node, data: { ...node.data, scenarioFocus: true } } : node;
+          if (node.type === "element") {
+            const badges = spotlight?.badges.get(node.id);
+            return focused || dimmed || badges
+              ? {
+                  ...node,
+                  style,
+                  data: {
+                    ...node.data,
+                    scenarioFocus: focused,
+                    ...(badges
+                      ? { scenarioBadges: badges, scenarioCurrent: spotlight?.current }
+                      : {}),
+                  },
+                }
+              : node;
+          }
           const className = focused ? "ring-2 ring-primary rounded-lg" : undefined;
           if (node.type !== "annotation") return { ...node, className };
           return {
             ...node,
+            style,
             className,
             data: {
               ...node.data,
@@ -2063,7 +2092,7 @@ export function Canvas({
     view.settings.showDescriptions,
     selection,
     expansion.expandedElementIds,
-    scenarioStep,
+    spotlight,
   ]);
 
   const changeRelationshipPresentation = useCallback(
@@ -2093,19 +2122,21 @@ export function Canvas({
   const editableEdges = useMemo(
     () =>
       edges.map((edge) => {
-        const arrival =
-          scenarioStep?.relationshipId !== undefined &&
-          edge.data?.relationshipIds?.includes(scenarioStep.relationshipId) === true;
+        const ids = edge.data?.relationshipIds ?? [];
+        const lit = ids.some((id) => spotlight?.relationshipIds.has(id));
+        const spotlit = Boolean(spotlight?.elementIds.size || spotlight?.relationshipIds.size);
         return {
           ...edge,
           style: {
             ...edge.style,
-            opacity: scenarioStep ? (arrival ? 1 : 0.25) : edge.style?.opacity,
+            opacity: spotlit ? (lit ? 1 : 0.2) : edge.style?.opacity,
           },
           data: edge.data
             ? {
                 ...edge.data,
-                replying: arrival && scenarioStep?.response === true,
+                replying:
+                  spotlight?.replyingRelationshipId !== undefined &&
+                  ids.includes(spotlight.replyingRelationshipId),
                 onRouteRendered: (points: ControlPoint[]) => {
                   renderedRoutes.current.set(edge.id, points);
                 },
@@ -2178,7 +2209,7 @@ export function Canvas({
             : undefined,
         };
       }),
-    [edges, changeRelationshipPresentation, scenarioStep, applyOperations, t, view.id],
+    [edges, changeRelationshipPresentation, spotlight, applyOperations, t, view.id],
   );
 
   return (
@@ -2212,6 +2243,10 @@ export function Canvas({
             connectionMode={ConnectionMode.Loose}
             onConnect={onConnect}
             edgesReconnectable={false}
+            // Presenting is read-only: the walkthrough must not move or rewire anything.
+            nodesDraggable={!presenting}
+            nodesConnectable={!presenting}
+            elementsSelectable={!presenting}
             onSelectionChange={onSelectionChange}
             onNodeClick={onNodeClick}
             onNodeDoubleClick={(event, node) => {
@@ -2293,23 +2328,24 @@ export function Canvas({
                 </svg>
               </ViewportPortal>
             )}
-            <Panel position="top-left" className="z-40">
+            <Panel position="top-left" className="z-40!">
               <ScenarioPanel
                 key={view.id}
                 workspaceId={workspaceId}
                 view={view}
                 elements={elements}
                 relationships={relationships}
-                onStep={onScenarioStep}
-                onOpenScenario={onOpenScenario}
+                onSpotlight={onSpotlight}
               />
             </Panel>
-            <CanvasComments
-              key={view.id}
-              workspaceId={workspaceId}
-              view={view}
-              canvasRef={canvasRef}
-            />
+            {!presenting && (
+              <CanvasComments
+                key={view.id}
+                workspaceId={workspaceId}
+                view={view}
+                canvasRef={canvasRef}
+              />
+            )}
             <Background
               variant={BackgroundVariant.Dots}
               gap={18}
@@ -2325,37 +2361,41 @@ export function Canvas({
                 <Maximize />
               </ControlButton>
             </Controls>
-            <MiniMap
-              pannable
-              zoomable
-              position="bottom-right"
-              style={{ bottom: 96 }}
-              nodeStrokeWidth={2}
-              maskColor="transparent"
-            />
+            {!presenting && (
+              <MiniMap
+                pannable
+                zoomable
+                position="bottom-right"
+                style={{ bottom: 96 }}
+                nodeStrokeWidth={2}
+                maskColor="transparent"
+              />
+            )}
           </ReactFlow>
         </LabelPlacementProvider>
 
-        <SelectionColorToolbar
-          workspaceId={workspaceId}
-          view={view}
-          nodes={allNodes}
-          edges={editableEdges}
-        >
-          {typeElement && (
-            <ElementTypePicker
-              element={typeElement}
-              elements={elements}
-              disabled={applyOperations.isPending}
-              onChange={(data) =>
-                applyOperations.mutate({
-                  label: t("elementTypes.changed"),
-                  operations: [{ op: "updateElement", elementId: typeElement.id, data }],
-                })
-              }
-            />
-          )}
-        </SelectionColorToolbar>
+        {!presenting && (
+          <SelectionColorToolbar
+            workspaceId={workspaceId}
+            view={view}
+            nodes={allNodes}
+            edges={editableEdges}
+          >
+            {typeElement && (
+              <ElementTypePicker
+                element={typeElement}
+                elements={elements}
+                disabled={applyOperations.isPending}
+                onChange={(data) =>
+                  applyOperations.mutate({
+                    label: t("elementTypes.changed"),
+                    operations: [{ op: "updateElement", elementId: typeElement.id, data }],
+                  })
+                }
+              />
+            )}
+          </SelectionColorToolbar>
+        )}
         {editingAnnotationId &&
           view.settings.annotations.find((item) => item.id === editingAnnotationId) && (
             <AnnotationEditor
@@ -2389,154 +2429,157 @@ export function Canvas({
               }}
             />
           )}
-        <CreationToolbar
-          workspaceId={workspaceId}
-          view={view}
-          onCreateAnnotation={(kind) => {
-            const bounds = canvasRef.current?.getBoundingClientRect();
-            const position = bounds
-              ? flow.screenToFlowPosition({
-                  x: bounds.left + bounds.width / 2 - 140,
-                  y: bounds.top + bounds.height / 2 - 60,
-                })
-              : { x: 0, y: 0 };
-            const id = `annotation-${crypto.randomUUID().slice(0, 12)}`;
-            applyOperations.mutate(
-              {
-                label: ta("created"),
-                operations: [
-                  {
-                    op: "createViewAnnotation",
-                    viewId: view.id,
-                    data: {
-                      id,
-                      ...position,
-                      width: kind === "table" ? 420 : 280,
-                      height: kind === "note" ? 180 : 60,
-                      ...(kind === "table"
-                        ? {
-                            kind,
-                            cells: [
-                              ["", "", ""],
-                              ["", "", ""],
-                            ],
-                          }
-                        : { kind, text: ta(kind === "text" ? "newText" : "newNote") }),
+        {!presenting && (
+          <CreationToolbar
+            workspaceId={workspaceId}
+            view={view}
+            onCreateAnnotation={(kind) => {
+              const bounds = canvasRef.current?.getBoundingClientRect();
+              const position = bounds
+                ? flow.screenToFlowPosition({
+                    x: bounds.left + bounds.width / 2 - 140,
+                    y: bounds.top + bounds.height / 2 - 60,
+                  })
+                : { x: 0, y: 0 };
+              const id = `annotation-${crypto.randomUUID().slice(0, 12)}`;
+              applyOperations.mutate(
+                {
+                  label: ta("created"),
+                  operations: [
+                    {
+                      op: "createViewAnnotation",
+                      viewId: view.id,
+                      data: {
+                        id,
+                        ...position,
+                        width: kind === "table" ? 420 : 280,
+                        height: kind === "note" ? 180 : 60,
+                        ...(kind === "table"
+                          ? {
+                              kind,
+                              cells: [
+                                ["", "", ""],
+                                ["", "", ""],
+                              ],
+                            }
+                          : { kind, text: ta(kind === "text" ? "newText" : "newNote") }),
+                      },
                     },
-                  },
-                ],
-              },
-              {
-                onSuccess: () => {
-                  select({ type: "annotation", id });
-                  setEditingAnnotationId(id);
+                  ],
                 },
-              },
-            );
-          }}
-          onCreateSection={() => {
-            const bounds = canvasRef.current?.getBoundingClientRect();
-            const point = bounds
-              ? flow.screenToFlowPosition({
-                  x: bounds.left + bounds.width / 2 - 180,
-                  y: bounds.top + bounds.height / 2 - 120,
-                })
-              : { x: 0, y: 0 };
-            const id = `section-${crypto.randomUUID().slice(0, 12)}`;
-            const selectedIds =
-              selection.type === "elements"
-                ? selection.ids
-                : selection.type === "element"
-                  ? [selection.id]
-                  : [];
-            const selectedNodes = nodes.filter(
-              (node) =>
-                selectedIds.includes(node.id) || (node.type === "annotation" && node.selected),
-            );
-            const x = selectedNodes.length
-              ? Math.min(...selectedNodes.map((node) => node.position.x)) - 28
-              : point.x;
-            const y = selectedNodes.length
-              ? Math.min(...selectedNodes.map((node) => node.position.y)) - 64
-              : point.y;
-            const width = selectedNodes.length
-              ? Math.max(
-                  ...selectedNodes.map(
-                    (node) => node.position.x + (node.measured?.width ?? NODE_WIDTH),
-                  ),
-                ) -
-                x +
-                28
-              : 420;
-            const height = selectedNodes.length
-              ? Math.max(
-                  ...selectedNodes.map(
-                    (node) => node.position.y + (node.measured?.height ?? NODE_HEIGHT),
-                  ),
-                ) -
-                y +
-                28
-              : 280;
-            applyOperations.mutate(
-              {
-                label: t("sections.add"),
-                operations: [
-                  {
-                    op: "createBoundary",
-                    data: {
-                      id,
-                      viewId: view.id,
-                      kind: "custom",
-                      parentBoundaryId:
-                        selection.type === "boundary" &&
-                        boundaries.some(
-                          (boundary) => boundary.id === selection.id && boundary.kind === "custom",
-                        )
-                          ? selection.id
-                          : null,
-                      layer: view.settings.boundaryLayer,
-                      name: t("sections.newName"),
-                      elementIds: selectedIds.filter((elementId) =>
-                        view.elements.some((entry) => entry.elementId === elementId),
-                      ),
-                    },
+                {
+                  onSuccess: () => {
+                    select({ type: "annotation", id });
+                    setEditingAnnotationId(id);
                   },
-                  ...nodes
-                    .filter((node) => node.type === "annotation" && node.selected)
-                    .map((node) => ({
-                      op: "updateViewAnnotation" as const,
+                },
+              );
+            }}
+            onCreateSection={() => {
+              const bounds = canvasRef.current?.getBoundingClientRect();
+              const point = bounds
+                ? flow.screenToFlowPosition({
+                    x: bounds.left + bounds.width / 2 - 180,
+                    y: bounds.top + bounds.height / 2 - 120,
+                  })
+                : { x: 0, y: 0 };
+              const id = `section-${crypto.randomUUID().slice(0, 12)}`;
+              const selectedIds =
+                selection.type === "elements"
+                  ? selection.ids
+                  : selection.type === "element"
+                    ? [selection.id]
+                    : [];
+              const selectedNodes = nodes.filter(
+                (node) =>
+                  selectedIds.includes(node.id) || (node.type === "annotation" && node.selected),
+              );
+              const x = selectedNodes.length
+                ? Math.min(...selectedNodes.map((node) => node.position.x)) - 28
+                : point.x;
+              const y = selectedNodes.length
+                ? Math.min(...selectedNodes.map((node) => node.position.y)) - 64
+                : point.y;
+              const width = selectedNodes.length
+                ? Math.max(
+                    ...selectedNodes.map(
+                      (node) => node.position.x + (node.measured?.width ?? NODE_WIDTH),
+                    ),
+                  ) -
+                  x +
+                  28
+                : 420;
+              const height = selectedNodes.length
+                ? Math.max(
+                    ...selectedNodes.map(
+                      (node) => node.position.y + (node.measured?.height ?? NODE_HEIGHT),
+                    ),
+                  ) -
+                  y +
+                  28
+                : 280;
+              applyOperations.mutate(
+                {
+                  label: t("sections.add"),
+                  operations: [
+                    {
+                      op: "createBoundary",
+                      data: {
+                        id,
+                        viewId: view.id,
+                        kind: "custom",
+                        parentBoundaryId:
+                          selection.type === "boundary" &&
+                          boundaries.some(
+                            (boundary) =>
+                              boundary.id === selection.id && boundary.kind === "custom",
+                          )
+                            ? selection.id
+                            : null,
+                        layer: view.settings.boundaryLayer,
+                        name: t("sections.newName"),
+                        elementIds: selectedIds.filter((elementId) =>
+                          view.elements.some((entry) => entry.elementId === elementId),
+                        ),
+                      },
+                    },
+                    ...nodes
+                      .filter((node) => node.type === "annotation" && node.selected)
+                      .map((node) => ({
+                        op: "updateViewAnnotation" as const,
+                        viewId: view.id,
+                        annotationId: annotationId(node.id),
+                        data: { sectionId: id },
+                      })),
+                    {
+                      op: "updateView",
                       viewId: view.id,
-                      annotationId: annotationId(node.id),
-                      data: { sectionId: id },
-                    })),
-                  {
-                    op: "updateView",
-                    viewId: view.id,
-                    data: {
-                      settings: {
-                        showBoundaries: true,
-                        sectionFrames: {
-                          ...sectionFrames,
-                          [`boundary:${id}`]: { x, y, width, height },
+                      data: {
+                        settings: {
+                          showBoundaries: true,
+                          sectionFrames: {
+                            ...sectionFrames,
+                            [`boundary:${id}`]: { x, y, width, height },
+                          },
                         },
                       },
                     },
-                  },
-                ],
-              },
-              { onSuccess: () => select({ type: "boundary", id }) },
-            );
-          }}
-          getCreationPoint={() => {
-            const bounds = canvasRef.current?.getBoundingClientRect();
-            return bounds
-              ? flow.screenToFlowPosition({
-                  x: bounds.left + bounds.width / 2,
-                  y: bounds.top + bounds.height / 2,
-                })
-              : { x: 0, y: 0 };
-          }}
-        />
+                  ],
+                },
+                { onSuccess: () => select({ type: "boundary", id }) },
+              );
+            }}
+            getCreationPoint={() => {
+              const bounds = canvasRef.current?.getBoundingClientRect();
+              return bounds
+                ? flow.screenToFlowPosition({
+                    x: bounds.left + bounds.width / 2,
+                    y: bounds.top + bounds.height / 2,
+                  })
+                : { x: 0, y: 0 };
+            }}
+          />
+        )}
         {graph.nodes.length === 0 && (
           <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-1 text-center">
             <p className="text-sm font-medium">{t("canvas.empty")}</p>

@@ -425,6 +425,22 @@ describe("UI demo fixture", () => {
     expect(byId.get("demo-route-target")?.kind).toBe("outcome");
   });
 
+  test("covers a scenario that continues into a detail view with highlights", () => {
+    const steps = byKey.get("demo-sections")?.settings.scenarios[0]?.steps ?? [];
+    expect(steps.map((step) => step.viewId ?? "")).toEqual([
+      "",
+      "",
+      "",
+      "",
+      "demo-process",
+      "demo-process",
+      "demo-process",
+      "",
+    ]);
+    expect(steps[0]?.highlightElementIds).toHaveLength(4);
+    expect(steps[6]?.highlightRelationshipIds).toEqual(["demo-drill-edge-4"]);
+  });
+
   test("covers colors, statuses, locked/hidden placements and scenario message, reply and note steps", () => {
     const states = byKey.get("demo-states");
     expect(byId.get("demo-state-live")?.tags).toContain("status:live");

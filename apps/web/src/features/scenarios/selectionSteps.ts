@@ -35,6 +35,19 @@ export function stepsFromSelection(
       },
     ];
   }
+  if (selection.type === "elements") {
+    // Several cards at once become one step: the first is the focus, the rest light up with it.
+    const [first, ...rest] = selection.ids;
+    if (!first) return null;
+    if (!selection.ids.every((id) => viewElementIds.includes(id))) return "outside";
+    return [
+      {
+        elementId: first,
+        title: titled(name(first)),
+        ...(rest.length ? { highlightElementIds: rest } : {}),
+      },
+    ];
+  }
   if (selection.type !== "relationship") return null;
   const edge = relationships.find((candidate) => candidate.id === selection.id);
   if (!edge) return null;
@@ -49,4 +62,32 @@ export function stepsFromSelection(
     { elementId: source, title: titled(name(source)) },
     { elementId: target, relationshipId: edge.id, title: message(target) },
   ];
+}
+
+/** The selection as extra highlights for an existing step on the same view. */
+export function highlightsFromSelection(
+  selection: Selection,
+  viewElementIds: readonly string[],
+  relationships: readonly Pick<
+    ArchitectureRelationship,
+    "id" | "sourceElementId" | "targetElementId"
+  >[],
+): { elementIds: string[]; relationshipIds: string[] } | "outside" | null {
+  const ids =
+    selection.type === "element"
+      ? [selection.id]
+      : selection.type === "elements"
+        ? selection.ids
+        : [];
+  if (ids.length)
+    return ids.every((id) => viewElementIds.includes(id))
+      ? { elementIds: ids, relationshipIds: [] }
+      : "outside";
+  if (selection.type !== "relationship") return null;
+  const edge = relationships.find((candidate) => candidate.id === selection.id);
+  if (!edge) return null;
+  return viewElementIds.includes(edge.sourceElementId) &&
+    viewElementIds.includes(edge.targetElementId)
+    ? { elementIds: [], relationshipIds: [edge.id] }
+    : "outside";
 }

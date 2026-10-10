@@ -205,11 +205,17 @@ function StudioContent({
     if (!reference || handledReference.current === reference) return;
     const parsed = parseReferenceSearchValue(reference);
     if (!parsed) return;
+    // A scenario link carries its owning view in the URL; wait until that view is known.
+    const ownerViewId = viewId ?? activeViewId;
+    if (parsed.type === "scenario" && !ownerViewId) return;
 
     handledReference.current = reference;
     if (parsed.type === "workspace") return;
     if (parsed.type === "scenario") {
-      useEditorStore.getState().requestScenario(parsed.targetId);
+      if (ownerViewId)
+        useEditorStore
+          .getState()
+          .setPlayback({ ownerViewId, scenarioId: parsed.targetId, index: 0 });
       return;
     }
     select({ type: parsed.type, id: parsed.targetId });
@@ -221,7 +227,7 @@ function StudioContent({
     } else if (parsed.type === "record") {
       setExplorerTab("presales");
     }
-  }, [reference, requestFocus, select, setExplorerTab]);
+  }, [reference, viewId, activeViewId, requestFocus, select, setExplorerTab]);
 
   const elements = useMemo(() => model.data?.elements ?? [], [model.data]);
   const boundaries = useMemo(() => view.data?.boundaries ?? [], [view.data]);
@@ -246,6 +252,50 @@ function StudioContent({
     setDetailElementId(null);
     onNavigate(workspaceId, nextViewId);
   };
+
+  // A walkthrough step can happen on another view: follow it there. Only a step change
+  // navigates, so the reader can still browse elsewhere while a walkthrough is open.
+  const playback = useEditorStore((state) => state.playback);
+  const presenting = useEditorStore((state) => state.presenting);
+  const followStep = useRef({
+    selectView: (_viewId: string) => {},
+    activeViewId,
+    views: views.data,
+  });
+  followStep.current = { selectView, activeViewId, views: views.data };
+  const playbackStep =
+    playback && `${playback.ownerViewId}/${playback.scenarioId}/${playback.index}`;
+  useEffect(() => {
+    if (!playbackStep) return;
+    const { playback: current } = useEditorStore.getState();
+    const { views: list, activeViewId: here, selectView: open } = followStep.current;
+    const owner = list?.find((item) => item.id === current?.ownerViewId);
+    const step = owner?.settings.scenarios.find((item) => item.id === current?.scenarioId)?.steps[
+      current?.index ?? 0
+    ];
+    const target = step?.viewId ?? owner?.id;
+    if (target && target !== here && list?.some((item) => item.id === target)) open(target);
+  }, [playbackStep]);
+  // Presenting collapses both side panels and restores whichever were open afterwards.
+  const panelsBeforePresenting = useRef<{ model: boolean; inspector: boolean } | null>(null);
+  useEffect(() => {
+    const model = modelPanel.current;
+    const inspector = inspectorPanel.current;
+    if (presenting && !panelsBeforePresenting.current) {
+      panelsBeforePresenting.current = {
+        model: !model?.isCollapsed(),
+        inspector: !inspector?.isCollapsed(),
+      };
+      model?.collapse();
+      inspector?.collapse();
+    } else if (!presenting && panelsBeforePresenting.current) {
+      const restore = panelsBeforePresenting.current;
+      panelsBeforePresenting.current = null;
+      if (restore.model) model?.resize(sidebarWidths.current.model);
+      if (restore.inspector) inspector?.resize(sidebarWidths.current.inspector);
+    }
+  }, [presenting, modelPanel, inspectorPanel]);
+
   const goBack = (index: number): void => {
     const target = navigation.back[index];
     const current = currentLocation();
@@ -496,10 +546,6 @@ function StudioContent({
                       layoutFitRequest={layoutFitRequest}
                       onOpenDetails={openDetails}
                       canOpenDetails={canOpenDetails}
-                      onOpenScenario={(nextViewId, scenarioId) => {
-                        useEditorStore.getState().requestScenario(scenarioId);
-                        selectView(nextViewId);
-                      }}
                     />
                   ) : (
                     <div

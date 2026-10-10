@@ -5,6 +5,7 @@ import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { useEditorStore } from "@/store/editor";
 import { iconFor } from "../icons";
 import { DetailViewAction } from "../navigation/DetailNavigation";
 import { InlineExpansionAction } from "../navigation/InlineExpansion";
@@ -69,6 +70,31 @@ function ElementNodeComponent({
         selected={selected || Boolean(data.scenarioFocus)}
         external={element.external}
       />
+      {data.scenarioBadges && (
+        <div className="nodrag nopan absolute -left-2.5 -top-2.5 z-10 flex gap-1">
+          {data.scenarioBadges.map((number) => (
+            <button
+              key={number}
+              type="button"
+              aria-label={t("scenarios.goToStep", { number })}
+              aria-current={number === data.scenarioCurrent ? "step" : undefined}
+              className={cn(
+                "flex h-5 min-w-5 items-center justify-center rounded-full border px-1 text-[11px] font-semibold tabular-nums shadow-sm",
+                number === data.scenarioCurrent
+                  ? "border-primary bg-primary text-primary-foreground"
+                  : "border-border bg-background text-muted-foreground hover:text-foreground",
+              )}
+              onClick={(event) => {
+                event.stopPropagation();
+                const { playback, setPlayback } = useEditorStore.getState();
+                if (playback) setPlayback({ ...playback, index: number - 1, finished: false });
+              }}
+            >
+              {number}
+            </button>
+          ))}
+        </div>
+      )}
       <ConnectionHandles
         diamond={diamond}
         sloped={shape === "data"}

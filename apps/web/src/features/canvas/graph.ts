@@ -50,6 +50,9 @@ export interface ElementNodeData extends Record<string, unknown> {
   status: ImplementationStatus | null;
   /** The current scenario step's element: outlined along its own shape. */
   scenarioFocus?: boolean;
+  /** 1-based numbers of the playing scenario's steps on this element; clicking one jumps there. */
+  scenarioBadges?: number[];
+  scenarioCurrent?: number;
 }
 
 export interface BoundaryNodeData extends Record<string, unknown> {

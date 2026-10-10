@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import type { ArchitectureRelationship } from "@structsmith/contracts";
-import { stepsFromSelection } from "./selectionSteps";
+import { highlightsFromSelection, stepsFromSelection } from "./selectionSteps";
 
 const elements = [
   { id: "browser", name: "Browser" },
@@ -70,4 +70,38 @@ test("selections off this view are explained and other selections are ignored", 
   expect(steps({ type: "none" })).toBeNull();
   expect(steps({ type: "boundary", id: "b" })).toBeNull();
   expect(steps({ type: "relationship", id: "deleted" })).toBeNull();
+});
+
+test("several selected cards become one step that lights the rest up", () => {
+  expect(steps({ type: "elements", ids: ["api", "db", "browser"] })).toEqual([
+    { elementId: "api", title: "API", highlightElementIds: ["db", "browser"] },
+  ]);
+  expect(
+    stepsFromSelection(
+      { type: "elements", ids: ["api", "db"] },
+      undefined,
+      ["api"],
+      elements,
+      relationships,
+    ),
+  ).toBe("outside");
+});
+
+test("the selection can be added to a step as highlights", () => {
+  expect(
+    highlightsFromSelection({ type: "elements", ids: ["api", "db"] }, onView, relationships),
+  ).toEqual({
+    elementIds: ["api", "db"],
+    relationshipIds: [],
+  });
+  expect(
+    highlightsFromSelection({ type: "relationship", id: "audit" }, onView, relationships),
+  ).toEqual({
+    elementIds: [],
+    relationshipIds: ["audit"],
+  });
+  expect(
+    highlightsFromSelection({ type: "relationship", id: "audit" }, ["api"], relationships),
+  ).toBe("outside");
+  expect(highlightsFromSelection({ type: "none" }, onView, relationships)).toBeNull();
 });

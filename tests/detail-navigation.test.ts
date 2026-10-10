@@ -165,4 +165,10 @@ test("back and breadcrumb jumps restore the exact visit, including multi-selecti
   expect(root.saved.c).toEqual(c);
   expect(returnToView(state, c, 100)).toBe(state);
   expect(state.back).toEqual([a, b]);
+  // Opening a view already in the trail (as a walkthrough returning to its overview does)
+  // returns to it instead of adding a repeated breadcrumb.
+  const revisited = visitView(state, c, "a");
+  expect(revisited.back).toEqual([]);
+  expect(revisited.saved.c).toEqual(c);
+  expect(revisited.saved.a).toEqual(a);
 });
