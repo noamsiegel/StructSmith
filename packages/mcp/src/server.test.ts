@@ -69,7 +69,7 @@ test("MCP exposes and validates Zod 4 tools and prompt arguments", async () => {
     const workspace = workspaces[0];
     if (!workspace) throw new Error("Missing workspace");
 
-    const guide = await client.callTool({ name: "modeling_guide", arguments: {} });
+    const guide = await client.callTool({ name: "modeling_guide", arguments: { topic: "all" } });
     expect(guide.content).toEqual(
       expect.arrayContaining([
         expect.objectContaining({

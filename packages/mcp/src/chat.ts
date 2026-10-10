@@ -9,7 +9,7 @@ import {
 } from "@structsmith/contracts";
 import { badRequest, type Services } from "@structsmith/domain";
 import { z } from "zod";
-import { modelingGuide } from "./guide";
+import { guideTopic } from "./guide";
 import { workspaceInspection } from "./inspection";
 import { resolveReference } from "./reference";
 
@@ -31,7 +31,7 @@ export function localChatBackend(services: Services): ChatModelBackend {
   return {
     getWorkspace: (id) => services.workspaces.get(id),
     listWorkspaces: () => services.workspaces.list(),
-    guide: modelingGuide,
+    guide: () => guideTopic("all"),
     inspect: (id, options) => workspaceInspection(services, id, options),
     validate: (id) => services.model.validate(id),
     resolve: (id, type, targetId) => resolveReference(services, id, type, targetId),

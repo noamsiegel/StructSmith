@@ -8,7 +8,8 @@ export interface McpToolInfo {
 export const MCP_TOOLS: readonly McpToolInfo[] = [
   {
     name: "modeling_guide",
-    description: "Read modeling rules, allowed enum values and the recommended MCP workflow.",
+    description:
+      "Start here. Without arguments: live workspaces, the call order and a topic index. With topic: one slice (workflow, model, views, layout, scenarios, comments, readability, integrity, acceptance), or all for the complete reference.",
     mutating: false,
   },
   { name: "workspace_list", description: "List all workspaces.", mutating: false },

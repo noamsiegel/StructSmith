@@ -22,7 +22,7 @@ export const OPERATION_KINDS = ArchitectureOperationSchema.options.map(
   (option) => option.shape.op.value,
 );
 
-/** Compact, machine-readable guidance so clients never need repository code. */
+/** The complete reference, served whole only on request (topic "all" or the guide resource). */
 export function modelingGuide() {
   return {
     version: 1,
@@ -140,4 +140,141 @@ export function modelingGuide() {
     },
     limits: { operationsPerBatch: 500, idLength: 64, nameLength: 200 },
   } as const;
+}
+
+/** Practice for readable diagrams; the tools cannot enforce taste, so the guide states it. */
+const readability = {
+  views:
+    "Give each view one purpose. Prefer a left-to-right main path, aligned peers, short titles and separate branch lanes. Avoid crossings you can remove, backward wraps, overlapping labels and lines through unrelated boxes.",
+  home: "Keep the top view readable at its intended size: roughly six to eight stages. Put implementation detail and source evidence in notes or detail views, not tiny overview text. Aim for at most four semantic levels, counting the top view.",
+  sectionsAndSubprocesses:
+    "Sections are view-owned visual frames for reading lanes: at canvas root or inside another Section, never inside a Subprocess, with no connections or detail views. Subprocesses (workflowGroup) are shared semantic steps with connections, children and scoped detail views; use them for behaviour.",
+  status:
+    "Organise navigation by function, not current versus proposed. Tag elements status:live (implemented) or status:planned; the status overlay shows badges and a legend, and mixed groups stay neutral. Live means implemented, not proven enabled in production. Use separate views only to explain a real transition.",
+  connectors:
+    "Label decisions and non-obvious handoffs; named labels are always visible. Connectors route orthogonally and may cross other objects; keep saved bends only where they add clarity and reset routes after large moves.",
+};
+
+/** Modelling discipline that keeps merged or imported diagrams truthful. */
+const integrity = {
+  reuse:
+    "Reuse existing elements, relationships and records before creating new ones. Inspect lifted descendant relationships before adding summary edges; hide clutter per view instead of deleting real relationships.",
+  grain:
+    "Establish each object's grain from what produces it: a login, account, request and row need not be one-to-one. When aggregating, keep independent inputs, safety gates, optional paths and failure outcomes.",
+  imports:
+    "import_mermaid maps flowchart shapes to kinds (diamond decision, subroutine Subprocess, stadium outcome, cylinder database, other shapes action). Check imported kinds and add status tags afterwards.",
+  broadEdits:
+    "snapshot_create before broad edits, merges or overwrites; keep originals until the result is verified. For merges, check cross-workspace ID collisions and record where remapped objects came from.",
+};
+
+/** What "done" means for a visual change; MCP cannot see pixels, so the client verifies. */
+const acceptance = {
+  url: "Each view opens at /w/{workspaceId}?view={viewId} on the StructSmith server (add &ref=element:{id} or &ref=scenario:{id} to focus or start a walkthrough).",
+  checks: [
+    "Reload every changed view at its intended size; Fit and automatic layout must clear floating controls.",
+    "Titles readable, arrows traceable, labels unclipped and visible with nothing selected.",
+    "Overview and detail views agree; drill-down, choosers, Back and breadcrumbs work after reload.",
+    "Status overlay modes and scenario playback behave; blank canvases and console errors fail acceptance.",
+  ],
+  evidence:
+    "model_validate proves structure, not visual quality or navigation. Report what was checked in the browser and name any check that could not be run.",
+};
+
+const topics = {
+  workflow: {
+    summary: "Call order, batching with @ref, revision guards and references.",
+    content: () => {
+      const guide = modelingGuide();
+      return {
+        startHere: guide.startHere,
+        concurrency: guide.concurrency,
+        references: guide.references,
+        limits: guide.limits,
+      };
+    },
+  },
+  model: {
+    summary: "C4 and workflow semantics, element kinds and allowed values.",
+    content: () => {
+      const guide = modelingGuide();
+      return { principles: guide.principles, enums: guide.enums };
+    },
+  },
+  views: {
+    summary: "Views, membership, Sections/boundaries and view settings.",
+    content: () => {
+      const { layouts: _, settings, ...views } = modelingGuide().views;
+      const { scenarios: __, commentPins: ___, ...rest } = settings;
+      return { ...views, settings: rest, inspection: modelingGuide().inspection };
+    },
+  },
+  layout: {
+    summary: "Automatic layout algorithms, saved positions and connector presentation.",
+    content: () => ({ ...modelingGuide().views.layouts, connectors: readability.connectors }),
+  },
+  scenarios: {
+    summary: "Step-by-step walkthroughs: message, reply and note steps.",
+    content: () => ({
+      scenarios: modelingGuide().views.settings.scenarios,
+      tools: [
+        "scenario_list",
+        "scenario_get",
+        "scenario_create",
+        "scenario_update",
+        "scenario_delete",
+      ],
+    }),
+  },
+  comments: {
+    summary: "Comment threads pinned to views.",
+    content: () => ({ commentPins: modelingGuide().views.settings.commentPins }),
+  },
+  readability: { summary: "How to lay out views people can read.", content: () => readability },
+  integrity: {
+    summary: "Reuse, grain, imports and safe broad edits.",
+    content: () => integrity,
+  },
+  acceptance: {
+    summary: "Verifying changed views in a browser before calling them done.",
+    content: () => acceptance,
+  },
+} as const;
+
+export type GuideTopic = keyof typeof topics | "all";
+export const GUIDE_TOPICS = [...Object.keys(topics), "all"] as unknown as [
+  GuideTopic,
+  ...GuideTopic[],
+];
+
+export function guideTopic(topic: GuideTopic) {
+  if (topic === "all") return { ...modelingGuide(), readability, integrity, acceptance };
+  return { topic, ...topics[topic].content() };
+}
+
+/** Content-first entry point: live workspaces, the call order and where to read more. */
+export function guideHome(workspaces: readonly { id: string; name: string; revision: number }[]) {
+  const shown = workspaces.slice(0, 10);
+  return {
+    product: "StructSmith: a semantic architecture model with views, diagrams and walkthroughs.",
+    workspaces: {
+      count: workspaces.length,
+      ...(workspaces.length
+        ? { items: shown.map(({ id, name, revision }) => ({ id, name, revision })) }
+        : { note: "0 workspaces on this server. Create one with workspace_create." }),
+      ...(workspaces.length > shown.length
+        ? { more: `${workspaces.length - shown.length} more; call workspace_list.` }
+        : {}),
+    },
+    goldenPath: [
+      "workspace_inspect {workspaceId} to read the model, views and revision.",
+      "model_preview_operations, then one model_apply_operations batch with expectedRevision.",
+      "model_validate, then open each changed view and check it (topic acceptance).",
+    ],
+    topics: Object.entries(topics).map(([id, topic]) => ({ id, summary: topic.summary })),
+    help: [
+      'modeling_guide {"topic":"readability"}',
+      'modeling_guide {"topic":"scenarios"}',
+      'modeling_guide {"topic":"all"} for the complete reference',
+    ],
+  };
 }

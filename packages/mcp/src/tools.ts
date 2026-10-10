@@ -35,8 +35,9 @@ import {
 import { badRequest, type Services } from "@structsmith/domain";
 import { z } from "zod";
 import { MCP_TOOLS } from "./catalog";
-import { modelingGuide } from "./guide";
+import { GUIDE_TOPICS, guideHome, guideTopic } from "./guide";
 import { workspaceInspection } from "./inspection";
+import { nextSteps } from "./next-steps";
 import { resolveReference } from "./reference";
 
 export interface McpToolOptions {
@@ -61,13 +62,23 @@ const expectedRevision = z
 const describe = (name: string): string =>
   MCP_TOOLS.find((tool) => tool.name === name)?.description ?? name;
 
-export function registerTools(
-  server: McpServer,
-  services: Services,
-  options: McpToolOptions,
-): void {
+export function registerTools(mcp: McpServer, services: Services, options: McpToolOptions): void {
   const readOnlyAnnotations = { readOnlyHint: true } as const;
   const writeAnnotations = { readOnlyHint: false, destructiveHint: false } as const;
+
+  // Every result ends with a short text block: what an empty answer means and what to call next.
+  const server = {
+    registerTool: ((name: string, config: never, handler: (args: never, extra: never) => unknown) =>
+      mcp.registerTool(name, config, (async (args: never, extra: never) => {
+        const result = (await handler(args, extra)) as {
+          content: { type: "text"; text: string }[];
+        };
+        const hints = nextSteps(name, args, result.content[0]?.text);
+        return hints
+          ? { ...result, content: [...result.content, { type: "text", text: hints }] }
+          : result;
+      }) as never)) as McpServer["registerTool"],
+  };
 
   const registerWrite = (
     name: string,
@@ -91,10 +102,15 @@ export function registerTools(
     "modeling_guide",
     {
       description: describe("modeling_guide"),
-      inputSchema: {},
+      inputSchema: {
+        topic: z
+          .enum(GUIDE_TOPICS)
+          .optional()
+          .describe("One guide slice; omit it for the live home view, use all for everything."),
+      },
       annotations: readOnlyAnnotations,
     },
-    () => json(modelingGuide()),
+    ({ topic }) => json(topic ? guideTopic(topic) : guideHome(services.workspaces.list())),
   );
 
   /* ----------------------------- workspaces ----------------------------- */

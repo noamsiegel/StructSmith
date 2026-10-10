@@ -76,6 +76,14 @@ and resets to Status on reload, without editing the model or coordinates.
   the current step without duplicating objects or diagrams. Deleting a referenced
   object or connection keeps the scenario for repair: playback marks the step and
   model validation reports `SCENARIO_*` warnings.
+- The MCP is self-sufficient for agents, following the AXI principles: server
+  instructions say to call `modeling_guide` first. Without arguments it returns
+  live workspaces, the call order and a topic index; `topic` returns one slice
+  (`workflow`, `model`, `views`, `layout`, `scenarios`, `comments`, `readability`,
+  `integrity`, `acceptance`) and `all` the complete reference. Every tool result
+  keeps its JSON payload in the first content block and adds a second block with a
+  named empty state or aggregate (for example `0 scenarios on view …`, or error,
+  warning and info counts) and two to four concrete next calls.
 - MCP agents use `scenario_list/get/create/update/delete`, which change one
   scenario at a time, and `reference_resolve` for copied scenario references
   (pass the reference's `viewId`). The modeling guide documents the step rules.

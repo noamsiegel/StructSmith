@@ -44,7 +44,7 @@ test("MCP scenario tools author, validate, resolve and undo walkthroughs", async
       { title: "Signed in", description: "The browser shows the dashboard." },
     ];
 
-    const guide = await call("modeling_guide");
+    const guide = await call("modeling_guide", { topic: "all" });
     expect(guide.views.settings.scenarios).toContain("response: true replies back");
     expect(guide.enums.operationKinds).toContain("addViewScenario");
     expect(guide.enums.operationKinds).toContain("addViewComment");

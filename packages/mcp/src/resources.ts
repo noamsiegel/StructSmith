@@ -1,7 +1,7 @@
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { Services } from "@structsmith/domain";
-import { modelingGuide } from "./guide";
+import { guideTopic } from "./guide";
 import { workspaceInspection } from "./inspection";
 
 const jsonResource = (uri: string, value: unknown) => ({
@@ -24,7 +24,7 @@ export function registerResources(server: McpServer, services: Services): void {
       description: "Model semantics, allowed values and the recommended agent workflow.",
       mimeType: "application/json",
     },
-    (uri) => jsonResource(uri.href, modelingGuide()),
+    (uri) => jsonResource(uri.href, guideTopic("all")),
   );
 
   server.registerResource(

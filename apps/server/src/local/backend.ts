@@ -101,16 +101,14 @@ export class RemoteChatBackend implements ChatModelBackend {
     const result = CallToolResultSchema.parse(
       await this.client.callTool({ name, arguments: args }, undefined, { timeout: 15000 }),
     );
-    const text = result.content
-      .filter((block) => block.type === "text")
-      .map((block) => block.text)
-      .join("\n");
+    const texts = result.content.flatMap((block) => (block.type === "text" ? [block.text] : []));
     if (result.isError)
-      throw new DomainError("BAD_REQUEST", text || "Docker MCP tool failed.", 400);
-    return JSON.parse(text);
+      throw new DomainError("BAD_REQUEST", texts.join("\n") || "Docker MCP tool failed.", 400);
+    // The first block is the JSON payload; later blocks are next-step hints for agents.
+    return JSON.parse(texts[0] ?? "null");
   }
 
-  guide: ChatModelBackend["guide"] = () => this.call("modeling_guide", {});
+  guide: ChatModelBackend["guide"] = () => this.call("modeling_guide", { topic: "all" });
   inspect: ChatModelBackend["inspect"] = (workspaceId, options) =>
     this.call("workspace_inspect", { workspaceId, ...options });
   validate: ChatModelBackend["validate"] = (workspaceId) =>
