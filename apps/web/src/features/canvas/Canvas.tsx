@@ -140,6 +140,7 @@ interface CanvasProps {
   statusOverlay: StatusOverlay;
   tagFocus: string | null;
   onOpenDetails: (elementId: string) => void;
+  onOpenScenario: (viewId: string, scenarioId: string) => void;
   canOpenDetails: (elementId: string) => boolean;
 }
 
@@ -156,6 +157,7 @@ export function Canvas({
   tagFocus,
   onOpenDetails,
   canOpenDetails,
+  onOpenScenario,
 }: CanvasProps) {
   const { t } = useTranslation();
   const { t: ta } = useTranslation("annotations");
@@ -2296,6 +2298,7 @@ export function Canvas({
                 elements={elements}
                 relationships={relationships}
                 onStep={onScenarioStep}
+                onOpenScenario={onOpenScenario}
               />
             </Panel>
             <CanvasComments

@@ -29,13 +29,15 @@ import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
+  SelectGroup,
   SelectItem,
+  SelectLabel,
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { CopyReferenceButton } from "@/features/reference/CopyReferenceButton";
-import { useApplyOperations, useWorkspace } from "@/hooks/useApi";
+import { useApplyOperations, useViews, useWorkspace } from "@/hooks/useApi";
 import { useEditorStore } from "@/store/editor";
 import { stepsFromSelection } from "./selectionSteps";
 
@@ -45,6 +47,8 @@ type DraftScenario = Omit<ViewScenario, "steps"> & { steps: DraftStep[] };
 const NOTE = "__note";
 const NO_ARRIVAL = "none";
 const REPLY = "reply:";
+/** Chooser values for scenarios on other views; this view's scenarios use their own IDs. */
+const ELSEWHERE = "elsewhere:";
 
 /** Keys that belong to a focused form control rather than to playback. */
 function typing(target: EventTarget | null): boolean {
@@ -60,16 +64,20 @@ export function ScenarioPanel({
   elements,
   relationships,
   onStep,
+  onOpenScenario,
 }: {
   workspaceId: string;
   view: ViewDetail;
   elements: readonly ArchitectureElement[];
   relationships: readonly ArchitectureRelationship[];
   onStep: (step: ViewScenarioStep | null) => void;
+  /** Opens another view and starts one of its scenarios. */
+  onOpenScenario: (viewId: string, scenarioId: string) => void;
 }) {
   const { t } = useTranslation();
   const fieldId = useId();
   const workspace = useWorkspace(workspaceId);
+  const views = useViews(workspaceId);
   const command = useApplyOperations(workspaceId);
   const selection = useEditorStore((state) => state.selection);
   const scenarioRequest = useEditorStore((state) => state.scenarioRequest);
@@ -100,6 +108,13 @@ export function ScenarioPanel({
         )
       : false;
   const count = selected?.steps.length ?? 0;
+  // Scenarios belong to a view; the chooser also lists every other view's so all are reachable.
+  const elsewhere = (views.data ?? []).filter(
+    (other) => other.id !== view.id && other.settings.scenarios.length,
+  );
+  const total =
+    view.settings.scenarios.length +
+    elsewhere.reduce((sum, other) => sum + other.settings.scenarios.length, 0);
 
   useEffect(() => {
     onStep(step && !stale ? step : null);
@@ -141,7 +156,15 @@ export function ScenarioPanel({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [playing, count]);
 
-  const choose = (id: string) => {
+  const choose = (value: string) => {
+    if (value.startsWith(ELSEWHERE)) {
+      const [viewIndex, scenarioIndex] = value.slice(ELSEWHERE.length).split(":").map(Number);
+      const other = elsewhere[viewIndex ?? -1];
+      const scenario = other?.settings.scenarios[scenarioIndex ?? -1];
+      if (other && scenario) onOpenScenario(other.id, scenario.id);
+      return;
+    }
+    const id = value;
     setSelectedId(id);
     setIndex(0);
     setPlaying(false);
@@ -254,6 +277,14 @@ export function ScenarioPanel({
         >
           <ListOrdered size={14} />
           {t("scenarios.title")}
+          {total > 0 && (
+            <span
+              className="text-xs tabular-nums text-muted-foreground"
+              title={t("scenarios.countHint", { here: view.settings.scenarios.length, total })}
+            >
+              {total}
+            </span>
+          )}
         </Button>
         {open && !draft && (
           <>
@@ -262,10 +293,31 @@ export function ScenarioPanel({
                 <SelectValue placeholder={t("scenarios.choose")} />
               </SelectTrigger>
               <SelectContent>
-                {view.settings.scenarios.map((scenario) => (
-                  <SelectItem key={scenario.id} value={scenario.id}>
-                    {scenario.name}
-                  </SelectItem>
+                <SelectGroup>
+                  <SelectLabel>{t("scenarios.thisView")}</SelectLabel>
+                  {view.settings.scenarios.map((scenario) => (
+                    <SelectItem key={scenario.id} value={scenario.id}>
+                      {scenario.name}
+                    </SelectItem>
+                  ))}
+                  {!view.settings.scenarios.length && (
+                    <SelectLabel className="font-normal text-muted-foreground">
+                      {t("scenarios.noneHere")}
+                    </SelectLabel>
+                  )}
+                </SelectGroup>
+                {elsewhere.map((other, viewIndex) => (
+                  <SelectGroup key={other.id}>
+                    <SelectLabel>{other.name}</SelectLabel>
+                    {other.settings.scenarios.map((scenario, scenarioIndex) => (
+                      <SelectItem
+                        key={scenario.id}
+                        value={`${ELSEWHERE}${viewIndex}:${scenarioIndex}`}
+                      >
+                        {scenario.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
                 ))}
               </SelectContent>
             </Select>
@@ -510,45 +562,7 @@ export function ScenarioPanel({
             </div>
           ) : selected ? (
             <div className="space-y-3">
-              {playing && step ? (
-                <div aria-live="polite">
-                  <Select value={String(index)} onValueChange={(value) => setIndex(Number(value))}>
-                    <SelectTrigger
-                      aria-label={t("scenarios.jumpTo")}
-                      className="h-6 w-auto gap-1 border-none px-0 text-xs text-muted-foreground shadow-none"
-                    >
-                      {t("scenarios.progress", { number: index + 1, count })}
-                    </SelectTrigger>
-                    <SelectContent>
-                      {selected.steps.map((entry, stepIndex) => (
-                        <SelectItem
-                          // biome-ignore lint/suspicious/noArrayIndexKey: steps have no ID; position is the identity.
-                          key={stepIndex}
-                          value={String(stepIndex)}
-                        >
-                          {stepIndex + 1}. {entry.title}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <h3 className="mt-1 break-words text-sm font-medium">{step.title}</h3>
-                  {arrival && !stale && (
-                    <p className="mt-1 break-words text-xs font-medium text-primary">
-                      {t(step.response ? "scenarios.replyOver" : "scenarios.arrivesOver", {
-                        name: edgeName(arrival),
-                      })}
-                    </p>
-                  )}
-                  {step.description && (
-                    <p className="mt-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">
-                      {step.description}
-                    </p>
-                  )}
-                  {stale && <p className="mt-2 text-xs text-destructive">{t("scenarios.stale")}</p>}
-                </div>
-              ) : (
-                <p className="text-xs text-muted-foreground">{t("scenarios.ready", { count })}</p>
-              )}
+              {/* Controls come first so Back and Next stay put while step text changes length. */}
               <div className="flex items-center gap-1">
                 {playing ? (
                   <>
@@ -561,6 +575,28 @@ export function ScenarioPanel({
                       <ChevronLeft size={14} />
                       {t("scenarios.back")}
                     </Button>
+                    <Select
+                      value={String(index)}
+                      onValueChange={(value) => setIndex(Number(value))}
+                    >
+                      <SelectTrigger
+                        aria-label={t("scenarios.jumpTo")}
+                        className="h-7 w-auto shrink-0 gap-1 border-none px-1 text-xs tabular-nums text-muted-foreground shadow-none"
+                      >
+                        {t("scenarios.progress", { number: index + 1, count })}
+                      </SelectTrigger>
+                      <SelectContent>
+                        {selected.steps.map((entry, stepIndex) => (
+                          <SelectItem
+                            // biome-ignore lint/suspicious/noArrayIndexKey: steps have no ID; position is the identity.
+                            key={stepIndex}
+                            value={String(stepIndex)}
+                          >
+                            {stepIndex + 1}. {entry.title}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button
                       size="sm"
                       variant="outline"
@@ -623,6 +659,29 @@ export function ScenarioPanel({
                   </Button>
                 </div>
               </div>
+              {playing && step ? (
+                <div aria-live="polite">
+                  <h3 className="break-words text-sm font-medium">{step.title}</h3>
+                  {arrival && !stale && (
+                    <p className="mt-1 break-words text-xs font-medium text-primary">
+                      {t(step.response ? "scenarios.replyOver" : "scenarios.arrivesOver", {
+                        name: edgeName(arrival),
+                      })}
+                    </p>
+                  )}
+                  {step.description && (
+                    <p className="mt-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">
+                      {step.description}
+                    </p>
+                  )}
+                  {stale && <p className="mt-2 text-xs text-destructive">{t("scenarios.stale")}</p>}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">{t("scenarios.ready", { count })}</p>
+              )}
+              {playing && (
+                <p className="text-xs text-muted-foreground">{t("scenarios.keyboardHint")}</p>
+              )}
               {deleting !== null && (
                 <div className="space-y-2 border-t border-border pt-2">
                   <p className="text-xs">{t("scenarios.confirmDelete", { name: selected.name })}</p>
@@ -662,7 +721,9 @@ export function ScenarioPanel({
               )}
             </div>
           ) : (
-            <p className="text-xs text-muted-foreground">{t("scenarios.empty")}</p>
+            <p className="text-xs text-muted-foreground">
+              {t(total ? "scenarios.chooseHint" : "scenarios.empty", { count: total })}
+            </p>
           )}
           {error && (
             <p role="alert" className="mt-3 text-xs text-destructive">

@@ -496,6 +496,10 @@ function StudioContent({
                       layoutFitRequest={layoutFitRequest}
                       onOpenDetails={openDetails}
                       canOpenDetails={canOpenDetails}
+                      onOpenScenario={(nextViewId, scenarioId) => {
+                        useEditorStore.getState().requestScenario(scenarioId);
+                        selectView(nextViewId);
+                      }}
                     />
                   ) : (
                     <div

@@ -858,6 +858,10 @@
     "addSelectionHint": "Select an element or connection on this diagram, then add it as the next step.",
     "selectionNotInView": "The selected element, or both ends of the selected connection, must be on this view.",
     "jumpTo": "Jump to step",
+    "thisView": "Ten widok",
+    "noneHere": "Brak scenariuszy w tym widoku",
+    "countHint": "{{here}} w tym widoku, {{total}} w obszarze roboczym",
+    "chooseHint": "Wybierz jeden z {{count}} scenariuszy. Scenariusz z innego widoku otwiera ten widok.",
     "keyboardHint": "Use ← and → to move between steps and Esc to stop."
   },
   "tagFocus": {
