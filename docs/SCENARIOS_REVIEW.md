@@ -89,7 +89,7 @@ Sources: [IcePanel flows](https://docs.icepanel.io/visual-storytelling/flows),
 [Ilograph sequences](https://www.ilograph.com/docs/editing/perspectives/sequence-perspectives/),
 [Ilograph walkthroughs](https://www.ilograph.com/docs/editing/walkthroughs/).
 
-## What a viewer still lacks
+## What a viewer lacked
 
 1. **A viewer mode.** Hide editing chrome, dim cards that are not in the step (only
    connections dim today), and let viewers click a numbered step badge on the canvas.
@@ -103,3 +103,13 @@ Sources: [IcePanel flows](https://docs.icepanel.io/visual-storytelling/flows),
 5. **A sequence diagram.** Copy the scenario as Mermaid `sequenceDiagram`, from the UI
    and MCP.
 6. **Read-only sharing.** The copied link opens playback but in the full editor.
+
+## Status after the follow-up
+
+Built in `97afb61` and `aa60509`: panel modes with an actions menu (the overflow is
+gone: no control lies outside the panel at 1024px), an end card, Esc that closes
+menus first, present mode, dimming and step badges, multi-element highlights,
+steps on other views with automatic navigation, and Mermaid sequence export (UI and
+`scenario_get` with `format: "mermaid"`). Still open: alternate (OR) paths, and a
+read-only share link for people outside the editor.
+

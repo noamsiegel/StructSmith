@@ -64,18 +64,25 @@ and resets to Status on reload, without editing the model or coordinates.
 - The element inspector lists incoming/outgoing dependencies, including connections
   through descendants, and views using the element. Entries navigate and focus the
   relevant object. These lists derive from the existing workspace model.
-- **Scenarios** saves named, ordered steps over objects already in the view, with
-  optional arrival connections. A step can reply over the previous step's
-  connection (playback draws its arrow reversed without changing the model), so a
-  request and its response share one connection; a note step narrates without an
-  element. **Add selection** appends the selected element, or a selected
-  connection as a message, its reply, or both ends. Create/edit/delete and
-  Next/Back/Stop playback share the existing revision guards and snapshot history;
-  arrow keys and Esc drive playback, the step counter jumps to any step, and the
-  copy-reference button gives a link that opens the walkthrough. Playback focuses
-  the current step without duplicating objects or diagrams. Deleting a referenced
-  object or connection keeps the scenario for repair: playback marks the step and
-  model validation reports `SCENARIO_*` warnings.
+- **Scenarios** saves named, ordered steps. A step focuses an element, arrives
+  over a connection or replies over it (its arrow is drawn reversed), or narrates
+  without an element (note step). A step can also light up further elements and
+  connections (parallel messages, an introduction that shows every participant)
+  and can happen on another view, such as a Subprocess's detail view: playback
+  opens that view and returns. The panel has three modes. Browsing chooses or
+  creates a scenario. Playing shows the scenario title, progress segments, the step
+  text at a readable size and Back plus a primary Next/Finish, ending on an end
+  card; copying a reference or a Mermaid sequence diagram, asking the agent,
+  editing and deleting live in one actions menu. Editing is a two-pane step list
+  and detail editor; **Add selection** turns the canvas selection into steps or
+  highlights. During playback cards outside the step dim and numbered badges on
+  cards jump to their steps. **Present** hides editing tools, the minimap and both
+  side panels and restores them afterwards. Arrow keys, PageUp/PageDown,
+  Home/End and Esc drive playback (Esc first closes an open menu, then leaves
+  Present). Playback never changes the model; edits share the existing revision
+  guards and snapshot history. Deleting a referenced object, connection or view
+  keeps the scenario for repair: playback marks the step and model validation
+  reports `SCENARIO_*` warnings.
 - The MCP is self-sufficient for agents, following the AXI principles: server
   instructions say to call `modeling_guide` first. Without arguments it returns
   live workspaces, the call order and a topic index; `topic` returns one slice
