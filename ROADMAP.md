@@ -102,21 +102,29 @@ the overlay controls. Each change should remain independently reviewable.
 An architect should be able to explain authentication, checkout, or invoice
 processing step by step using the same objects and relationships as the model.
 
-- [ ] **FLOW-1: Store named flows.** Associate a flow with a primary diagram and
+- [x] **FLOW-1: Store named flows.** Associate a flow with a primary diagram and
   an ordered sequence of message, process, and note steps.
-- [ ] **FLOW-2: Author steps from selections.** Use a selected object or
+- [x] **FLOW-2: Author steps from selections.** Use a selected object or
   relationship to create a step, add explanations, and reorder the sequence.
-- [ ] **FLOW-3: Present the sequence.** Add previous/next controls, keyboard
+- [x] **FLOW-3: Present the sequence.** Add previous/next controls, keyboard
   navigation, jump-to-step, and readable text alongside highlighted connections.
-- [ ] **FLOW-4: Support responses.** Let a step reverse the displayed message
+- [x] **FLOW-4: Support responses.** Let a step reverse the displayed message
   direction while retaining the underlying relationship's meaning.
-- [ ] **FLOW-5: Make flows portable and accessible to AI.** Include flows in
+- [x] **FLOW-5: Make flows portable and accessible to AI.** Include flows in
   REST/MCP, validation, copyable references, native export/import, and snapshots.
 
 Completion criteria: a scenario can use the same connection more than once,
 including a response; it survives export/import and snapshot restore; playback
 does not mutate the architecture; and removing a referenced object or connection
 produces an explicit repair or cascade outcome.
+
+Status: delivered as view-owned scenarios. Steps focus an element, arrive over a
+connection or reply over it, or narrate without an element (note steps). Authors
+add the canvas selection as the next step; playback has Back/Next, arrow keys,
+jump-to-step and a copyable reference that opens the walkthrough. Scenarios are
+available through `addViewScenario`/`updateViewScenario`/`deleteViewScenario` and
+the `scenario_*` MCP tools. Deleting a referenced object keeps the scenario for
+repair; playback marks the step and `model_validate` reports `SCENARIO_*` warnings.
 
 Implementation dependencies: milestones 1–2 supply relationship identity and
 highlighting behaviour. Persist canonical references rather than derived diagram

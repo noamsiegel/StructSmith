@@ -65,9 +65,23 @@ and resets to Status on reload, without editing the model or coordinates.
   through descendants, and views using the element. Entries navigate and focus the
   relevant object. These lists derive from the existing workspace model.
 - **Scenarios** saves named, ordered steps over objects already in the view, with
-  optional arrival connections. Create/edit/delete and Next/Back/Stop playback
-  share the existing revision guards and snapshot history; playback focuses the
-  current step without duplicating objects or diagrams.
+  optional arrival connections. A step can reply over the previous step's
+  connection (playback draws its arrow reversed without changing the model), so a
+  request and its response share one connection; a note step narrates without an
+  element. **Add selection** appends the selected element, or a selected
+  connection as a message, its reply, or both ends. Create/edit/delete and
+  Next/Back/Stop playback share the existing revision guards and snapshot history;
+  arrow keys and Esc drive playback, the step counter jumps to any step, and the
+  copy-reference button gives a link that opens the walkthrough. Playback focuses
+  the current step without duplicating objects or diagrams. Deleting a referenced
+  object or connection keeps the scenario for repair: playback marks the step and
+  model validation reports `SCENARIO_*` warnings.
+- MCP agents use `scenario_list/get/create/update/delete`, which change one
+  scenario at a time, and `reference_resolve` for copied scenario references
+  (pass the reference's `viewId`). The modeling guide documents the step rules.
+- Element and scenario deep links focus their target after the view's first fit
+  instead of being replaced by it. The selection toolbar moves beside canvas
+  chrome such as the scenario panel rather than covering it.
 - Element and relationship inspectors provide **Implementation** and **Runbook**
   links through `implementation.url` and `runbook.url` properties. Only validated
   HTTP(S) links can be opened; existing unrelated properties are retained.

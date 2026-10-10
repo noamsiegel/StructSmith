@@ -43,7 +43,7 @@ suite. They validate structure; browser acceptance is still required.
 | `demo-connection-alignment` | Near-aligned automatic LR/TB attachments, fixed border fractions, different card heights with an 8px grid mismatch, short Section title, legacy detour and a right/right manual connector | Drag near the opposite endpoint axis at normal and 200% zoom; guide appears; aligned axis overrides grid; other axis stays on grid; drag the right/right connector's target to Bottom and check that obsolete bends clear; same-border movement preserves bends; legacy detours never immediately retrace; Undo/Redo and reload retain the result |
 | `demo-native-flow` | Connected data/documents, start/end, fork/join and merge; mixed model/annotation Section on the default layer | Recognizable shapes, attached connectors, readable titles, type switching, Auto layout retains all Section contents |
 | `demo-comments` | Open/resolved threads, replies, anchored/free pins | Create/edit/delete/reply, resolve/reopen, outside-click, deletion conflict |
-| `demo-states` | Live/planned/mixed tags, explicit colors, locked/hidden items, scenarios | Overlay/focus, color reset, lock refusal, scenario Next/Back/Stop |
+| `demo-states` | Live/planned/mixed tags, explicit colors, locked/hidden items, a scenario with message, reply and note steps | Overlay/focus, color reset, lock refusal; scenario Next/Back/Stop, arrow keys/Esc, jump-to-step, reversed reply arrow, Add selection (element, then a connector twice), copied scenario link opening playback, toolbar clear of the open panel at 1024px |
 
 For each changed surface, seed or reset, open the relevant view, exercise the
 actual interaction, reload, then inspect screenshot, console and request evidence.
