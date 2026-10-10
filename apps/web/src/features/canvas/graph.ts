@@ -48,6 +48,8 @@ export interface ElementNodeData extends Record<string, unknown> {
   showDescriptions: boolean;
   minimumHeight: number;
   status: ImplementationStatus | null;
+  /** The current scenario step's element: outlined along its own shape. */
+  scenarioFocus?: boolean;
 }
 
 export interface BoundaryNodeData extends Record<string, unknown> {

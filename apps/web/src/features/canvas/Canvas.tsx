@@ -2010,8 +2010,11 @@ export function Canvas({
     return applyNodeColors(
       [...frames, ...expandedFrames, ...nodes.filter((node) => !transformed.has(node.id))].map(
         (node): FlowNode => {
-          const className =
-            scenarioStep?.elementId === node.id ? "ring-2 ring-primary rounded-lg" : undefined;
+          const focused = scenarioStep?.elementId === node.id;
+          // Elements outline their own silhouette (a diamond stays a diamond); other nodes are rectangles.
+          if (node.type === "element")
+            return focused ? { ...node, data: { ...node.data, scenarioFocus: true } } : node;
+          const className = focused ? "ring-2 ring-primary rounded-lg" : undefined;
           if (node.type !== "annotation") return { ...node, className };
           return {
             ...node,

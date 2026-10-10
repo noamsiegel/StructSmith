@@ -66,7 +66,7 @@ function ElementNodeComponent({
         height={height ?? minimumHeight}
         fill={fill}
         stroke={stroke}
-        selected={selected}
+        selected={selected || Boolean(data.scenarioFocus)}
         external={element.external}
       />
       <ConnectionHandles
