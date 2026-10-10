@@ -460,3 +460,87 @@ test("dragging a jog onto its neighbouring segment collapses both bends, never o
   expect(snapRelationshipSegmentDelta(points, 1, { x: -98, y: 0 }, 6)).toEqual({ x: -98, y: 0 });
   expect(snapRelationshipSegmentDelta(points, 1, { x: 197, y: 0 }, 6)).toEqual({ x: 200, y: 0 });
 });
+
+test("saved stubs left behind by a resized card do not leave a step at the endpoint", () => {
+  // Own "Come back" return route: saved when its right-border attachment sat at y=492.
+  const saved = [
+    { x: 3015, y: 492 },
+    { x: 3015, y: 495 },
+    { x: 3128, y: 495 },
+    { x: 3128, y: 656 },
+    { x: 1608, y: 656 },
+    { x: 1608, y: 208 },
+    { x: 1601, y: 208 },
+  ];
+  const source = { x: 2991, y: 483 };
+  const target = { x: 1601, y: 165 };
+  expect(
+    orthogonalRelationshipBends(source, target, Position.Right, Position.Bottom, saved),
+  ).toEqual([
+    { x: 3128, y: 483 },
+    { x: 3128, y: 656 },
+    // The target attachment also moved, from x=1608 to 1601.
+    { x: 1601, y: 656 },
+  ]);
+  const deliberate = [
+    { x: 3015, y: 483 },
+    { x: 3015, y: 520 },
+    { x: 3128, y: 520 },
+    { x: 3128, y: 656 },
+  ];
+  expect(
+    orthogonalRelationshipBends(
+      source,
+      { x: 3200, y: 700 },
+      Position.Right,
+      Position.Left,
+      deliberate,
+    ),
+  ).toEqual([...deliberate.slice(0, 3), { x: 3128, y: 700 }]);
+  // Own "Upload documents" route: a 5px step saved from an old title detour.
+  expect(
+    orthogonalRelationshipBends(
+      { x: 1592, y: 1 },
+      { x: 2872, y: -47 },
+      Position.Top,
+      Position.Top,
+      [
+        { x: 1592, y: -23 },
+        { x: 1592, y: -23 },
+        { x: 1592, y: -76 },
+        { x: 2088, y: -76 },
+        { x: 2088, y: -71 },
+        { x: 2872, y: -71 },
+      ],
+    ),
+  ).toEqual([
+    { x: 1592, y: -76 },
+    { x: 2872, y: -76 },
+  ]);
+  // Both legs end at an endpoint: removing the step would move an endpoint.
+  expect(
+    orthogonalRelationshipBends({ x: 0, y: 0 }, { x: 200, y: 8 }, Position.Right, Position.Left, [
+      { x: 100, y: 0 },
+      { x: 100, y: 8 },
+    ]),
+  ).toEqual([
+    { x: 100, y: 0 },
+    { x: 100, y: 8 },
+  ]);
+  // A leg that turns back is a hairpin around the card, not a stale step.
+  const hairpin = [
+    { x: 24, y: 0 },
+    { x: 24, y: 10 },
+    { x: -60, y: 10 },
+    { x: -60, y: 200 },
+  ];
+  expect(
+    orthogonalRelationshipBends(
+      { x: 0, y: 0 },
+      { x: 100, y: 200 },
+      Position.Right,
+      Position.Left,
+      hairpin,
+    ),
+  ).toEqual(hairpin);
+});

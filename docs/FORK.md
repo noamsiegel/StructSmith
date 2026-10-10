@@ -107,6 +107,10 @@ and resets to Status on reload, without editing the model or coordinates.
 - Moving an endpoint to another border, another object or between attached and
   loose resets its old bends and calculates a new route. Moving along the same
   border preserves the route. Inspector side changes follow the same rule.
+  Saved routes render without steps of at most sixteen canvas pixels between legs
+  heading the same way, so an endpoint that slides along its border (for example
+  when a card grows) or an old saved detour leaves no stale step. Endpoints never
+  move; saved bends are not rewritten until the route is edited.
 - Connected card dragging uses the pointer before grid snapping to align facing
   border attachments within six screen pixels, with a dotted alignment guide.
   The grid still applies on other axes. Selected objects and Section contents

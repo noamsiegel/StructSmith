@@ -60,6 +60,66 @@ export function slotFromHandle(handle: string | null | undefined): number | unde
   return handle?.endsWith("-0") ? 0 : handle?.endsWith("-2") ? 2 : undefined;
 }
 
+function withoutCollinear(points: readonly ControlPoint[]): ControlPoint[] {
+  const route: ControlPoint[] = [];
+  for (const point of points) {
+    while (route.length > 1) {
+      const before = route[route.length - 2] as ControlPoint;
+      const previous = route[route.length - 1] as ControlPoint;
+      if (
+        (before.x !== previous.x || previous.x !== point.x) &&
+        (before.y !== previous.y || previous.y !== point.y)
+      )
+        break;
+      route.pop();
+    }
+    route.push(point);
+  }
+  return route;
+}
+
+/**
+ * A step of at most 16 canvas pixels between two legs heading the same way is a
+ * stale saved bend: an endpoint slid along its border (a resized card, a
+ * reallocated attachment) or an old detour was saved. Move one leg onto the
+ * other's line so the step disappears; endpoints never move.
+ */
+function withoutShortSteps(points: readonly ControlPoint[]): ControlPoint[] {
+  let route = withoutCollinear(points);
+  for (let index = 0; index + 3 < route.length; index += 1) {
+    const [a, b, c, d] = route.slice(index, index + 4) as [
+      ControlPoint,
+      ControlPoint,
+      ControlPoint,
+      ControlPoint,
+    ];
+    const axis = a.y === b.y ? "y" : "x";
+    const along = axis === "y" ? "x" : "y";
+    const jog = Math.abs(c[axis] - b[axis]);
+    if (
+      b[along] !== c[along] ||
+      jog === 0 ||
+      jog > 16 ||
+      c[axis] !== d[axis] ||
+      Math.sign(d[along] - c[along]) !== Math.sign(b[along] - a[along])
+    )
+      continue;
+    const last = index + 3 === route.length - 1;
+    if (last && index === 0) continue;
+    const line = last ? c[axis] : a[axis];
+    const moved = last ? [index, index + 1] : [index + 2, index + 3];
+    const next = withoutCollinear(
+      route.map((point, at) => (moved.includes(at) ? { ...point, [axis]: line } : point)),
+    );
+    // Each collapse removes points; the length check guarantees termination.
+    if (next.length < route.length) {
+      route = next;
+      index = -1;
+    }
+  }
+  return route;
+}
+
 export function orthogonalRelationshipBends(
   source: ControlPoint,
   target: ControlPoint,
@@ -83,21 +143,7 @@ export function orthogonalRelationshipBends(
       }
       if (previous.x !== next.x || previous.y !== next.y) points.push(next);
     }
-    const route: ControlPoint[] = [];
-    for (const point of points) {
-      while (route.length > 1) {
-        const before = route[route.length - 2] as ControlPoint;
-        const previous = route[route.length - 1] as ControlPoint;
-        if (
-          (before.x !== previous.x || previous.x !== point.x) &&
-          (before.y !== previous.y || previous.y !== point.y)
-        )
-          break;
-        route.pop();
-      }
-      route.push(point);
-    }
-    return route.slice(1, -1);
+    return withoutShortSteps(points).slice(1, -1);
   }
   const facingGap =
     sourcePosition === "right" && targetPosition === "left"
