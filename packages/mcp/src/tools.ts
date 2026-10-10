@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import {
   AddViewCommentOpSchema,
   AddViewCommentReplyOpSchema,
+  AddViewScenarioOpSchema,
   ApplyOperationsRequestSchema,
   CreateBoundarySchema,
   CreateElementSchema,
@@ -13,6 +14,7 @@ import {
   DeleteViewAnnotationOpSchema,
   DeleteViewCommentOpSchema,
   DeleteViewCommentReplyOpSchema,
+  DeleteViewScenarioOpSchema,
   ImportMermaidRequestSchema,
   LayoutAlgorithmSchema,
   LayoutDirectionSchema,
@@ -25,6 +27,7 @@ import {
   UpdateViewAnnotationOpSchema,
   UpdateViewCommentOpSchema,
   UpdateViewCommentReplyOpSchema,
+  UpdateViewScenarioOpSchema,
   UpdateViewSchema,
   UpdateWorkspaceSchema,
   ViewRelationshipPatchSchema,
@@ -143,10 +146,15 @@ export function registerTools(
         workspaceId,
         type: ReferenceTargetKindSchema.describe("The type field from a StructSmithRef payload."),
         targetId: z.string().describe("The targetId field from a StructSmithRef payload."),
+        viewId: z
+          .string()
+          .optional()
+          .describe("The viewId field from a StructSmithRef payload; required for scenarios."),
       },
       annotations: readOnlyAnnotations,
     },
-    ({ workspaceId: id, type, targetId }) => json(resolveReference(services, id, type, targetId)),
+    ({ workspaceId: id, type, targetId, viewId }) =>
+      json(resolveReference(services, id, type, targetId, viewId)),
   );
 
   registerWrite("workspace_create", CreateWorkspaceSchema.shape, (args: unknown) =>
@@ -599,6 +607,63 @@ export function registerTools(
           "mcp",
         );
         return json({ ...result, comments: services.views.get(input.viewId).settings.commentPins });
+      },
+      destructive,
+    );
+  }
+
+  server.registerTool(
+    "scenario_list",
+    {
+      description: describe("scenario_list"),
+      inputSchema: { viewId },
+      annotations: readOnlyAnnotations,
+    },
+    ({ viewId }) => json(services.views.get(viewId).settings.scenarios),
+  );
+
+  server.registerTool(
+    "scenario_get",
+    {
+      description: describe("scenario_get"),
+      inputSchema: { viewId, scenarioId: z.string().min(1) },
+      annotations: readOnlyAnnotations,
+    },
+    ({ viewId, scenarioId }) => {
+      const scenario = services.views
+        .get(viewId)
+        .settings.scenarios.find((item) => item.id === scenarioId);
+      if (!scenario) throw badRequest(`Scenario "${scenarioId}" does not exist on this view.`);
+      return json(scenario);
+    },
+  );
+
+  for (const [name, operationSchema, destructive] of [
+    ["scenario_create", AddViewScenarioOpSchema, false],
+    ["scenario_update", UpdateViewScenarioOpSchema, false],
+    ["scenario_delete", DeleteViewScenarioOpSchema, true],
+  ] as const) {
+    const { op, ...fields } = operationSchema.shape;
+    const inputSchema = z.object({ ...fields, workspaceId, expectedRevision });
+    registerWrite(
+      name,
+      inputSchema.shape,
+      (args: unknown) => {
+        const input = inputSchema.parse(args);
+        const result = services.model.applyOperations(
+          input.workspaceId,
+          {
+            expectedRevision: input.expectedRevision,
+            label: `MCP ${name}`,
+            operations: [operationSchema.parse({ ...input, op: op.value })],
+          },
+          "mcp",
+        );
+        return json({
+          ...result,
+          scenarioId: result.appliedOperations[0]?.id,
+          scenarios: services.views.get(input.viewId).settings.scenarios,
+        });
       },
       destructive,
     );

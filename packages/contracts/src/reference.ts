@@ -7,6 +7,7 @@ export const referenceTargetKinds = [
   "boundary",
   "relationship",
   "record",
+  "scenario",
 ] as const;
 
 export const ReferenceTargetKindSchema = z.enum(referenceTargetKinds);

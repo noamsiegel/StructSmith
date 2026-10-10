@@ -133,6 +133,35 @@ export const MCP_TOOLS: readonly McpToolInfo[] = [
   },
   { name: "view_delete", description: "Delete a view (the model is untouched).", mutating: true },
   {
+    name: "scenario_list",
+    description:
+      "Read the named, ordered walkthroughs saved on a view. Each step focuses an element, may arrive over a connection or reply over it (response), or narrates without an element (note step).",
+    mutating: false,
+  },
+  {
+    name: "scenario_get",
+    description: "Read one scenario and its ordered steps by view and scenario id.",
+    mutating: false,
+  },
+  {
+    name: "scenario_create",
+    description:
+      "Add a scenario to a view. Steps reference elements on that view; an arrival relationshipId must run from the previous step's element to this one, or back from this element when response is true. Returns scenarioId, revision and undo snapshot.",
+    mutating: true,
+  },
+  {
+    name: "scenario_update",
+    description:
+      "Rename a scenario or replace its ordered steps without touching other scenarios. Use it to repair steps reported by model_validate.",
+    mutating: true,
+  },
+  {
+    name: "scenario_delete",
+    description:
+      "Delete one scenario from a view. The model is untouched. Returns an undo snapshot.",
+    mutating: true,
+  },
+  {
     name: "comment_list",
     description: "Read all comment threads on a view, including resolved threads and replies.",
     mutating: false,

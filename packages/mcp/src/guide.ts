@@ -1,4 +1,5 @@
 import {
+  ArchitectureOperationSchema,
   boundaryClassifications,
   boundaryKinds,
   boundaryLayers,
@@ -16,28 +17,10 @@ import {
   workspaceModes,
 } from "@structsmith/contracts";
 
-export const OPERATION_KINDS = [
-  "createElement",
-  "updateElement",
-  "deleteElement",
-  "createBoundary",
-  "updateBoundary",
-  "deleteBoundary",
-  "setBoundaryMembers",
-  "createRelationship",
-  "updateRelationship",
-  "deleteRelationship",
-  "createView",
-  "updateView",
-  "deleteView",
-  "setViewElements",
-  "setViewRelationships",
-  "setLayout",
-  "autoLayoutView",
-  "createRecord",
-  "updateRecord",
-  "deleteRecord",
-] as const;
+/** Derived from the operation union so the guide never lags new operations. */
+export const OPERATION_KINDS = ArchitectureOperationSchema.options.map(
+  (option) => option.shape.op.value,
+);
 
 /** Compact, machine-readable guidance so clients never need repository code. */
 export function modelingGuide() {
@@ -50,6 +33,7 @@ export function modelingGuide() {
       "Use the tool input schemas and this guide; do not inspect StructSmith source code.",
       "For multi-entity changes call model_preview_operations, then model_apply_operations.",
       "Finish with model_validate and inspect the affected views.",
+      "To explain a flow step by step (authentication, checkout), add a scenario with scenario_create on the view that shows its elements.",
     ],
     principles: [
       "The semantic model is the source of truth; views control membership, boundaries, presentation and saved layout without copying model elements.",
@@ -82,7 +66,7 @@ export function modelingGuide() {
     },
     references: {
       copiedReferences:
-        "The UI copies one-line StructSmithRef JSON. Resolve it with reference_resolve; its url also deep-links to the target in the editor.",
+        "The UI copies one-line StructSmithRef JSON. Resolve it with reference_resolve, passing viewId as well for a scenario; its url also deep-links to the target in the editor and opens a scenario's walkthrough.",
       syntax: "Assign ref on a create operation and use @ref in later id fields in the same batch.",
       example: [
         { op: "createElement", ref: "api", data: { kind: "container", name: "API" } },
@@ -114,6 +98,8 @@ export function modelingGuide() {
           "Per-view #RRGGBB colors keyed by element ID or boundary:ID for group frames. Existing workspace elements and this view's boundaries are valid targets. Replace the map to remove a node color; connector colors use relationship presentation. Explicit colors override status outlines without changing tags.",
         sectionFrames:
           "View-owned Section rectangles keyed by boundary:ID, with finite x/y and width >= 120, height >= 80. Section membership uses custom boundaries, not custom-element parents. Create the boundary and setBoundaryMembers before setting its frame. Move or fit frames with updateView, without changing semantic parentage or connection endpoints.",
+        scenarios:
+          "Named, ordered walkthroughs over this view ({id,name,steps:[{elementId?,relationshipId?,response?,title,description?}]}). Prefer scenario_create/update/delete, which change one scenario and return an undo snapshot; settings.scenarios replaces the whole list. A step focuses an element on this view. relationshipId is the arrival connection from the previous step's element; response: true replies back over the previous step's connection (it runs from this element to the previous one), so a request and its reply can use the same connection. Omit elementId for a narration-only note step, which has no arrival. Implied (lifted) connections are not valid arrivals: when a step's endpoints are collapsed into one visible parent, author the scenario on a detail view that shows them. Deleting a referenced element or connection keeps the scenario; model_validate reports SCENARIO_* warnings until the step is repaired or removed. Playback never changes the model.",
         commentPins:
           "View-owned threads ({id,x,y,text,resolved,replies:[{id,text}]}); comment_list/comment_get read threads. comment_create/update/delete and comment_reply_create/update/delete share model_apply_operations revision guards and undo snapshots. Updating data.resolved resolves/reopens a thread. Deleting a parent removes all replies; deleting a reply leaves the parent. No per-person ownership, mentions or notifications.",
         showFullTitles: "Wrap full element titles instead of truncating them.",

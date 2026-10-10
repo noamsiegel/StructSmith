@@ -1,11 +1,12 @@
 import type { ReferenceTargetKind } from "@structsmith/contracts";
-import { resolveRelationshipsForView, type Services } from "@structsmith/domain";
+import { resolveRelationshipsForView, type Services, scenarioProblems } from "@structsmith/domain";
 
 export function resolveReference(
   services: Services,
   workspaceId: string,
   type: ReferenceTargetKind,
   targetId: string,
+  viewId?: string,
 ) {
   const document = services.model.getDocument(workspaceId);
   const reference = { type, workspaceId, targetId, revision: document.workspace.revision };
@@ -111,6 +112,42 @@ export function resolveReference(
             },
           ];
         }),
+      },
+    };
+  }
+
+  if (type === "scenario") {
+    // Scenario IDs are unique per view, so a copied reference carries its view.
+    const matches = document.views.flatMap((view) =>
+      (!viewId || view.id === viewId) && view.settings.scenarios.some((s) => s.id === targetId)
+        ? [view]
+        : [],
+    );
+    if (matches.length > 1)
+      throw new Error(`Scenario ${targetId} exists on several views; pass the reference's viewId.`);
+    const view = matches[0];
+    const target = view?.settings.scenarios.find((item) => item.id === targetId);
+    if (!view || !target) throw new Error(`Scenario not found: ${targetId}`);
+    const elements = new Map(document.elements.map((item) => [item.id, item]));
+    const relationships = new Map(document.relationships.map((item) => [item.id, item]));
+    return {
+      reference: { ...reference, viewId: view.id },
+      target,
+      context: {
+        view: { id: view.id, name: view.name, kind: view.kind },
+        steps: target.steps.map((step) => ({
+          ...step,
+          element: step.elementId ? (elements.get(step.elementId) ?? null) : null,
+          relationship: step.relationshipId
+            ? (relationships.get(step.relationshipId) ?? null)
+            : null,
+        })),
+        problems: scenarioProblems(
+          [target],
+          view.elements.map((entry) => entry.elementId),
+          document.elements,
+          document.relationships,
+        ),
       },
     };
   }
