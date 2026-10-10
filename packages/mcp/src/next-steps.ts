@@ -59,6 +59,13 @@ export function nextSteps(name: string, input: unknown, text: string | undefined
     if (issues.some((issue) => issue.code.startsWith("SCENARIO_")))
       lines.push(call("scenario_update", { ...ws, viewId: "…", scenarioId: "…", data: {} }));
     lines.push(call("modeling_guide", { topic: "acceptance" }));
+  } else if (name === "workspace_create" && result && !Array.isArray(result)) {
+    const created = (result.result ?? result) as { id?: string };
+    if (created.id)
+      lines.push(
+        call("workspace_inspect", { workspaceId: created.id }),
+        call("modeling_guide", { topic: "readability" }),
+      );
   } else if (name === "scenario_list" && Array.isArray(result) && result.length === 0) {
     lines.push(
       call("scenario_create", { ...ws, viewId: args.viewId, data: { name: "…", steps: [] } }),

@@ -76,6 +76,10 @@ test("results name empty states and suggest concrete next calls", async () => {
     expect((await call("workspace_list")).hint).toBe(
       '0 workspaces on this server.\nnext[2]:\n  workspace_create {"name":"…"}\n  modeling_guide {}',
     );
+    const created = await call("workspace_create", { name: "Hints" });
+    expect(created.hint).toBe(
+      `next[2]:\n  workspace_inspect {"workspaceId":"${created.data.id}"}\n  modeling_guide {"topic":"readability"}`,
+    );
     const workspace = createWorkspace(services);
     const step = services.elements.create(workspace.id, { name: "Step", kind: "action" }).result;
     const view = services.views.create(workspace.id, {
@@ -88,16 +92,16 @@ test("results name empty states and suggest concrete next calls", async () => {
     expect(empty.data).toEqual([]);
     expect(empty.hint).toStartWith(`0 scenarios on view ${view.id}.\nnext[2]:\n  scenario_create`);
 
-    const created = await call("scenario_create", {
+    const scenario = await call("scenario_create", {
       ...base,
       data: { name: "Walk", steps: [{ elementId: step.id, title: "Go" }] },
     });
-    expect(created.hint).toBe(
+    expect(scenario.hint).toBe(
       [
         "next[3]:",
         `  model_validate {"workspaceId":"${workspace.id}"}`,
         `  Open /w/${workspace.id}?view=${view.id} and check it: modeling_guide {"topic":"acceptance"}`,
-        `  Undo: snapshot_restore {"snapshotId":"${created.data.snapshotId}"}`,
+        `  Undo: snapshot_restore {"snapshotId":"${scenario.data.snapshotId}"}`,
       ].join("\n"),
     );
     expect((await call("model_validate", { workspaceId: workspace.id })).hint).toStartWith(

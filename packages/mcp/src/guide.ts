@@ -27,7 +27,7 @@ export function modelingGuide() {
   return {
     version: 1,
     startHere: [
-      "Call workspace_list to resolve the target workspace id.",
+      "Pick the target workspace from the modeling_guide home view (workspace_list shows all), or create one with workspace_create.",
       "Call workspace_inspect before planning a change.",
       "When a prompt contains a StructSmithRef payload, call reference_resolve with its workspaceId, type and targetId.",
       "Use the tool input schemas and this guide; do not inspect StructSmith source code.",
@@ -91,6 +91,8 @@ export function modelingGuide() {
         "Visible relationships are derived from the semantic model. Descendant relationships may be lifted and grouped; explicit view relationship entries customize visibility, routing and presentation without changing semantic endpoints.",
       boundaryBehavior:
         "Each view owns its boundary tree. The view boundaryLayer selects which layer is rendered and used by boundary-aware layout; showBoundaries controls rendering without deleting boundaries or memberships. Add elements to the view before assigning them to a boundary. Elements with no boundary in the active layer remain ordinary items in the view; 'Items in view' is a UI grouping, not a boundary object.",
+      settingsPatch:
+        "view_update and updateView merge settings per key: omitted keys are unchanged, and a supplied key (for example nodeColors, sectionFrames or scenarios) replaces that whole value.",
       settings: {
         annotations:
           "View-owned text/note/table objects: id, kind, finite x/y, width/height (20-10000), nullable optional color (#RRGGBB) and sectionId (custom Section boundary in this view). Text/note use text (<=20000 chars) and optional fontSize (8-72); tables use rectangular cells (1-100 rows, 1-20 columns, <=5000 chars per cell, <=100000 total). They are never model elements or relationship endpoints. Use annotation_list/get/create/update/delete or createViewAnnotation/updateViewAnnotation/deleteViewAnnotation in atomic batches. Update patches preserve ID and kind; snapshots support undo. Reusable connected objects belong in the shared model.",
@@ -99,7 +101,7 @@ export function modelingGuide() {
         sectionFrames:
           "View-owned Section rectangles keyed by boundary:ID, with finite x/y and width >= 120, height >= 80. Section membership uses custom boundaries, not custom-element parents. Create the boundary and setBoundaryMembers before setting its frame. Move or fit frames with updateView, without changing semantic parentage or connection endpoints.",
         scenarios:
-          "Named, ordered walkthroughs over this view ({id,name,steps:[{elementId?,relationshipId?,response?,title,description?}]}). Prefer scenario_create/update/delete, which change one scenario and return an undo snapshot; settings.scenarios replaces the whole list. A step focuses an element on this view. relationshipId is the arrival connection from the previous step's element; response: true replies back over the previous step's connection (it runs from this element to the previous one), so a request and its reply can use the same connection. Omit elementId for a narration-only note step, which has no arrival. Implied (lifted) connections are not valid arrivals: when a step's endpoints are collapsed into one visible parent, author the scenario on a detail view that shows them. Deleting a referenced element or connection keeps the scenario; model_validate reports SCENARIO_* warnings until the step is repaired or removed. Playback never changes the model.",
+          "Named, ordered walkthroughs over this view ({id,name,steps:[{elementId?,relationshipId?,response?,title,description?}]}). Prefer scenario_create/update/delete, which change one scenario and return an undo snapshot; settings.scenarios replaces the whole list. A step focuses an element on this view. relationshipId is the arrival connection from the previous step's element; response: true replies back over the previous step's connection (it runs from this element to the previous one), so a request and its reply can use the same connection. relationshipId is optional: omit it when no direct connection joins the two elements, for example the step after a reply. Omit elementId for a narration-only note step, which has no arrival. Implied (lifted) connections are not valid arrivals: when a step's endpoints are collapsed into one visible parent, author the scenario on a detail view that shows them. Deleting a referenced element or connection keeps the scenario; model_validate reports SCENARIO_* warnings until the step is repaired or removed. Playback never changes the model.",
         commentPins:
           "View-owned threads ({id,x,y,text,resolved,replies:[{id,text}]}); comment_list/comment_get read threads. comment_create/update/delete and comment_reply_create/update/delete share model_apply_operations revision guards and undo snapshots. Updating data.resolved resolves/reopens a thread. Deleting a parent removes all replies; deleting a reply leaves the parent. No per-person ownership, mentions or notifications.",
         showFullTitles: "Wrap full element titles instead of truncating them.",
@@ -151,6 +153,8 @@ const readability = {
     "Sections are view-owned visual frames for reading lanes: at canvas root or inside another Section, never inside a Subprocess, with no connections or detail views. Subprocesses (workflowGroup) are shared semantic steps with connections, children and scoped detail views; use them for behaviour.",
   status:
     "Organise navigation by function, not current versus proposed. Tag elements status:live (implemented) or status:planned; the status overlay shows badges and a legend, and mixed groups stay neutral. Live means implemented, not proven enabled in production. Use separate views only to explain a real transition.",
+  lanes:
+    "For swimlanes, make one Section per actor and stack them as horizontal rows across the main left-to-right path. Boundary-aware automatic layout keeps each Section's members together as a block, which can place lanes side by side and send the flow backwards; after view_auto_layout, set lane frames with sectionFrames and card positions with view_set_layout (lock them to keep later automatic layouts from moving them).",
   connectors:
     "Label decisions and non-obvious handoffs; named labels are always visible. Connectors route orthogonally and may cross other objects; keep saved bends only where they add clarity and reset routes after large moves.",
 };
@@ -210,7 +214,11 @@ const topics = {
   },
   layout: {
     summary: "Automatic layout algorithms, saved positions and connector presentation.",
-    content: () => ({ ...modelingGuide().views.layouts, connectors: readability.connectors }),
+    content: () => ({
+      ...modelingGuide().views.layouts,
+      lanes: readability.lanes,
+      connectors: readability.connectors,
+    }),
   },
   scenarios: {
     summary: "Step-by-step walkthroughs: message, reply and note steps.",
@@ -266,6 +274,7 @@ export function guideHome(workspaces: readonly { id: string; name: string; revis
         : {}),
     },
     goldenPath: [
+      "Pick a workspace above, or workspace_create {name} for a new one.",
       "workspace_inspect {workspaceId} to read the model, views and revision.",
       "model_preview_operations, then one model_apply_operations batch with expectedRevision.",
       "model_validate, then open each changed view and check it (topic acceptance).",
