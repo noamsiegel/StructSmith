@@ -28,6 +28,18 @@ class RefTable {
   }
 }
 
+/** Steps may name elements and connections created earlier in the same batch. */
+function resolveScenarioSteps<T extends { elementId?: string; relationshipId?: string }>(
+  refs: RefTable,
+  steps: readonly T[],
+): T[] {
+  return steps.map((step) => ({
+    ...step,
+    elementId: refs.resolve(step.elementId),
+    relationshipId: refs.resolve(step.relationshipId),
+  }));
+}
+
 /**
  * Applies a batch of operations. The caller is responsible for wrapping this
  * in a transaction and for the revision guard (see `ModelService`).
@@ -294,6 +306,40 @@ export function applyOperations(
           operation.replyId,
         );
         applied.push({ op: operation.op, id: view.id });
+        break;
+      }
+      case "addViewScenario": {
+        const scenario = engine.addViewScenario(repos, workspace, refs.resolve(operation.viewId), {
+          ...operation.data,
+          steps: resolveScenarioSteps(refs, operation.data.steps),
+        });
+        applied.push({ op: operation.op, id: scenario.id });
+        break;
+      }
+      case "updateViewScenario": {
+        const scenario = engine.updateViewScenario(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.scenarioId,
+          {
+            ...operation.data,
+            ...(operation.data.steps
+              ? { steps: resolveScenarioSteps(refs, operation.data.steps) }
+              : {}),
+          },
+        );
+        applied.push({ op: operation.op, id: scenario.id });
+        break;
+      }
+      case "deleteViewScenario": {
+        engine.deleteViewScenario(
+          repos,
+          workspace,
+          refs.resolve(operation.viewId),
+          operation.scenarioId,
+        );
+        applied.push({ op: operation.op, id: operation.scenarioId });
         break;
       }
       case "deleteView": {

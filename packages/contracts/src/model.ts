@@ -233,8 +233,18 @@ export const UpdateViewCommentSchema = z.object({
 export type UpdateViewCommentInput = z.infer<typeof UpdateViewCommentSchema>;
 
 export const ViewScenarioStepSchema = z.object({
-  elementId: IdSchema,
-  relationshipId: IdSchema.optional(),
+  elementId: IdSchema.optional().describe(
+    "Element on this view that the step focuses. Omit it for a narration-only note step.",
+  ),
+  relationshipId: IdSchema.optional().describe(
+    "Arrival connection: it must run from the previous step's element to this step's element, or from this element back to the previous one when response is true.",
+  ),
+  response: z
+    .boolean()
+    .optional()
+    .describe(
+      "Reply over relationshipId: playback shows the message travelling against the connection's direction, without changing the connection.",
+    ),
   title: z.string().trim().min(1).max(200),
   description: z.string().max(2000).optional(),
 });
@@ -245,6 +255,14 @@ export const ViewScenarioSchema = z.object({
   steps: z.array(ViewScenarioStepSchema).min(1).max(200),
 });
 export type ViewScenario = z.infer<typeof ViewScenarioSchema>;
+export const AddViewScenarioSchema = ViewScenarioSchema.extend({
+  id: IdSchema.optional().describe("Optional stable ID; generated when omitted."),
+});
+export type AddViewScenarioInput = z.infer<typeof AddViewScenarioSchema>;
+export const UpdateViewScenarioSchema = ViewScenarioSchema.pick({ name: true, steps: true })
+  .partial()
+  .describe("Replace the supplied fields. steps replaces the whole ordered list.");
+export type UpdateViewScenarioInput = z.infer<typeof UpdateViewScenarioSchema>;
 
 export const SectionFrameSchema = z.object({
   x: z.number().finite(),

@@ -3,6 +3,7 @@ import { LayoutAlgorithmSchema, LayoutDirectionSchema } from "./enums";
 import {
   AddViewCommentReplySchema,
   AddViewCommentSchema,
+  AddViewScenarioSchema,
   CreateBoundarySchema,
   CreateElementSchema,
   CreateRecordSchema,
@@ -17,6 +18,7 @@ import {
   UpdateRelationshipSchema,
   UpdateViewAnnotationSchema,
   UpdateViewCommentSchema,
+  UpdateViewScenarioSchema,
   UpdateViewSchema,
   ValidationResultSchema,
   ViewRelationshipPatchSchema,
@@ -179,6 +181,25 @@ export const DeleteViewCommentReplyOpSchema = z.object({
   replyId: IdSchema,
 });
 
+export const AddViewScenarioOpSchema = z.object({
+  op: z.literal("addViewScenario"),
+  viewId: IdSchema,
+  data: AddViewScenarioSchema,
+});
+
+export const UpdateViewScenarioOpSchema = z.object({
+  op: z.literal("updateViewScenario"),
+  viewId: IdSchema,
+  scenarioId: IdSchema,
+  data: UpdateViewScenarioSchema,
+});
+
+export const DeleteViewScenarioOpSchema = z.object({
+  op: z.literal("deleteViewScenario"),
+  viewId: IdSchema,
+  scenarioId: IdSchema,
+});
+
 export const DeleteViewOpSchema = z.object({
   op: z.literal("deleteView"),
   viewId: IdSchema,
@@ -262,6 +283,9 @@ export const ArchitectureOperationSchema = z.discriminatedUnion("op", [
   AddViewCommentReplyOpSchema,
   UpdateViewCommentReplyOpSchema,
   DeleteViewCommentReplyOpSchema,
+  AddViewScenarioOpSchema,
+  UpdateViewScenarioOpSchema,
+  DeleteViewScenarioOpSchema,
   DeleteViewOpSchema,
   SetViewElementsOpSchema,
   SetViewRelationshipsOpSchema,

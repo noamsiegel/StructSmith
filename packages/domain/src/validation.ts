@@ -1,6 +1,7 @@
 import type { ValidationIssue, ValidationResult, WorkspaceDocument } from "@structsmith/contracts";
 import { ViewSettingsSchema } from "@structsmith/contracts";
 import { checkParent, wouldCreateCycle } from "./rules";
+import { scenarioProblems } from "./scenarios";
 
 /**
  * Deterministic architecture validator (spec §41). Not every finding is an
@@ -148,6 +149,27 @@ export function validateDocument(document: WorkspaceDocument): ValidationResult 
       });
     }
     seenViewKeys.add(view.key);
+    // Saved scenarios outlive model edits so authors can repair them; report what broke.
+    for (const problem of scenarioProblems(
+      view.settings.scenarios,
+      view.elements.map((entry) => entry.elementId),
+      elements,
+      relationships,
+    )) {
+      issues.push({
+        level: "warning",
+        code: problem.code,
+        message: `View "${view.name}": ${problem.message} Edit the scenario to repair or remove the step.`,
+        viewId: view.id,
+        ...(problem.elementId && byId.has(problem.elementId)
+          ? { elementId: problem.elementId }
+          : {}),
+        ...(problem.relationshipId &&
+        relationships.some((edge) => edge.id === problem.relationshipId)
+          ? { relationshipId: problem.relationshipId }
+          : {}),
+      });
+    }
     if (view.scopeElementId && !byId.has(view.scopeElementId)) {
       issues.push({
         level: "error",

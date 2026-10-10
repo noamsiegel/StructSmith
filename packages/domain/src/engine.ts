@@ -1,6 +1,7 @@
 import type {
   AddViewCommentInput,
   AddViewCommentReplyInput,
+  AddViewScenarioInput,
   ArchitectureBoundary,
   ArchitectureElement,
   ArchitectureRecord,
@@ -22,11 +23,13 @@ import type {
   UpdateViewAnnotationInput,
   UpdateViewCommentInput,
   UpdateViewInput,
+  UpdateViewScenarioInput,
   ViewAnnotation,
   ViewComment,
   ViewElement,
   ViewRelationship,
   ViewRelationshipPatch,
+  ViewScenario,
   ViewSettings,
   Workspace,
   WorkspaceMode,
@@ -34,10 +37,12 @@ import type {
 import {
   AddViewCommentReplySchema,
   AddViewCommentSchema,
+  AddViewScenarioSchema,
   CreateViewAnnotationSchema,
   ERROR_CODES,
   UpdateViewAnnotationSchema,
   UpdateViewCommentSchema,
+  UpdateViewScenarioSchema,
   ViewAnnotationSchema,
   ViewSettingsSchema,
 } from "@structsmith/contracts";
@@ -1002,6 +1007,64 @@ export function deleteViewCommentReply(
     ...comment,
     updatedAt: nowIso(),
     replies: comment.replies.filter((reply) => reply.id !== replyId),
+  });
+}
+
+function requireViewScenario(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  scenarioId: string,
+) {
+  const view = requireView(repos, viewId, workspace.id);
+  const scenario = view.settings.scenarios.find((item) => item.id === scenarioId);
+  if (!scenario) throw badRequest(`Scenario "${scenarioId}" does not exist on this view.`);
+  return { view, scenario };
+}
+
+export function addViewScenario(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  input: AddViewScenarioInput,
+): ViewScenario {
+  const current = requireView(repos, viewId, workspace.id);
+  const { id, ...data } = AddViewScenarioSchema.parse(input);
+  const scenario = { ...data, id: id ?? createId("scenario") };
+  if (current.settings.scenarios.some((item) => item.id === scenario.id))
+    throw badRequest(`Scenario "${scenario.id}" already exists on this view.`);
+  updateView(repos, workspace, viewId, {
+    settings: { scenarios: [...current.settings.scenarios, scenario] },
+  });
+  return scenario;
+}
+
+export function updateViewScenario(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  scenarioId: string,
+  input: UpdateViewScenarioInput,
+): ViewScenario {
+  const { view, scenario } = requireViewScenario(repos, workspace, viewId, scenarioId);
+  const next = { ...scenario, ...UpdateViewScenarioSchema.parse(input) };
+  updateView(repos, workspace, viewId, {
+    settings: {
+      scenarios: view.settings.scenarios.map((item) => (item.id === scenarioId ? next : item)),
+    },
+  });
+  return next;
+}
+
+export function deleteViewScenario(
+  repos: Repositories,
+  workspace: Workspace,
+  viewId: string,
+  scenarioId: string,
+): void {
+  const { view } = requireViewScenario(repos, workspace, viewId, scenarioId);
+  updateView(repos, workspace, viewId, {
+    settings: { scenarios: view.settings.scenarios.filter((item) => item.id !== scenarioId) },
   });
 }
 
