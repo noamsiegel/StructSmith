@@ -59,6 +59,8 @@ interface EditorState {
   paletteBoundaryId: string | null;
   connectFrom: string | null;
   focusRequest: { elementId: string; nonce: number } | null;
+  /** A copied scenario reference asks the view's scenario panel to start that walkthrough. */
+  scenarioRequest: string | null;
   pendingSave: number;
   clipboard: DiagramClipboard | null;
 
@@ -74,6 +76,7 @@ interface EditorState {
   openElementPalette: (boundaryId?: string | null) => void;
   setConnectFrom: (elementId: string | null) => void;
   requestFocus: (elementId: string) => void;
+  requestScenario: (scenarioId: string | null) => void;
   beginSave: () => void;
   endSave: () => void;
   setClipboard: (clipboard: DiagramClipboard | null) => void;
@@ -91,6 +94,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   paletteBoundaryId: null,
   connectFrom: null,
   focusRequest: null,
+  scenarioRequest: null,
   pendingSave: 0,
   clipboard: null,
 
@@ -114,6 +118,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   openElementPalette: (paletteBoundaryId = null) => set({ paletteOpen: true, paletteBoundaryId }),
   setConnectFrom: (connectFrom) => set({ connectFrom }),
   requestFocus: (elementId) => set({ focusRequest: { elementId, nonce: Date.now() } }),
+  requestScenario: (scenarioRequest) => set({ scenarioRequest }),
   beginSave: () => set((state) => ({ pendingSave: state.pendingSave + 1 })),
   endSave: () => set((state) => ({ pendingSave: Math.max(0, state.pendingSave - 1) })),
   setClipboard: (clipboard) => set({ clipboard }),

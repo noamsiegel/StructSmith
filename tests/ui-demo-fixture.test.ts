@@ -425,7 +425,7 @@ describe("UI demo fixture", () => {
     expect(byId.get("demo-route-target")?.kind).toBe("outcome");
   });
 
-  test("covers colors, statuses, locked/hidden placements and scenario element/relationship steps", () => {
+  test("covers colors, statuses, locked/hidden placements and scenario message, reply and note steps", () => {
     const states = byKey.get("demo-states");
     expect(byId.get("demo-state-live")?.tags).toContain("status:live");
     expect(byId.get("demo-state-planned")?.tags).toContain("status:planned");
@@ -443,10 +443,16 @@ describe("UI demo fixture", () => {
       true,
     );
     expect(
-      states?.settings.scenarios[0]?.steps.map((step) => [step.elementId, step.relationshipId]),
+      states?.settings.scenarios[0]?.steps.map((step) => [
+        step.elementId,
+        step.relationshipId,
+        step.response,
+      ]),
     ).toEqual([
-      ["demo-state-live", undefined],
-      ["demo-state-planned", "demo-state-edge"],
+      ["demo-state-live", undefined, undefined],
+      ["demo-state-planned", "demo-state-edge", undefined],
+      ["demo-state-live", "demo-state-edge", true],
+      [undefined, undefined, undefined],
     ]);
   });
 

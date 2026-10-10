@@ -197,7 +197,7 @@ export function Canvas({
   const onScenarioStep = useCallback(
     (step: ViewScenarioStep | null) => {
       setScenarioStep(step);
-      if (step) {
+      if (step?.elementId) {
         select({ type: "element", id: step.elementId });
         useEditorStore.getState().requestFocus(step.elementId);
       }
@@ -347,14 +347,52 @@ export function Canvas({
     );
   }, [flow]);
 
+  /**
+   * Selecting an element outside the canvas (model tree, command palette, a copied
+   * reference or scenario step) has to move the camera *and* mark the node as
+   * selected — React Flow keeps `selected` inside the elements array, so the store
+   * alone cannot show it.
+   */
+  const focusElement = useCallback(
+    (request: { elementId: string; nonce: number }) => {
+      // One-shot: a handled request must not refocus when another view loads.
+      useEditorStore.setState((state) =>
+        state.focusRequest?.nonce === request.nonce ? { focusRequest: null } : state,
+      );
+      const node = flow.getNode(request.elementId);
+      if (node)
+        void flow.fitView({
+          nodes: [{ id: node.id }],
+          duration: 350,
+          maxZoom: 1.2,
+          padding: CANVAS_FIT_PADDING,
+        });
+      setNodes((current) =>
+        current.map((candidate) => {
+          const shouldSelect = candidate.id === request.elementId;
+          return candidate.selected === shouldSelect
+            ? candidate
+            : { ...candidate, selected: shouldSelect };
+        }),
+      );
+      setEdges((current) =>
+        current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
+      );
+    },
+    [flow],
+  );
+
   useEffect(() => {
     if (!flow.viewportInitialized || nodes.length === 0 || !nodesInitialized) return;
     if (fittedViewId.current === view.id) return;
     fittedViewId.current = view.id;
-    if (initialViewport.current) void flow.setViewport(initialViewport.current);
+    // A request made while the view loaded (a deep link) wins over the first fit.
+    const pending = useEditorStore.getState().focusRequest;
+    if (pending && flow.getNode(pending.elementId)) focusElement(pending);
+    else if (initialViewport.current) void flow.setViewport(initialViewport.current);
     else if (nodes.length > 0) fit();
     if (restoredSelection.current) select(restoredSelection.current);
-  }, [nodesInitialized, nodes.length, view.id, flow, select, fit]);
+  }, [nodesInitialized, nodes.length, view.id, flow, select, fit, focusElement]);
 
   useEffect(() => {
     if (fittedLayoutRequest.current === layoutFitRequest || !nodesInitialized) return;
@@ -383,36 +421,10 @@ export function Canvas({
     );
   }, [layoutFitRequest, nodesInitialized, renderedNodes, graph.nodes, flow]);
 
-  /**
-   * Selecting an element outside the canvas (model tree, command palette) has
-   * to move the camera *and* mark the node as selected — React Flow keeps
-   * `selected` inside the elements array, so the store alone cannot show it.
-   */
   useEffect(() => {
-    if (!focusRequest) return;
-    const { elementId } = focusRequest;
-
-    const node = flow.getNode(elementId);
-    if (node)
-      void flow.fitView({
-        nodes: [{ id: node.id }],
-        duration: 350,
-        maxZoom: 1.2,
-        padding: CANVAS_FIT_PADDING,
-      });
-
-    setNodes((current) =>
-      current.map((candidate) => {
-        const shouldSelect = candidate.id === elementId;
-        return candidate.selected === shouldSelect
-          ? candidate
-          : { ...candidate, selected: shouldSelect };
-      }),
-    );
-    setEdges((current) =>
-      current.map((edge) => (edge.selected ? { ...edge, selected: false } : edge)),
-    );
-  }, [focusRequest, flow]);
+    // Until the view's first fit, the request stays pending for that fit to apply.
+    if (focusRequest && fittedViewId.current === view.id) focusElement(focusRequest);
+  }, [focusRequest, view.id, focusElement]);
 
   useEffect(() => {
     if (selection.type !== "relationship") return;
@@ -2075,90 +2087,92 @@ export function Canvas({
 
   const editableEdges = useMemo(
     () =>
-      edges.map((edge) => ({
-        ...edge,
-        style: {
-          ...edge.style,
-          opacity: scenarioStep
-            ? edge.data?.relationshipIds?.includes(scenarioStep.relationshipId ?? "")
-              ? 1
-              : 0.25
-            : edge.style?.opacity,
-        },
-        data: edge.data
-          ? {
-              ...edge.data,
-              onRouteRendered: (points: ControlPoint[]) => {
-                renderedRoutes.current.set(edge.id, points);
-              },
-              onControlPointsChange: (controlPoints: { x: number; y: number }[]) =>
-                changeRelationshipPresentation(
-                  (edge.data?.relationshipIds ?? [edge.data?.relationship.id as string]).map(
-                    (relationshipId) => ({ relationshipId, controlPoints }),
+      edges.map((edge) => {
+        const arrival =
+          scenarioStep?.relationshipId !== undefined &&
+          edge.data?.relationshipIds?.includes(scenarioStep.relationshipId) === true;
+        return {
+          ...edge,
+          style: {
+            ...edge.style,
+            opacity: scenarioStep ? (arrival ? 1 : 0.25) : edge.style?.opacity,
+          },
+          data: edge.data
+            ? {
+                ...edge.data,
+                replying: arrival && scenarioStep?.response === true,
+                onRouteRendered: (points: ControlPoint[]) => {
+                  renderedRoutes.current.set(edge.id, points);
+                },
+                onControlPointsChange: (controlPoints: { x: number; y: number }[]) =>
+                  changeRelationshipPresentation(
+                    (edge.data?.relationshipIds ?? [edge.data?.relationship.id as string]).map(
+                      (relationshipId) => ({ relationshipId, controlPoints }),
+                    ),
                   ),
-                ),
-              onEndpointChange:
-                edge.data.count === 1
-                  ? (endpoint: "source" | "target", attachment: ConnectorAttachment) => {
-                      if (!edge.data) return Promise.resolve();
-                      let operations: ArchitectureOperation[];
-                      try {
-                        operations = reconnectRelationshipOperations(
-                          view.id,
-                          edge.data.relationship,
-                          endpoint === "source" ? edge.source : edge.target,
-                          endpoint,
-                          attachment,
-                          {
-                            side:
-                              edge.data.placement?.presentation?.[
-                                endpoint === "source" ? "sourceSide" : "targetSide"
-                              ] ??
-                              sideFromHandle(
-                                endpoint === "source" ? edge.sourceHandle : edge.targetHandle,
-                                endpoint,
+                onEndpointChange:
+                  edge.data.count === 1
+                    ? (endpoint: "source" | "target", attachment: ConnectorAttachment) => {
+                        if (!edge.data) return Promise.resolve();
+                        let operations: ArchitectureOperation[];
+                        try {
+                          operations = reconnectRelationshipOperations(
+                            view.id,
+                            edge.data.relationship,
+                            endpoint === "source" ? edge.source : edge.target,
+                            endpoint,
+                            attachment,
+                            {
+                              side:
+                                edge.data.placement?.presentation?.[
+                                  endpoint === "source" ? "sourceSide" : "targetSide"
+                                ] ??
+                                sideFromHandle(
+                                  endpoint === "source" ? edge.sourceHandle : edge.targetHandle,
+                                  endpoint,
+                                ),
+                              detached: Boolean(
+                                edge.data.placement?.presentation?.[
+                                  endpoint === "source" ? "sourcePoint" : "targetPoint"
+                                ],
                               ),
-                            detached: Boolean(
-                              edge.data.placement?.presentation?.[
-                                endpoint === "source" ? "sourcePoint" : "targetPoint"
-                              ],
+                            },
+                          );
+                        } catch (error) {
+                          toast.message(
+                            t(
+                              error instanceof Error && error.message === "self-endpoint"
+                                ? "relationshipPresentation.selfEndpointHint"
+                                : "relationshipPresentation.liftedEndpointHint",
                             ),
-                          },
-                        );
-                      } catch (error) {
-                        toast.message(
-                          t(
-                            error instanceof Error && error.message === "self-endpoint"
-                              ? "relationshipPresentation.selfEndpointHint"
-                              : "relationshipPresentation.liftedEndpointHint",
-                          ),
-                        );
-                        return Promise.reject(error);
+                          );
+                          return Promise.reject(error);
+                        }
+                        return applyOperations
+                          .mutateAsync({ label: t("relationshipPresentation.updated"), operations })
+                          .then(() =>
+                            queryClient.refetchQueries(
+                              { queryKey: queryKeys.view(view.id) },
+                              { cancelRefetch: false },
+                            ),
+                          )
+                          .then(() => undefined);
                       }
-                      return applyOperations
-                        .mutateAsync({ label: t("relationshipPresentation.updated"), operations })
-                        .then(() =>
-                          queryClient.refetchQueries(
-                            { queryKey: queryKeys.view(view.id) },
-                            { cancelRefetch: false },
-                          ),
-                        )
-                        .then(() => undefined);
-                    }
-                  : undefined,
-              onLabelOffsetChange: (
-                _relationshipId: string,
-                labelOffset: { x: number; y: number },
-              ) =>
-                changeRelationshipPresentation(
-                  (edge.data?.relationshipIds ?? []).map((relationshipId) => ({
-                    relationshipId,
-                    presentation: { labelOffset },
-                  })),
-                ),
-            }
-          : undefined,
-      })),
+                    : undefined,
+                onLabelOffsetChange: (
+                  _relationshipId: string,
+                  labelOffset: { x: number; y: number },
+                ) =>
+                  changeRelationshipPresentation(
+                    (edge.data?.relationshipIds ?? []).map((relationshipId) => ({
+                      relationshipId,
+                      presentation: { labelOffset },
+                    })),
+                  ),
+              }
+            : undefined,
+        };
+      }),
     [edges, changeRelationshipPresentation, scenarioStep, applyOperations, t, view.id],
   );
 
@@ -2533,7 +2547,10 @@ export function Canvas({
         )}
 
         {graph.hiddenCount > 0 && (
-          <div className="pointer-events-none absolute right-3 top-16 rounded border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground">
+          <div
+            data-canvas-chrome
+            className="pointer-events-none absolute right-3 top-16 rounded border border-border bg-background/80 px-2 py-1 text-[11px] text-muted-foreground"
+          >
             {t("canvas.hiddenElements", { count: graph.hiddenCount })}
           </div>
         )}

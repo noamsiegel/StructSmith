@@ -1107,6 +1107,17 @@ export function buildUiDemoDocument(): WorkspaceDocument {
                   title: "Planned handoff",
                   description: "Both connector and destination are highlighted.",
                 },
+                {
+                  elementId: "demo-state-live",
+                  relationshipId: "demo-state-edge",
+                  response: true,
+                  title: "Reply to live",
+                  description: "The same connector carries the reply; its arrow points back.",
+                },
+                {
+                  title: "Wrap up",
+                  description: "A note step narrates without focusing an element.",
+                },
               ],
             },
           ],

@@ -477,7 +477,12 @@ export function CanvasComments({
 
   return (
     <>
-      <Panel position="top-right" data-comment-control className="flex items-center gap-2">
+      <Panel
+        position="top-right"
+        data-comment-control
+        data-canvas-chrome
+        className="flex items-center gap-2"
+      >
         {mode && (
           <p role="status" className="rounded-md bg-background px-3 py-2 text-xs">
             {t("comments.placeHint")}

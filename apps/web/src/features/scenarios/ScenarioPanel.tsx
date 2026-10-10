@@ -1,18 +1,20 @@
 import {
   type ArchitectureElement,
+  type ArchitectureOperationInput,
   type ArchitectureRelationship,
   type ViewDetail,
   type ViewScenario,
   ViewScenarioSchema,
   type ViewScenarioStep,
 } from "@structsmith/contracts";
-import { clearInvalidScenarioArrivals, validateViewScenarios } from "@structsmith/domain";
+import { clearInvalidScenarioArrivals, scenarioProblems } from "@structsmith/domain";
 import {
   ArrowDown,
   ArrowUp,
   ChevronLeft,
   ChevronRight,
   ListOrdered,
+  MousePointerClick,
   Pencil,
   Play,
   Plus,
@@ -32,10 +34,25 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { CopyReferenceButton } from "@/features/reference/CopyReferenceButton";
 import { useApplyOperations, useWorkspace } from "@/hooks/useApi";
+import { useEditorStore } from "@/store/editor";
+import { stepsFromSelection } from "./selectionSteps";
 
 type DraftStep = ViewScenarioStep & { key: string };
 type DraftScenario = Omit<ViewScenario, "steps"> & { steps: DraftStep[] };
+
+const NOTE = "__note";
+const NO_ARRIVAL = "none";
+const REPLY = "reply:";
+
+/** Keys that belong to a focused form control rather than to playback. */
+function typing(target: EventTarget | null): boolean {
+  return (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName))
+  );
+}
 
 export function ScenarioPanel({
   workspaceId,
@@ -54,33 +71,75 @@ export function ScenarioPanel({
   const fieldId = useId();
   const workspace = useWorkspace(workspaceId);
   const command = useApplyOperations(workspaceId);
+  const selection = useEditorStore((state) => state.selection);
+  const scenarioRequest = useEditorStore((state) => state.scenarioRequest);
   const [open, setOpen] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [playing, setPlaying] = useState(false);
   const [index, setIndex] = useState(0);
-  const [draft, setDraft] = useState<{ scenario: DraftScenario; revision: number } | null>(null);
+  const [draft, setDraft] = useState<{
+    scenario: DraftScenario;
+    revision: number;
+    existing: boolean;
+  } | null>(null);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const selected = view.settings.scenarios.find((scenario) => scenario.id === selectedId);
   const step = playing ? selected?.steps[index] : undefined;
-  const visible = elements.filter((element) =>
-    view.elements.some((row) => row.elementId === element.id),
-  );
+  const viewElementIds = view.elements.map((row) => row.elementId);
+  const visible = elements.filter((element) => viewElementIds.includes(element.id));
+  const nameOf = (id: string | undefined) => elements.find((element) => element.id === id)?.name;
+  const edgeName = (edge: ArchitectureRelationship) =>
+    edge.description ||
+    `${nameOf(edge.sourceElementId) ?? "?"} → ${nameOf(edge.targetElementId) ?? "?"}`;
   const arrival = relationships.find((edge) => edge.id === step?.relationshipId);
-  const previous = selected?.steps[index - 1];
   const stale =
-    step &&
-    (!visible.some((element) => element.id === step.elementId) ||
-      (step.relationshipId &&
-        (!arrival ||
-          !previous ||
-          arrival.sourceElementId !== previous.elementId ||
-          arrival.targetElementId !== step.elementId)));
+    selected && step
+      ? scenarioProblems([selected], viewElementIds, elements, relationships).some(
+          (problem) => problem.stepIndex === index,
+        )
+      : false;
+  const count = selected?.steps.length ?? 0;
 
   useEffect(() => {
     onStep(step && !stale ? step : null);
   }, [step, stale, onStep]);
   useEffect(() => () => onStep(null), [onStep]);
+
+  // A copied scenario reference opens its walkthrough once the view has loaded.
+  useEffect(() => {
+    if (!scenarioRequest || draft) return;
+    if (!view.settings.scenarios.some((scenario) => scenario.id === scenarioRequest)) return;
+    useEditorStore.getState().requestScenario(null);
+    setOpen(true);
+    setSelectedId(scenarioRequest);
+    setIndex(0);
+    setPlaying(true);
+    setDeleting(null);
+    setError(null);
+  }, [scenarioRequest, view.settings.scenarios, draft]);
+
+  // Playback owns the arrow keys so they move between steps instead of nudging the
+  // focused element; capture runs before the canvas's own shortcuts.
+  useEffect(() => {
+    if (!playing) return;
+    const onKey = (event: KeyboardEvent) => {
+      if (typing(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
+      const move =
+        event.key === "ArrowRight" || event.key === "PageDown"
+          ? 1
+          : event.key === "ArrowLeft" || event.key === "PageUp"
+            ? -1
+            : 0;
+      if (!move && event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.key === "Escape") setPlaying(false);
+      else setIndex((current) => Math.min(Math.max(current + move, 0), count - 1));
+    };
+    window.addEventListener("keydown", onKey, true);
+    return () => window.removeEventListener("keydown", onKey, true);
+  }, [playing, count]);
 
   const choose = (id: string) => {
     setSelectedId(id);
@@ -89,14 +148,16 @@ export function ScenarioPanel({
     setDeleting(null);
     setError(null);
   };
+  const keyed = (steps: readonly ViewScenarioStep[]): DraftStep[] =>
+    steps.map((entry) => ({ ...entry, key: crypto.randomUUID() }));
+  const fromSelection = (previous: ViewScenarioStep | undefined) =>
+    stepsFromSelection(selection, previous, viewElementIds, elements, relationships);
   const edit = () => {
     if (!workspace.data || !selected) return;
     setDraft({
-      scenario: {
-        ...structuredClone(selected),
-        steps: selected.steps.map((entry) => ({ ...entry, key: crypto.randomUUID() })),
-      },
+      scenario: { ...structuredClone(selected), steps: keyed(selected.steps) },
       revision: workspace.data.revision,
+      existing: true,
     });
     setPlaying(false);
     setDeleting(null);
@@ -105,24 +166,30 @@ export function ScenarioPanel({
   const create = () => {
     const element = visible[0];
     if (!workspace.data || !element) return;
+    const picked = fromSelection(undefined);
     setDraft({
       revision: workspace.data.revision,
+      existing: false,
       scenario: {
         id: crypto.randomUUID(),
         name: "",
-        steps: [{ key: crypto.randomUUID(), elementId: element.id, title: element.name }],
+        steps: keyed(
+          picked && picked !== "outside"
+            ? picked
+            : [{ elementId: element.id, title: element.name }],
+        ),
       },
     });
     setPlaying(false);
     setDeleting(null);
     setError(null);
   };
-  const persist = async (scenarios: ViewScenario[], revision: number) => {
+  const persist = async (operation: ArchitectureOperationInput, revision: number) => {
     try {
       await command.mutateAsync({
         expectedRevision: revision,
         label: t("scenarios.changed"),
-        operations: [{ op: "updateView", viewId: view.id, data: { settings: { scenarios } } }],
+        operations: [operation],
       });
       setDraft(null);
       setDeleting(null);
@@ -141,23 +208,18 @@ export function ScenarioPanel({
       setError(t("scenarios.required"));
       return;
     }
-    try {
-      validateViewScenarios(
-        [parsed.data],
-        view.elements.map((row) => row.elementId),
-        elements,
-        relationships,
-      );
-    } catch {
+    if (scenarioProblems([parsed.data], viewElementIds, elements, relationships).length) {
       setError(t("scenarios.invalidReferences"));
       return;
     }
-    const scenarios = view.settings.scenarios.some((scenario) => scenario.id === parsed.data.id)
-      ? view.settings.scenarios.map((scenario) =>
-          scenario.id === parsed.data.id ? parsed.data : scenario,
-        )
-      : [...view.settings.scenarios, parsed.data];
-    if (await persist(scenarios, draft.revision)) choose(parsed.data.id);
+    const { id, name, steps } = parsed.data;
+    const saved = await persist(
+      draft.existing
+        ? { op: "updateViewScenario", viewId: view.id, scenarioId: id, data: { name, steps } }
+        : { op: "addViewScenario", viewId: view.id, data: parsed.data },
+      draft.revision,
+    );
+    if (saved) choose(id);
   };
   const updateSteps = (steps: DraftStep[]) => {
     if (!draft) return;
@@ -165,10 +227,17 @@ export function ScenarioPanel({
     setDraft({ ...draft, scenario: { ...draft.scenario, steps: cleaned } });
     setError(null);
   };
+  const patchStep = (itemIndex: number, patch: Partial<ViewScenarioStep>) =>
+    draft &&
+    updateSteps(
+      draft.scenario.steps.map((entry, i) => (i === itemIndex ? { ...entry, ...patch } : entry)),
+    );
+  const picked = draft ? fromSelection(draft.scenario.steps.at(-1)) : null;
 
   return (
     <section
       aria-label={t("scenarios.title")}
+      data-canvas-chrome
       className={`pointer-events-auto rounded-lg bg-background shadow-lg ${open ? "w-[min(22rem,calc(100vw-2rem))]" : "w-auto"}`}
     >
       <div className="flex items-center gap-1 p-1.5">
@@ -218,7 +287,8 @@ export function ScenarioPanel({
       {open && (
         <div className="border-t border-border p-3">
           {draft ? (
-            <div className="space-y-3">
+            // Bounded by the viewport so Save stays visible above the creation toolbar.
+            <div className="flex max-h-[max(16rem,calc(100vh-17rem))] flex-col gap-3">
               <div className="space-y-1">
                 <Label htmlFor={`${fieldId}-name`}>{t("scenarios.name")}</Label>
                 <Input
@@ -234,165 +304,193 @@ export function ScenarioPanel({
                   disabled={command.isPending}
                 />
               </div>
-              <ol className="max-h-[min(24rem,50vh)] space-y-4 overflow-y-auto pr-1">
-                {draft.scenario.steps.map((item, itemIndex) => (
-                  <li key={item.key} className="space-y-2">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-xs font-medium">
-                        {t("scenarios.stepNumber", { number: itemIndex + 1 })}
-                      </span>
-                      <div className="flex gap-0.5">
-                        <Button
-                          size="iconSm"
-                          variant="ghost"
-                          disabled={itemIndex === 0 || command.isPending}
-                          aria-label={t("scenarios.moveUp")}
-                          onClick={() => {
-                            const steps = [...draft.scenario.steps];
-                            const prior = steps[itemIndex - 1];
-                            if (!prior) return;
-                            steps[itemIndex - 1] = item;
-                            steps[itemIndex] = prior;
-                            updateSteps(steps);
-                          }}
-                        >
-                          <ArrowUp size={14} />
-                        </Button>
-                        <Button
-                          size="iconSm"
-                          variant="ghost"
-                          disabled={
-                            itemIndex === draft.scenario.steps.length - 1 || command.isPending
-                          }
-                          aria-label={t("scenarios.moveDown")}
-                          onClick={() => {
-                            const steps = [...draft.scenario.steps];
-                            const next = steps[itemIndex + 1];
-                            if (!next) return;
-                            steps[itemIndex + 1] = item;
-                            steps[itemIndex] = next;
-                            updateSteps(steps);
-                          }}
-                        >
-                          <ArrowDown size={14} />
-                        </Button>
-                        <Button
-                          size="iconSm"
-                          variant="ghost"
-                          disabled={draft.scenario.steps.length === 1 || command.isPending}
-                          aria-label={t("scenarios.removeStep")}
-                          onClick={() =>
-                            updateSteps(draft.scenario.steps.filter((_, i) => i !== itemIndex))
-                          }
-                        >
-                          <Trash2 size={14} />
-                        </Button>
+              <ol className="min-h-0 flex-1 space-y-4 overflow-y-auto pr-1">
+                {draft.scenario.steps.map((item, itemIndex) => {
+                  const previous = draft.scenario.steps[itemIndex - 1];
+                  const requests = relationships.filter(
+                    (edge) =>
+                      edge.sourceElementId === previous?.elementId &&
+                      edge.targetElementId === item.elementId,
+                  );
+                  const replies = relationships.filter(
+                    (edge) =>
+                      edge.sourceElementId === item.elementId &&
+                      edge.targetElementId === previous?.elementId,
+                  );
+                  return (
+                    <li key={item.key} className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium">
+                          {t("scenarios.stepNumber", { number: itemIndex + 1 })}
+                        </span>
+                        <div className="flex gap-0.5">
+                          <Button
+                            size="iconSm"
+                            variant="ghost"
+                            disabled={itemIndex === 0 || command.isPending}
+                            aria-label={t("scenarios.moveUp")}
+                            onClick={() => {
+                              const steps = [...draft.scenario.steps];
+                              const prior = steps[itemIndex - 1];
+                              if (!prior) return;
+                              steps[itemIndex - 1] = item;
+                              steps[itemIndex] = prior;
+                              updateSteps(steps);
+                            }}
+                          >
+                            <ArrowUp size={14} />
+                          </Button>
+                          <Button
+                            size="iconSm"
+                            variant="ghost"
+                            disabled={
+                              itemIndex === draft.scenario.steps.length - 1 || command.isPending
+                            }
+                            aria-label={t("scenarios.moveDown")}
+                            onClick={() => {
+                              const steps = [...draft.scenario.steps];
+                              const next = steps[itemIndex + 1];
+                              if (!next) return;
+                              steps[itemIndex + 1] = item;
+                              steps[itemIndex] = next;
+                              updateSteps(steps);
+                            }}
+                          >
+                            <ArrowDown size={14} />
+                          </Button>
+                          <Button
+                            size="iconSm"
+                            variant="ghost"
+                            disabled={draft.scenario.steps.length === 1 || command.isPending}
+                            aria-label={t("scenarios.removeStep")}
+                            onClick={() =>
+                              updateSteps(draft.scenario.steps.filter((_, i) => i !== itemIndex))
+                            }
+                          >
+                            <Trash2 size={14} />
+                          </Button>
+                        </div>
                       </div>
-                    </div>
-                    <Select
-                      value={item.elementId}
-                      disabled={command.isPending}
-                      onValueChange={(elementId) =>
-                        updateSteps(
-                          draft.scenario.steps.map((entry, i) =>
-                            i === itemIndex ? { ...entry, elementId } : entry,
-                          ),
-                        )
-                      }
-                    >
-                      <SelectTrigger aria-label={t("scenarios.element")}>
-                        <SelectValue placeholder={t("scenarios.missingElement")} />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {visible.map((element) => (
-                          <SelectItem key={element.id} value={element.id}>
-                            {element.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Input
-                      aria-label={t("scenarios.stepTitle")}
-                      placeholder={t("scenarios.stepTitle")}
-                      maxLength={200}
-                      value={item.title}
-                      disabled={command.isPending}
-                      onChange={(event) =>
-                        updateSteps(
-                          draft.scenario.steps.map((entry, i) =>
-                            i === itemIndex ? { ...entry, title: event.target.value } : entry,
-                          ),
-                        )
-                      }
-                    />
-                    <Textarea
-                      aria-label={t("scenarios.description")}
-                      placeholder={t("scenarios.description")}
-                      maxLength={2000}
-                      rows={2}
-                      value={item.description ?? ""}
-                      disabled={command.isPending}
-                      onChange={(event) =>
-                        updateSteps(
-                          draft.scenario.steps.map((entry, i) =>
-                            i === itemIndex ? { ...entry, description: event.target.value } : entry,
-                          ),
-                        )
-                      }
-                    />
-                    {itemIndex > 0 && (
                       <Select
-                        value={item.relationshipId ?? "none"}
+                        value={item.elementId ?? NOTE}
                         disabled={command.isPending}
-                        onValueChange={(id) =>
-                          updateSteps(
-                            draft.scenario.steps.map((entry, i) =>
-                              i === itemIndex
-                                ? { ...entry, relationshipId: id === "none" ? undefined : id }
-                                : entry,
-                            ),
-                          )
+                        onValueChange={(value) =>
+                          patchStep(itemIndex, { elementId: value === NOTE ? undefined : value })
                         }
                       >
-                        <SelectTrigger aria-label={t("scenarios.arrival")}>
-                          <SelectValue />
+                        <SelectTrigger aria-label={t("scenarios.element")}>
+                          <SelectValue placeholder={t("scenarios.missingElement")} />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="none">{t("scenarios.noConnection")}</SelectItem>
-                          {relationships
-                            .filter(
-                              (edge) =>
-                                edge.sourceElementId ===
-                                  draft.scenario.steps[itemIndex - 1]?.elementId &&
-                                edge.targetElementId === item.elementId,
+                          <SelectItem value={NOTE}>{t("scenarios.noteStep")}</SelectItem>
+                          {visible.map((element) => (
+                            <SelectItem key={element.id} value={element.id}>
+                              {element.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <Input
+                        aria-label={t("scenarios.stepTitle")}
+                        placeholder={t("scenarios.stepTitle")}
+                        maxLength={200}
+                        value={item.title}
+                        disabled={command.isPending}
+                        onChange={(event) => patchStep(itemIndex, { title: event.target.value })}
+                      />
+                      <Textarea
+                        aria-label={t("scenarios.description")}
+                        placeholder={t("scenarios.description")}
+                        maxLength={2000}
+                        rows={2}
+                        value={item.description ?? ""}
+                        disabled={command.isPending}
+                        onChange={(event) =>
+                          patchStep(itemIndex, { description: event.target.value })
+                        }
+                      />
+                      {previous?.elementId && item.elementId && (
+                        <Select
+                          value={
+                            item.relationshipId
+                              ? `${item.response ? REPLY : ""}${item.relationshipId}`
+                              : NO_ARRIVAL
+                          }
+                          disabled={command.isPending}
+                          onValueChange={(value) =>
+                            patchStep(
+                              itemIndex,
+                              value === NO_ARRIVAL
+                                ? { relationshipId: undefined, response: undefined }
+                                : value.startsWith(REPLY)
+                                  ? { relationshipId: value.slice(REPLY.length), response: true }
+                                  : { relationshipId: value, response: undefined },
                             )
-                            .map((edge) => (
+                          }
+                        >
+                          <SelectTrigger aria-label={t("scenarios.arrival")}>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={NO_ARRIVAL}>
+                              {t("scenarios.noConnection")}
+                            </SelectItem>
+                            {requests.map((edge) => (
                               <SelectItem key={edge.id} value={edge.id}>
                                 {edge.description || t("scenarios.connection")}
                               </SelectItem>
                             ))}
-                        </SelectContent>
-                      </Select>
-                    )}
-                  </li>
-                ))}
+                            {replies.map((edge) => (
+                              <SelectItem key={`${REPLY}${edge.id}`} value={`${REPLY}${edge.id}`}>
+                                {t("scenarios.replyOver", { name: edgeName(edge) })}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      )}
+                    </li>
+                  );
+                })}
               </ol>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={draft.scenario.steps.length >= 200 || command.isPending}
-                onClick={() => {
-                  const element = visible[0];
-                  if (element)
-                    updateSteps([
-                      ...draft.scenario.steps,
-                      { key: crypto.randomUUID(), elementId: element.id, title: element.name },
-                    ]);
-                }}
-              >
-                <Plus size={14} />
-                {t("scenarios.addStep")}
-              </Button>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={draft.scenario.steps.length >= 200 || command.isPending}
+                  onClick={() => {
+                    const element = visible[0];
+                    if (element)
+                      updateSteps([
+                        ...draft.scenario.steps,
+                        { key: crypto.randomUUID(), elementId: element.id, title: element.name },
+                      ]);
+                  }}
+                >
+                  <Plus size={14} />
+                  {t("scenarios.addStep")}
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  title={t("scenarios.addSelectionHint")}
+                  disabled={
+                    !picked ||
+                    picked === "outside" ||
+                    draft.scenario.steps.length + picked.length > 200 ||
+                    command.isPending
+                  }
+                  onClick={() => {
+                    if (picked && picked !== "outside")
+                      updateSteps([...draft.scenario.steps, ...keyed(picked)]);
+                  }}
+                >
+                  <MousePointerClick size={14} />
+                  {t("scenarios.addSelection")}
+                </Button>
+              </div>
+              {picked === "outside" && (
+                <p className="text-xs text-muted-foreground">{t("scenarios.selectionNotInView")}</p>
+              )}
               <div className="flex justify-end gap-2">
                 <Button
                   size="sm"
@@ -414,10 +512,33 @@ export function ScenarioPanel({
             <div className="space-y-3">
               {playing && step ? (
                 <div aria-live="polite">
-                  <p className="text-xs text-muted-foreground">
-                    {t("scenarios.progress", { number: index + 1, count: selected.steps.length })}
-                  </p>
+                  <Select value={String(index)} onValueChange={(value) => setIndex(Number(value))}>
+                    <SelectTrigger
+                      aria-label={t("scenarios.jumpTo")}
+                      className="h-6 w-auto gap-1 border-none px-0 text-xs text-muted-foreground shadow-none"
+                    >
+                      {t("scenarios.progress", { number: index + 1, count })}
+                    </SelectTrigger>
+                    <SelectContent>
+                      {selected.steps.map((entry, stepIndex) => (
+                        <SelectItem
+                          // biome-ignore lint/suspicious/noArrayIndexKey: steps have no ID; position is the identity.
+                          key={stepIndex}
+                          value={String(stepIndex)}
+                        >
+                          {stepIndex + 1}. {entry.title}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <h3 className="mt-1 break-words text-sm font-medium">{step.title}</h3>
+                  {arrival && !stale && (
+                    <p className="mt-1 break-words text-xs font-medium text-primary">
+                      {t(step.response ? "scenarios.replyOver" : "scenarios.arrivesOver", {
+                        name: edgeName(arrival),
+                      })}
+                    </p>
+                  )}
                   {step.description && (
                     <p className="mt-1 whitespace-pre-wrap break-words text-xs text-muted-foreground">
                       {step.description}
@@ -426,9 +547,7 @@ export function ScenarioPanel({
                   {stale && <p className="mt-2 text-xs text-destructive">{t("scenarios.stale")}</p>}
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground">
-                  {t("scenarios.ready", { count: selected.steps.length })}
-                </p>
+                <p className="text-xs text-muted-foreground">{t("scenarios.ready", { count })}</p>
               )}
               <div className="flex items-center gap-1">
                 {playing ? (
@@ -445,7 +564,7 @@ export function ScenarioPanel({
                     <Button
                       size="sm"
                       variant="outline"
-                      disabled={index >= selected.steps.length - 1}
+                      disabled={index >= count - 1}
                       onClick={() => setIndex(index + 1)}
                     >
                       {t("scenarios.next")}
@@ -455,6 +574,7 @@ export function ScenarioPanel({
                       size="iconSm"
                       variant="ghost"
                       aria-label={t("scenarios.stop")}
+                      title={t("scenarios.keyboardHint")}
                       onClick={() => setPlaying(false)}
                     >
                       <X size={14} />
@@ -463,6 +583,7 @@ export function ScenarioPanel({
                 ) : (
                   <Button
                     size="sm"
+                    title={t("scenarios.keyboardHint")}
                     onClick={() => {
                       setIndex(0);
                       setPlaying(true);
@@ -472,7 +593,16 @@ export function ScenarioPanel({
                     {t("scenarios.play")}
                   </Button>
                 )}
-                <div className="ml-auto flex gap-1">
+                <div className="ml-auto flex items-center gap-1">
+                  <CopyReferenceButton
+                    reference={{
+                      type: "scenario",
+                      workspaceId,
+                      targetId: selected.id,
+                      label: selected.name,
+                      viewId: view.id,
+                    }}
+                  />
                   <Button
                     size="iconSm"
                     variant="ghost"
@@ -512,9 +642,11 @@ export function ScenarioPanel({
                       onClick={async () => {
                         if (
                           await persist(
-                            view.settings.scenarios.filter(
-                              (scenario) => scenario.id !== selected.id,
-                            ),
+                            {
+                              op: "deleteViewScenario",
+                              viewId: view.id,
+                              scenarioId: selected.id,
+                            },
                             deleting,
                           )
                         ) {

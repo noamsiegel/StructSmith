@@ -208,6 +208,10 @@ function StudioContent({
 
     handledReference.current = reference;
     if (parsed.type === "workspace") return;
+    if (parsed.type === "scenario") {
+      useEditorStore.getState().requestScenario(parsed.targetId);
+      return;
+    }
     select({ type: parsed.type, id: parsed.targetId });
     if (parsed.type === "element" || parsed.type === "boundary") {
       setExplorerTab("model");

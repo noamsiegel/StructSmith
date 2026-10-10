@@ -77,6 +77,8 @@ export interface RelationshipEdgeData extends Record<string, unknown> {
   placement?: ViewRelationship;
   status: ImplementationStatus | null;
   relationshipIds?: string[];
+  /** Display-only: a scenario response travels against the connection's direction. */
+  replying?: boolean;
   tags: string[];
   onControlPointsChange?: (points: ControlPoint[]) => Promise<void>;
   movementBends?: ControlPoint[];

@@ -845,7 +845,15 @@
     "invalidReferences": "A step refers to a missing element or invalid arrival connection. Choose elements in this view and direct connections from the previous step.",
     "saveFailed": "Could not save. If the workspace changed, cancel and reopen the editor before retrying. Your draft is still here.",
     "missingElement": "Missing element",
-    "stale": "This step's element or connection was removed. Edit the scenario to repair it, or continue to the next step."
+    "stale": "This step's element or connection was removed. Edit the scenario to repair it, or continue to the next step.",
+    "noteStep": "Note (no element)",
+    "replyOver": "Reply over: {{name}}",
+    "arrivesOver": "Over: {{name}}",
+    "addSelection": "Add selection",
+    "addSelectionHint": "Select an element or connection on this diagram, then add it as the next step.",
+    "selectionNotInView": "The selected element, or both ends of the selected connection, must be on this view.",
+    "jumpTo": "Jump to step",
+    "keyboardHint": "Use ← and → to move between steps and Esc to stop."
   },
   "tagFocus": {
     "title": "Focus by tag",

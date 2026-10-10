@@ -140,8 +140,12 @@ function RelationshipEdgeComponent({
   const focus = hovered ? "connected" : relationshipFocus(activeElementId, source, target);
   const presentation = data?.placement?.presentation;
   const strokeStyle = data?.status ? statusStroke(data.status) : presentation?.strokeStyle;
-  const sourceArrow = presentation?.sourceArrow ?? "none";
-  const targetArrow = presentation?.targetArrow ?? "arrowclosed";
+  const sourceArrow = data?.replying
+    ? (presentation?.targetArrow ?? "arrowclosed")
+    : (presentation?.sourceArrow ?? "none");
+  const targetArrow = data?.replying
+    ? (presentation?.sourceArrow ?? "none")
+    : (presentation?.targetArrow ?? "arrowclosed");
   const [endpointPreview, setEndpointPreview] = useState<
     Partial<Record<"source" | "target", ConnectorAttachment>>
   >({});

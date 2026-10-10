@@ -1,4 +1,8 @@
-import type { ReferenceTargetKind, StructSmithReference } from "@structsmith/contracts";
+import {
+  type ReferenceTargetKind,
+  referenceTargetKinds,
+  type StructSmithReference,
+} from "@structsmith/contracts";
 
 export interface AgentReferenceInput {
   type: ReferenceTargetKind;
@@ -21,11 +25,7 @@ export function parseReferenceSearchValue(
 
   const type = value.slice(0, separator);
   const targetId = value.slice(separator + 1);
-  if (
-    !(["workspace", "view", "element", "boundary", "relationship", "record"] as const).includes(
-      type as ReferenceTargetKind,
-    )
-  ) {
+  if (!(referenceTargetKinds as readonly string[]).includes(type)) {
     return null;
   }
   return { type: type as ReferenceTargetKind, targetId };

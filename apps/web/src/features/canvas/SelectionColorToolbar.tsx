@@ -1,6 +1,6 @@
 import type { ViewDetail } from "@structsmith/contracts";
 import { Check, Palette, RotateCcw } from "lucide-react";
-import { type ReactNode, useEffect, useId, useState } from "react";
+import { type ReactNode, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { useEditorStore } from "@/store/editor";
 import { annotationId, isAnnotationId } from "./annotations";
 import type { FlowEdge, FlowNode } from "./graph";
 import { colorSelectionOperations, selectionColorTargets } from "./selectionColors";
+import { selectionToolbarPosition } from "./toolbarPlacement";
 
 const palette = [
   "#FFFFFF",
@@ -65,6 +66,39 @@ export function SelectionColorToolbar({
   useEffect(() => {
     setDraft(color ?? "#3DADFF");
   }, [color]);
+  const toolbar = useRef<HTMLDivElement>(null);
+  const [position, setPosition] = useState<{ left: number; top: number } | null>(null);
+  // Re-measure after every render: chrome such as the scenario panel opens, grows and closes.
+  useLayoutEffect(() => {
+    const own = toolbar.current;
+    const canvas = own?.offsetParent;
+    if (!own || !(canvas instanceof HTMLElement)) return;
+    const chrome = [...canvas.querySelectorAll<HTMLElement>("[data-canvas-chrome]")];
+    const place = () => {
+      const box = canvas.getBoundingClientRect();
+      const next = selectionToolbarPosition(
+        canvas.clientWidth,
+        { width: own.offsetWidth, height: own.offsetHeight },
+        window.matchMedia("(min-width: 640px)").matches ? 12 : 56,
+        chrome.map((element) => {
+          const rect = element.getBoundingClientRect();
+          return {
+            left: rect.left - box.left,
+            top: rect.top - box.top,
+            right: rect.right - box.left,
+            bottom: rect.bottom - box.top,
+          };
+        }),
+      );
+      setPosition((current) =>
+        current?.left === next.left && current.top === next.top ? current : next,
+      );
+    };
+    const observer = new ResizeObserver(place);
+    for (const element of [canvas, own, ...chrome]) observer.observe(element);
+    place();
+    return () => observer.disconnect();
+  });
   if (!nodeIds.length && !relationshipIds.length) return null;
   const valid = /^#[0-9a-fA-F]{6}$/.test(draft);
   const save = (next: string | null) =>
@@ -75,6 +109,8 @@ export function SelectionColorToolbar({
 
   return (
     <div
+      ref={toolbar}
+      style={position ? { left: position.left, top: position.top, translate: "none" } : undefined}
       className="absolute left-1/2 top-14 z-40 flex -translate-x-1/2 items-center rounded-lg border border-border bg-popover p-1 shadow-md sm:top-3"
       role="toolbar"
       aria-label={t("selectionColors.toolbar")}
